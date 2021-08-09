@@ -9,6 +9,9 @@
   <ItemGroup>
     <Compile Include="Format.fsi" />
     <Compile Include="Format.fs" />
+    <Compile Include="SpanHelpers.fs" />
+    <Compile Include="Read.fsi" />
+    <Compile Include="Read.fs" />
   </ItemGroup>
 
 </Project>

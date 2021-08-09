@@ -6,10 +6,12 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
-val preamble : ImmutableArray<byte>
-
-[<Literal>] val CurrentVersion : uint32 = 1u
 [<Literal>] val PageSize: uint32 = 65536u
+
+[<RequireQualifiedAccess>]
+module Preamble =
+    val magic : ImmutableArray<byte>
+    val version : ImmutableArray<byte>
 
 type Name = string
 
@@ -54,10 +56,10 @@ module Types =
 
         interface IEquatable<FuncType>
 
-    [<NoComparison; StructuralEquality>]
-    type Limit<'T when 'T : struct and 'T :> IEquatable<'T>> =
-        { Min: 'T
-          Max: 'T voption }
+    [<Sealed>]
+    type Limit<'T when 'T : struct and 'T : equality> =
+        member Min: 'T
+        member Max: 'T voption
 
         interface IEquatable<Limit<'T>>
 
@@ -73,6 +75,10 @@ module Types =
     type GlobalType =
         | Const of ValType
         | Var of ValType
+
+    [<RequireQualifiedAccess>]
+    module Limit =
+        val tryWithMax: min: 'T -> max: 'T voption -> Limit<'T> voption when 'T : comparison
 
 [<NoComparison; NoEquality>]
 type CustomSection =
@@ -659,10 +665,14 @@ module ModuleSections =
         new: capacity: int32 -> Builder
         new: unit -> Builder
 
+        /// <exception cref="T:Wasm.Format.DuplicateSectionException" />
+        member Add: section: Section -> unit
+        // TODO: Consider throwing exception if length of code section vector <> length of function section vector.
         member TryAdd: section: Section * duplicate: outref<Section> -> bool
         member ToImmutable: unit -> ModuleSections
 
     val tryOfSeq : sections: seq<Section> -> Result<ModuleSections, Section>
+    /// <exception cref="T:Wasm.Format.DuplicateSectionException" />
     val ofSeq : sections: seq<Section> -> ModuleSections
 
 [<NoComparison; NoEquality>]

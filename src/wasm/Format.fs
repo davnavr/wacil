@@ -5,8 +5,10 @@ open System.Collections
 open System.Collections.Generic
 open System.Collections.Immutable
 
-let preamble = ImmutableArray.Create<byte> "\0asm"B
-let [<Literal>] CurrentVersion = 1u
+module Preamble =
+    let magic = ImmutableArray.Create<byte> "\0asm"B
+    let version = ImmutableArray.Create<byte> [| 1uy; 0uy; 0uy; 0uy |]
+
 let [<Literal>] PageSize = 65536u
 
 [<Struct>]
@@ -41,7 +43,12 @@ module Types =
     [<Struct>]
     type FuncType = { Parameters: ResultType; Results: ResultType }
 
-    type Limit<'T when 'T : struct and 'T :> IEquatable<'T>> = { Min: 'T; Max: 'T voption }
+    [<Sealed>]
+    type Limit<'T when 'T : struct and 'T : equality> (min, max) =
+        member _.Min: 'T = min
+        member _.Max: 'T voption = max
+
+        interface IEquatable<Limit<'T>> with member _.Equals other = min = other.Min && max = other.Max
 
     [<Struct>]
     type TableType = { ElementType: RefType; Limit: Limit<uint32> }
@@ -51,6 +58,12 @@ module Types =
     type GlobalType =
         | Const of ValType
         | Var of ValType
+
+    module Limit =
+        let tryWithMax min max =
+            match max with
+            | ValueSome max' when max' < min -> ValueNone
+            | _ -> ValueSome(Limit(min, max))
 
 type Name = string
 
@@ -460,6 +473,10 @@ module ModuleSections =
             sections.Add section
             failwith "TODO: Create lookup"
             false
+
+        member this.Add(section) =
+            let (duplicate, _) = this.TryAdd section
+            if duplicate then raise(DuplicateSectionException section)
 
         member _.ToImmutable() = ModuleSections(sections.ToImmutable())
 
