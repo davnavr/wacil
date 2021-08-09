@@ -108,6 +108,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     new (index) = { Index = index }
 
+    static member inline Zero = Index<'Class> 0u
     static member inline op_Implicit(index: Index<'Class>) = index.Index
     static member inline op_Explicit(index: Index<'Class>) = Checked.int32 index.Index
 
@@ -115,12 +116,6 @@ let inline (|Index|) (index: Index<_>) = index.Index
 
 module InstructionSet =
     type Opcode = uint8
-
-    [<Struct>]
-    type LocalIndex = LocalIndex of uint32
-
-    [<Struct>]
-    type LabelIndex = LabelIndex of uint32
 
     [<Struct>]
     type MemArgAlignment (alignment: uint32) =
@@ -155,7 +150,7 @@ module InstructionSet =
         | GlobalIndex of Index<IndexKinds.Global>
         | TableIndex of Index<IndexKinds.Table>
         | LabelIndex of Index<IndexKinds.Label>
-        | LabelIndexVector of ImmutableArray<LabelIndex>
+        | LabelIndexVector of ImmutableArray<Index<IndexKinds.Label>>
         | MemArg of MemArg
         | I32 of int32
         | I64 of int64
@@ -268,13 +263,13 @@ type IndexedVector<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> =
     abstract Item: index: Index<'IndexClass> -> inref<'T> with get
 
 module IndexedVector =
-    let ofBlockBuilder start (builder: ImmutableArray<'T>.Builder) =
+    let ofBlockBuilder<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> start (builder: ImmutableArray<'T>.Builder) =
         { new IndexedVector<'IndexClass, 'T> with
             member _.Length = builder.Count
             member _.First = start
             member this.Item with get index = &builder.ItemRef(int32 this.First + int32 index) }
 
-type Expr = unit
+type Expr = seq<InstructionSet.Instruction>
 
 type TypeSection = IndexedVector<IndexKinds.Type, FuncType>
 
@@ -286,10 +281,13 @@ type ImportDesc =
     | Global of GlobalType
 
 [<Struct>]
-type Import = { Module: Name; Name: Name; Description: ImportDesc }
+type Import<'Desc> = { Module: Name; Name: Name; Description: 'Desc }
+
+let inline addImportDesc (builder: ImmutableArray<_>.Builder) (import: inref<Import<_>>) desc =
+    builder.Add { Module = import.Module; Name = import.Name; Description = desc }
 
 [<Sealed>]
-type ImportSection (imports: ImmutableArray<Import>) =
+type ImportSection (imports: ImmutableArray<Import<ImportDesc>>) =
     let functions = ImmutableArray.CreateBuilder()
     let tables = ImmutableArray.CreateBuilder()
     let memories = ImmutableArray.CreateBuilder()
@@ -298,10 +296,18 @@ type ImportSection (imports: ImmutableArray<Import>) =
     do
         for i = 0 to imports.Length - 1 do
             let import = &imports.ItemRef i
-            ()
+            match import.Description with
+            | ImportDesc.Func i -> addImportDesc functions &import i
+            | ImportDesc.Table t -> addImportDesc tables &import t
+            | ImportDesc.Mem m -> addImportDesc memories &import m
+            | ImportDesc.Global g -> addImportDesc globals &import g
 
     member _.Count = imports.Length
     member _.Item with get index = &imports.ItemRef index
+    member val Functions = IndexedVector.ofBlockBuilder<IndexKinds.Func, _> Index.Zero functions
+    member val Tables = IndexedVector.ofBlockBuilder<IndexKinds.Table, _> Index.Zero tables
+    member val Memories = IndexedVector.ofBlockBuilder<IndexKinds.Mem, _> Index.Zero memories
+    member val Globals = IndexedVector.ofBlockBuilder<IndexKinds.Global, _> Index.Zero globals
 
 [<Struct; RequireQualifiedAccess>]
 type Function = { Type: Index<IndexKinds.Type> }
@@ -478,6 +484,7 @@ module ModuleSections =
 type WasmModule =
     { Version: uint32; Sections: ModuleSections }
 
+[<Struct>]
 type ValidatedModule = Validated of WasmModule
 
 let inline (|ValidatedModule|) (Validated m) = m

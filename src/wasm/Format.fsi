@@ -132,6 +132,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     new: index: uint32 -> Index<'Class>
 
+    static member inline Zero: Index<'Class>
     static member inline op_Implicit: index: Index<'Class> -> uint32
     static member inline op_Explicit: index: Index<'Class> -> int32
 
@@ -143,7 +144,10 @@ type IndexedVector<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> =
 
 [<RequireQualifiedAccess>]
 module internal IndexedVector =
-    val ofBlockBuilder : start: Index<'IndexClass> -> builder: ImmutableArray<'T>.Builder -> IndexedVector<'IndexClass, 'T>
+    val ofBlockBuilder<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> :
+        start: Index<'IndexClass> ->
+        builder: ImmutableArray<'T>.Builder ->
+        IndexedVector<'IndexClass, 'T>
 
 val inline (|Index|) : index: Index<'Class> -> uint32
 
@@ -175,7 +179,7 @@ module InstructionSet =
     type BlockType =
         | Empty
         | ValueType of ValType
-        | Index of Index<IndexKinds.Table>
+        | Index of Index<IndexKinds.Type>
 
     [<RequireQualifiedAccess; NoComparison; NoEquality>]
     type InstructionArguments =
@@ -495,23 +499,23 @@ type ImportDesc =
     | Global of GlobalType
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
-type Import =
+type Import<'Desc> =
     { Module: Name
       Name: Name
-      Description: ImportDesc }
+      Description: 'Desc }
 
 /// (2) Defines the functions, tables, memories, and globals defined in another module used by the module.
 [<Sealed>]
 type ImportSection =
-    new: imports: ImmutableArray<Import> -> ImportSection
+    new: imports: ImmutableArray<Import<ImportDesc>> -> ImportSection
 
     member Count : int32
-    member Item: index: int32 -> inref<Import> with get
+    member Item: index: int32 -> inref<Import<ImportDesc>> with get
 
-    member Functions: IndexedVector<IndexKinds.Func, Index<IndexKinds.Type>>
-    member Tables: IndexedVector<IndexKinds.Table, TableType>
-    member Memories: IndexedVector<IndexKinds.Mem, MemType>
-    member Globals: IndexedVector<IndexKinds.Global, GlobalType>
+    member Functions: IndexedVector<IndexKinds.Func, Import<Index<IndexKinds.Type>>>
+    member Tables: IndexedVector<IndexKinds.Table, Import<TableType>>
+    member Memories: IndexedVector<IndexKinds.Mem, Import<MemType>>
+    member Globals: IndexedVector<IndexKinds.Global, Import<GlobalType>>
 
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; NoEquality>]
 type Function =
@@ -558,7 +562,7 @@ type Export =
 type ExportSection = ImmutableArray<Export>
 
 /// (8) Specifies the index of the function "that is automatically called invoked when the module is instantiated".
-type StartSection = FunctionIndex
+type StartSection = Index<IndexKinds.Func>
 
 type Elem
 //    | 
