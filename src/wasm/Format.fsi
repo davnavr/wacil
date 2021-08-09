@@ -20,6 +20,60 @@ type MemSize =
 
     interface IEquatable<MemSize>
 
+module Types =
+    [<NoComparison; StructuralEquality>]
+    type NumType =
+        | I32
+        | I64
+        | F32
+        | F64
+    
+        interface IEquatable<NumType>
+
+    [<NoComparison; StructuralEquality>]
+    type RefType =
+        | FuncRef
+        | ExternRef
+    
+        interface IEquatable<RefType>
+    
+    [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+    type ValType =
+        | NumType of numType: NumType
+        | RefType of refType: RefType
+    
+        interface IEquatable<ValType>
+
+    /// Represents the types of the results of executing an instruction or calling a function.
+    type ResultType = ImmutableArray<ValType>
+
+    [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+    type FuncType =
+        { Parameters: ResultType
+          Results: ResultType }
+
+        interface IEquatable<FuncType>
+
+    [<NoComparison; StructuralEquality>]
+    type Limit<'T when 'T : struct and 'T :> IEquatable<'T>> =
+        { Min: 'T
+          Max: 'T voption }
+
+        interface IEquatable<Limit<'T>>
+
+    [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+    type TableType =
+        { ElementType: RefType
+          Limit: Limit<uint32> }
+
+        interface IEquatable<TableType>
+
+    type MemType = Limit<MemSize>
+
+    type GlobalType =
+        | Const of ValType
+        | Var of ValType
+
 [<NoComparison; NoEquality>]
 type CustomSection =
     { Name: Name
@@ -40,8 +94,40 @@ type SectionId =
     | Data = 11uy
     | DataCount = 12uy
 
+[<RequireQualifiedAccess>]
+module IndexKinds =
+    [<AbstractClass>]
+    type Kind = class end
+
+    [<AbstractClass; Sealed>]
+    type Type = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Func = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Table = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Mem = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Global = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Elem = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Data = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Local = inherit Kind
+
+    [<AbstractClass; Sealed>]
+    type Label = inherit Kind
+
 [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
-type Index<'Class> =
+type Index<'Class when 'Class :> IndexKinds.Kind> =
     val Index: uint32
 
     new: index: uint32 -> Index<'Class>
@@ -50,77 +136,360 @@ type Index<'Class> =
     static member inline op_Explicit: index: Index<'Class> -> int32
 
 [<Interface>]
-type IndexedVector<'IndexClass, 'T> =
+type IndexedVector<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> =
     abstract Length: int32
     abstract First: Index<'IndexClass>
-    abstract Item: index: Index<'IndexClass> -> inref<'T>
+    abstract Item: index: Index<'IndexClass> -> inref<'T> with get
+
+[<RequireQualifiedAccess>]
+module internal IndexedVector =
+    val ofBlockBuilder : start: Index<'IndexClass> -> builder: ImmutableArray<'T>.Builder -> IndexedVector<'IndexClass, 'T>
 
 val inline (|Index|) : index: Index<'Class> -> uint32
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type NumType =
-    | I32
-    | I64
-    | F32
-    | F64
+open Types
 
-    interface IEquatable<NumType>
+module InstructionSet =
+    type Opcode = uint8
 
-[<NoComparison; StructuralEquality>]
-type RefType =
-    | FuncRef
-    | ExternRef
+    [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
+    type MemArgAlignment =
+        member Alignment: uint32
 
-    interface IEquatable<RefType>
+        static member inline op_Implicit: alignment: MemArgAlignment -> uint32
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type ValType =
-    | NumType of numType: NumType
-    | RefType of refType: RefType
+        interface IEquatable<MemArgAlignment>
 
-    interface IEquatable<ValType>
+    val inline (|MemArgAlignment|) : alignment: MemArgAlignment -> uint32
 
-/// Represents the types of the results of executing an instruction or calling a function.
-type ResultType = ImmutableArray<ValType>
+    [<RequireQualifiedAccess>]
+    module MemArgAlignment =
+        val ofPower : power: uint8 -> MemArgAlignment
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type FuncType =
-    { Parameters: ResultType
-      Results: ResultType }
+    [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
+    type MemArg =
+        { Alignment: MemArgAlignment
+          Offset: uint32 }
 
-    interface IEquatable<FuncType>
+    [<RequireQualifiedAccess; NoComparison; NoEquality>]
+    type BlockType =
+        | Empty
+        | ValueType of ValType
+        | Index of Index<IndexKinds.Table>
 
-[<NoComparison; StructuralEquality>]
-type Limit<'T when 'T : struct and 'T :> IEquatable<'T>> =
-    { Min: 'T
-      Max: 'T voption }
+    [<RequireQualifiedAccess; NoComparison; NoEquality>]
+    type InstructionArguments =
+        | Nothing
+        | Bytes of ImmutableArray<byte>
+        | RefType of RefType
+        | BlockType of BlockType
+        | ValTypeVector of ImmutableArray<ValType>
+        | FuncIndex of Index<IndexKinds.Func>
+        | IndirectCall of Index<IndexKinds.Type> * Index<IndexKinds.Table>
+        | LocalIndex of Index<IndexKinds.Local>
+        | GlobalIndex of Index<IndexKinds.Global>
+        | TableIndex of Index<IndexKinds.Table>
+        | LabelIndex of Index<IndexKinds.Label>
+        | LabelIndexVector of ImmutableArray<Index<IndexKinds.Label>>
+        | MemArg of MemArg
+        | I32 of int32
+        | I64 of int64
+        | F32 of Single
+        | F64 of Double
 
-    interface IEquatable<Limit<'T>>
+    [<IsReadOnly; Struct; NoComparison; NoEquality>]
+    type Instruction =
+        { Opcode: Opcode
+          Arguments: InstructionArguments }
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type TableType =
-    { ElementType: RefType
-      Limit: Limit<uint32> }
+    [<AutoOpen>]
+    module Control =
+        val ``unreachable`` : Instruction
+        val ``nop`` : Instruction
+        val ``block`` : BlockType -> Instruction
+        val ``loop`` : BlockType -> Instruction
+        val ``if`` : BlockType -> Instruction
+        val ``else`` : Instruction
 
-    interface IEquatable<TableType>
+        val ``end`` : Instruction
+        val ``br`` : label: Index<IndexKinds.Label> -> Instruction
+        val br_if : label: Index<IndexKinds.Label> -> Instruction
+        val br_table : labels: ImmutableArray<Index<IndexKinds.Label>> -> Instruction
+        val ``return`` : Instruction
+        val call : Index<IndexKinds.Func> -> Instruction
+        val call_indirect : Index<IndexKinds.Type> -> Index<IndexKinds.Table> -> Instruction
 
-type MemType = Limit<MemSize>
+    [<RequireQualifiedAccess>]
+    module Ref =
+        val ``null`` : t: RefType -> Instruction
+        val is_null : Instruction
+        val ``func`` : Index<IndexKinds.Func> -> Instruction
 
-type GlobalType =
-    | Const of ValType
-    | Var of ValType
+    module Parametric =
+        val drop : Instruction
+        val select : types: ImmutableArray<ValType> voption -> Instruction
 
-//module InstructionSet
+    [<RequireQualifiedAccess>]
+    module Local =
+        val ``get`` : variable: Index<IndexKinds.Local> -> Instruction
+        val ``set`` : variable: Index<IndexKinds.Local>  -> Instruction
+        val tee : variable: Index<IndexKinds.Local>  -> Instruction
+
+    [<RequireQualifiedAccess>]
+    module Global =
+        val ``get`` : variable: Index<IndexKinds.Global> -> Instruction
+        val ``set`` : variable: Index<IndexKinds.Global> -> Instruction
+
+    [<RequireQualifiedAccess>]
+    module Table =
+        val ``get`` : table: Index<IndexKinds.Table> -> Instruction
+        val ``set`` : table: Index<IndexKinds.Table> -> Instruction
+
+        //val init : source: Index<IndexKinds.Elem> -> destination: Index<IndexKinds.Table> -> Instruction
+        //val copy : destination: Index<IndexKinds.Table> -> source: Index<IndexKinds.Table> -> Instruction
+        //val grow : table: Index<IndexKinds.Table> -> Instruction
+        //val size : table: Index<IndexKinds.Table> -> Instruction
+        //val fill : table: Index<IndexKinds.Table> -> Instruction
+
+    //[<RequireQualifiedAccess>]
+    //module Elem =
+    //    val drop : index: Index<IndexKinds.Elem> -> Instruction
+
+    /// Contains memory instructions for storing and loading 32-bit integers.
+    [<RequireQualifiedAccess>]
+    module I32 =
+        val load : m: MemArg -> Instruction
+
+        val load8_s : m: MemArg -> Instruction
+        val load8_u : m: MemArg -> Instruction
+        val load16_s : m: MemArg -> Instruction
+        val load16_u : m: MemArg -> Instruction
+
+        val store : m: MemArg -> Instruction
+
+        val store8 : m: MemArg -> Instruction
+        val store16 : m: MemArg -> Instruction
+
+        val ``const`` : n: int32 -> Instruction
+
+        val eqz : Instruction
+        val eq : Instruction
+        val ne : Instruction
+        val lt_s : Instruction
+        val lt_u : Instruction
+        val gt_s : Instruction
+        val gt_u : Instruction
+        val le_s : Instruction
+        val le_u : Instruction
+        val ge_s : Instruction
+        val ge_u : Instruction
+
+        val clz : Instruction
+        val ctz : Instruction
+        val popcnt : Instruction
+        val add : Instruction
+        val sub : Instruction
+        val mul : Instruction
+        val div_s : Instruction
+        val div_u : Instruction
+        val rem_s : Instruction
+        val rem_u : Instruction
+        val ``and`` : Instruction
+        val ``or`` : Instruction
+        val xor : Instruction
+        val shl : Instruction
+        val shr_s : Instruction
+        val shr_u : Instruction
+        val rotl : Instruction
+        val rotr : Instruction
+
+        //val wrap_i64 : Instruction
+        //val trunc_f32_s : Instruction
+        //val trunc_f32_u : Instruction
+        //val trunc_f64_s : Instruction
+        //val trunc_f64_u : Instruction
+
+        //val reinterpret_f32 : Instruction
+
+        //val extend8_s : Instruction
+        //val extend16_s : Instruction
+
+        //val trunc_sat_f32_s : Instruction
+        //val trunc_sat_f32_u : Instruction
+        //val trunc_sat_f64_s : Instruction
+        //val trunc_sat_f64_u : Instruction
+
+    (*
+    /// Contains memory instructions for storing and loading 64-bit integers.
+    [<RequireQualifiedAccess>]
+    module I64 =
+        val load : MemArg -> Instruction
+
+        val load8_s : m: MemArg -> Instruction
+        val load8_u : m: MemArg -> Instruction
+        val load16_s : m: MemArg -> Instruction
+        val load16_u : m: MemArg -> Instruction
+        val load32_s : m: MemArg -> Instruction
+        val load32_u : m: MemArg -> Instruction
+
+        val store : m: MemArg -> Instruction
+
+        val store8 : m: MemArg -> Instruction
+        val store16 : m: MemArg -> Instruction
+        val store32 : m: MemArg -> Instruction
+
+        val ``const`` : n: int64 -> Instruction
+
+        val eqz : Instruction
+        val eq : Instruction
+        val ne : Instruction
+        val lt_s : Instruction
+        val lt_u : Instruction
+        val gt_s : Instruction
+        val gt_u : Instruction
+        val le_s : Instruction
+        val le_u : Instruction
+        val ge_s : Instruction
+        val ge_u : Instruction
+
+        val clz : Instruction
+        val ctz : Instruction
+        val popcnt : Instruction
+        val add : Instruction
+        val sub : Instruction
+        val mul : Instruction
+        val div_s : Instruction
+        val div_u : Instruction
+        val rem_s : Instruction
+        val rem_u : Instruction
+        val ``and`` : Instruction
+        val ``or`` : Instruction
+        val xor : Instruction
+        val shl : Instruction
+        val shr_s : Instruction
+        val shr_u : Instruction
+        val rotl : Instruction
+        val rotr : Instruction
+
+        val extend_i32_s : Instruction
+        val extend_i32_u : Instruction
+        val trunc_f32_s : Instruction
+        val trunc_f32_u : Instruction
+        val trunc_f64_s : Instruction
+        val trunc_f64_u : Instruction
+
+        val reinterpret_f64 : Instruction
+
+        val extend8_s : Instruction
+        val extend16_s : Instruction
+        val extend32_s : Instruction
+
+        val trunc_sat_f32_s : Instruction
+        val trunc_sat_f32_u : Instruction
+        val trunc_sat_f64_s : Instruction
+        val trunc_sat_f64_u : Instruction
+
+    /// Contains memory instructions for storing and loading 32-bit floating-point numbers.
+    [<RequireQualifiedAccess>]
+    module F32 =
+        val load : MemArg -> Instruction
+
+        val store : m: MemArg -> Instruction
+
+        val ``const`` : n: Single -> Instruction
+
+        val eq : Instruction
+        val ne : Instruction
+        val lt : Instruction
+        val gt : Instruction
+        val le : Instruction
+        val ge : Instruction
+
+        val abs : Instruction
+        val neg : Instruction
+        val ceil : Instruction
+        val floor : Instruction
+        val trunc : Instruction
+        val nearest : Instruction
+        val sqrt : Instruction
+        val add : Instruction
+        val sub : Instruction
+        val mul : Instruction
+        val div : Instruction
+        val min : Instruction
+        val max : Instruction
+        val copysign : Instruction
+
+        val convert_i32_s : Instruction
+        val convert_i32_u : Instruction
+        val convert_i64_s : Instruction
+        val convert_i64_u : Instruction
+        val demote_f64 : Instruction
+
+        val reinterpret_i32 : Instruction
+
+    /// Contains memory instructions for storing and loading 64-bit floating-point numbers.
+    [<RequireQualifiedAccess>]
+    module F64 =
+        val load : MemArg -> Instruction
+
+        val store : m: MemArg -> Instruction
+
+        val ``const`` : n: Double -> Instruction
+
+        val eq : Instruction
+        val ne : Instruction
+        val lt : Instruction
+        val gt : Instruction
+        val le : Instruction
+        val ge : Instruction
+
+        val abs : Instruction
+        val neg : Instruction
+        val ceil : Instruction
+        val floor : Instruction
+        val trunc : Instruction
+        val nearest : Instruction
+        val sqrt : Instruction
+        val add : Instruction
+        val sub : Instruction
+        val mul : Instruction
+        val div : Instruction
+        val min : Instruction
+        val max : Instruction
+        val copysign : Instruction
+
+        val convert_i32_s : Instruction
+        val convert_i32_u : Instruction
+        val convert_i64_s : Instruction
+        val convert_i64_u : Instruction
+        val promote_f32 : Instruction
+
+        val reinterpret_i64 : Instruction
+    *)
+
+    [<RequireQualifiedAccess>]
+    module Memory =
+        val size : Instruction
+        val grow : Instruction
+
+        //val init : Index<IndexKinds.Data> -> Instruction
+        //val copy : Instruction
+        //val fill : Instruction
+
+    //[<RequireQualifiedAccess>]
+    //module Data =
+    //    val drop : Index<IndexKinds.Data> -> Instruction
 
 /// Represents a function body or the value of a global variable.
-type Expr = unit
+type Expr = seq<InstructionSet.Instruction>
 
 /// (1) Defines the function types used by the module.
-type TypeSection = IndexedVector<FuncType, FuncType>
+type TypeSection = IndexedVector<IndexKinds.Type, FuncType>
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type ImportDesc =
-    | Func of Index<FuncType>
+    | Func of Index<IndexKinds.Type>
     | Table of TableType
     | Mem of MemType
     | Global of GlobalType
@@ -132,28 +501,38 @@ type Import =
       Description: ImportDesc }
 
 /// (2) Defines the functions, tables, memories, and globals defined in another module used by the module.
-type ImportSection = IndexedVector<Import, Import>
+[<Sealed>]
+type ImportSection =
+    new: imports: ImmutableArray<Import> -> ImportSection
+
+    member Count : int32
+    member Item: index: int32 -> inref<Import> with get
+
+    member Functions: IndexedVector<IndexKinds.Func, Index<IndexKinds.Type>>
+    member Tables: IndexedVector<IndexKinds.Table, TableType>
+    member Memories: IndexedVector<IndexKinds.Mem, MemType>
+    member Globals: IndexedVector<IndexKinds.Global, GlobalType>
 
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; NoEquality>]
 type Function =
-    { Type: FuncType }
+    { Type: Index<IndexKinds.Type> }
 
 /// (3) Specifies the signatures of the functions defined in the module.
-type FunctionSection = IndexedVector<Function, Function>
+type FunctionSection = IndexedVector<IndexKinds.Func, Function>
 
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; NoEquality>]
 type Table =
     { Type: TableType }
 
 /// (4)
-type TableSection = IndexedVector<Table, Table>
+type TableSection = IndexedVector<IndexKinds.Table, Table>
 
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; NoEquality>]
 type Mem =
     { Type: MemType }
 
 /// (5)
-type MemorySection = IndexedVector<Mem, Mem>
+type MemorySection = IndexedVector<IndexKinds.Mem, Mem>
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type Global =
@@ -161,14 +540,14 @@ type Global =
       Expression: Expr }
 
 /// (6) Defines the global variables of a module.
-type GlobalSection = IndexedVector<Global, Global>
+type GlobalSection = IndexedVector<IndexKinds.Global, Global>
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type ExportDesc =
-    | Func of Index<Function>
-    | Table of Index<Table>
-    | Mem of Index<Mem>
-    | Global of Index<Global>
+    | Func of Index<IndexKinds.Func>
+    | Table of Index<IndexKinds.Table>
+    | Mem of Index<IndexKinds.Mem>
+    | Global of Index<IndexKinds.Global>
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type Export =
@@ -176,16 +555,16 @@ type Export =
       Description: ExportDesc }
 
 /// (7) Specifies the functions, tables, memories, and globals in the module that are exported.
-type ExportSection = IndexedVector<Export, Export>
+type ExportSection = ImmutableArray<Export>
 
 /// (8) Specifies the index of the function "that is automatically called invoked when the module is instantiated".
-type StartSection = Index<Function>
+type StartSection = FunctionIndex
 
 type Elem
 //    | 
 
 /// (9)
-type ElementSection //= IndexedVector<Elem, Elem>
+type ElementSection = IndexedVector<IndexKinds.Elem, Elem>
 
 /// Represents the body of a function.
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
@@ -194,15 +573,15 @@ type Code =
       Body: Expr }
 
 /// (10) Contains the local variables and bodies of the functions defined in the module.
-type CodeSection = IndexedVector<Code, Code>
+type CodeSection = ImmutableArray<Code>
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type Data =
-    | Active of Index<Mem> * Expr * ReadOnlyMemory<byte>
+    | Active of Index<IndexKinds.Mem> * Expr * ReadOnlyMemory<byte>
     | Passive of ReadOnlyMemory<byte>
 
 /// (11)
-type DataSection = IndexedVector<Data, Data>
+type DataSection = IndexedVector<IndexKinds.Data, Data>
 
 /// (12) Optional number than indicates "the number of data segments in the data section".
 type DataCountSection = uint32
@@ -286,3 +665,8 @@ module ModuleSections =
 type WasmModule =
     { Version: uint32
       Sections: ModuleSections }
+
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
+type ValidatedModule = internal Validated of WasmModule
+
+val inline (|ValidatedModule|) : ValidatedModule -> WasmModule
