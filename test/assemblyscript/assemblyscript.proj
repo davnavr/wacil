@@ -1,0 +1,21 @@
+<Project DefaultTargets="Rebuild" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)\out</OutDir>
+  </PropertyGroup>
+
+  <Target Name="Clean">
+    <RemoveDir Directories="$(OutDir)" />
+  </Target>
+
+  <Target Name="Build" AfterTargets="Clean">
+    <MakeDir Directories="$(OutDir)" />
+
+    <Exec
+        Command="npx asc $(MSBuildThisFileDirectory)\add5.ts -Osize --runtime minimal -o $(OutDir)\add5.wasm"
+        LogStandardErrorAsError="true" />
+  </Target>
+
+  <Target Name="Rebuild" DependsOnTargets="Clean; Build" />
+
+</Project>

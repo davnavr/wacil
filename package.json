@@ -1,0 +1,6 @@
+{
+    "private": true,
+    "devDependencies": {
+        "assemblyscript": "^0.19.10"
+    }
+}
