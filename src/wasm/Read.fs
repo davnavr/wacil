@@ -66,7 +66,9 @@ type SlicedByteStream (length: uint32, source: ByteStream) =
             if uint32 buffer.Length > remaining
             then buffer.Slice(0, Checked.int32 remaining)
             else buffer
-        base.Read buffer'
+        let read = base.Read buffer'
+        remaining <- Checked.(-) remaining (uint32 read)
+        read
 
 let readAllBytes (stream: ByteStream) (buffer: Span<byte>) =
     let read = stream.Read buffer
@@ -240,13 +242,30 @@ let readInstructionSeq (stream: SlicedByteStream) =
     let mutable endOpcodeCount = 0u
 
     while stream.Remaining > 0u do
-        match readByte stream with
-        | 0uy -> unreachable
-        | 1uy -> nop
+        let opcode = readByte stream
 
+        match opcode with
+        // |if, block, loop, etc. ->
+        | 0x0Buy when stream.Remaining > 0u -> endOpcodeCount <- Checked.(-) endOpcodeCount 1u
+        | _ -> ()
 
+        { Instruction.Opcode = opcode
+          Arguments =
+            match opcode with
+            | 0uy
+            | 1uy
 
-        | bad -> failwithf "TODO: Error for unknown opcode 0x%02X" bad
+            | 0x0Buy
+
+            | 0x6Auy -> InstructionArguments.Nothing
+
+            | 0x20uy
+            | 0x21uy
+            | 0x22uy -> InstructionArguments.LocalIndex (index stream)
+
+            | 0x41uy -> InstructionArguments.I32(int32(Integer.u32 stream))
+
+            | bad -> failwithf "TODO: Error for unknown opcode 0x%02X" bad }
         |> instructions.Add
 
     if endOpcodeCount > 0u then failwith "TODO: Error for mismatch of end opcodes"
@@ -257,12 +276,12 @@ let readInstructionSeq (stream: SlicedByteStream) =
 
 let expression stream: Expr =
     let instrs = readInstructionSeq stream
-    let terminator = readByte stream
-    if terminator <> Control.``end``.Opcode then
+    let terminator = &instrs.ItemRef(instrs.Length - 1)
+    if terminator.Opcode <> Control.``end``.Opcode then
         failwithf
             "TODO: Error for last byte of expression was expected to be end opcode 0x%02X but got 0x%02X"
             Control.``end``.Opcode
-            terminator
+            terminator.Opcode
     instrs :> seq<_>
 
 [<Struct>]
