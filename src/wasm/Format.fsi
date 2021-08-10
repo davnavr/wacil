@@ -683,4 +683,4 @@ type WasmModule =
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type ValidatedModule = internal Validated of WasmModule
 
-val inline (|ValidatedModule|) : ValidatedModule -> WasmModule
+val (|ValidatedModule|) : ValidatedModule -> WasmModule

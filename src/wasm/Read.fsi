@@ -39,3 +39,8 @@ type InvalidSectionIdException with override Message: string
 /// <exception cref="T:System.ArgumentException">Thrown when the <paramref name="stream"/> does not support reading.</exception>
 /// <exception cref="T:Wasm.Read.ReadException" />
 val fromStream : stream: #Stream -> ValidatedModule
+
+/// <exception cref="T:System.IO.FileNotFoundException">
+/// Thrown when the file specified by the <paramref name="path"/> does not exist.
+/// </exception>
+val fromPath : path: string -> ValidatedModule

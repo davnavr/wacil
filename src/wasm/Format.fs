@@ -6,7 +6,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 
 module Preamble =
-    let magic = ImmutableArray.Create<byte> "\0asm"B
+    let magic = ImmutableArray.Create<byte> "\000asm"B
     let version = ImmutableArray.Create<byte> [| 1uy; 0uy; 0uy; 0uy |]
 
 let [<Literal>] PageSize = 65536u
@@ -424,7 +424,7 @@ type ModuleSectionsEnumerator =
     member this.MoveNext() =
         if this.index < this.sections.Length then
             this.index <- this.index + 1
-            true
+            this.index < this.sections.Length
         else
             false
 
@@ -504,4 +504,4 @@ type WasmModule =
 [<Struct>]
 type ValidatedModule = Validated of WasmModule
 
-let inline (|ValidatedModule|) (Validated m) = m
+let (|ValidatedModule|) (Validated m) = m

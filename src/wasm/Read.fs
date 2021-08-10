@@ -23,7 +23,7 @@ type State =
         | ReadSectionContents id -> sprintf "reading section contents %A (%i)" id (uint8 id)
 
 type ReadException (offset: uint32, state: State, inner: exn) =
-    inherit Exception(sprintf "Error while %O at offset %i (0x04X) from start of file: %s" state offset inner.Message, inner)
+    inherit Exception(sprintf "Exception while %O at offset %i (0x%04X) from start of file" state offset offset, inner)
 
     member _.Offset = offset
     member _.State = state
@@ -44,14 +44,14 @@ with override this.Message = let id' = uint8 this.id in sprintf "Invalid section
 [<Interface>]
 type IReader = abstract Read: buffer: Span<byte> -> int32
 
-let readBytes (source: #IReader) (buffer: Span<byte>) =
+let readBytes (source: byref<#IReader>) (buffer: Span<byte>) =
     let read = source.Read buffer
     if read <> buffer.Length then
         failwithf "TODO: Error for unexpected end of reader (attempted to read %i bytes but read %i bytes instead)" buffer.Length read
 
-let readMagicBytes source (expected: ImmutableArray<byte>) e =
+let readMagicBytes (source: byref<_>) (expected: ImmutableArray<byte>) e =
     let actual = SpanHelpers.stackalloc expected.Length
-    readBytes source actual
+    readBytes &source actual
     if actual.SequenceEqual(expected.AsSpan()) |> not then
         actual.ToArray() |> e |> raise
 
@@ -65,44 +65,59 @@ let readU32 source =
 //    if not BitConverter.IsLittleEndian then buffer.Reverse()
 //    BitConverter.ToUInt32(SpanHelpers.readonly buffer)
 
-[<IsReadOnly; Struct; NoComparison; NoEquality>]
+[<Struct; NoComparison; NoEquality>]
 type ByteStreamReader<'Stream when 'Stream :> Stream> (source: 'Stream) =
     interface IReader with
         member _.Read buffer = source.Read buffer
 
-let readWasmMagic source = readMagicBytes source Preamble.magic InvalidMagicException
+[<Struct; NoComparison; NoEquality>]
+type PositionedReader<'Reader when 'Reader :> IReader> =
+    val mutable private pos: uint32
+    val mutable private reader: 'Reader
 
-let readWasmVersion source = readMagicBytes source Preamble.version InvalidVersionException
+    new (source: 'Reader) = { pos = 0u; reader = source }
 
-let readSectionId (source: #IReader) =
+    member this.Position = this.pos
+
+    interface IReader with member this.Read buffer = this.reader.Read buffer
+
+let readPreambleMagic (source: byref<_>) = readMagicBytes &source Preamble.magic InvalidMagicException
+
+let readPreambleVersion (source: byref<_>) = readMagicBytes &source Preamble.version InvalidVersionException
+
+let readSectionId (source: byref<#IReader>) =
     let buffer = SpanHelpers.stackalloc sizeof<uint8>
     match source.Read buffer with
     | 0 -> ValueNone
     | _ -> ValueSome(LanguagePrimitives.EnumOfValue buffer.[0])
 
-let readSectionContents (source: #IReader) (id: SectionId) =
+let readSectionContents (source: byref<#IReader>) (id: SectionId) =
     if id > SectionId.DataCount then raise(InvalidSectionIdException id)
     match readU32 source with
     | 0u -> ValueNone
     | size ->
         failwith "What now?"
 
-let read source (sections: ModuleSections.Builder) state =
-    match state with
-    | ReadMagic ->
-        readWasmMagic source
-        ValueSome ReadVersionField
-    | ReadVersionField ->
-        readWasmVersion source
-        ValueSome ReadSectionId
-    | ReadSectionId -> ValueOption.map ReadSectionContents (readSectionId source)
-    | ReadSectionContents id ->
-        ValueOption.iter sections.Add (readSectionContents source id)
-        ValueSome ReadSectionId
+let read (source: byref<PositionedReader<_>>) (sections: ModuleSections.Builder) state =
+    let start = source.Position
+    try
+        match state with
+        | ReadMagic ->
+            readPreambleMagic &source
+            ValueSome ReadVersionField
+        | ReadVersionField ->
+            readPreambleVersion &source
+            ValueSome ReadSectionId
+        | ReadSectionId -> ValueOption.map ReadSectionContents (readSectionId &source)
+        | ReadSectionContents id ->
+            ValueOption.iter sections.Add (readSectionContents &source id)
+            ValueSome ReadSectionId
+    with
+    | ex -> raise(ReadException(start, state, ex))
 
-let rec loop source (sections: ModuleSections.Builder) state =
-    match read source sections state with
-    | ValueSome next -> loop source sections next
+let rec loop (source: byref<_>) (sections: ModuleSections.Builder) state =
+    match read &source sections state with
+    | ValueSome next -> loop &source sections next
     | ValueNone ->
         let version = SpanHelpers.stackalloc sizeof<uint32>
         Preamble.version.AsSpan().CopyTo version
@@ -112,10 +127,12 @@ let rec loop source (sections: ModuleSections.Builder) state =
         |> ValidatedModule.Validated
 
 let fromStream (stream: #Stream) =
-    if isNull stream then nullArg (nameof stream)
+    if Object.ReferenceEquals(null, stream) then nullArg (nameof stream)
     try
         if not stream.CanRead then invalidArg (nameof stream) "The stream must support reading"
-        let reader = ByteStreamReader stream
-        loop reader (ModuleSections.Builder()) State.ReadMagic
+        let mutable reader = PositionedReader(ByteStreamReader stream)
+        loop &reader (ModuleSections.Builder()) State.ReadMagic
     finally
         stream.Close()
+
+let fromPath path = fromStream(File.OpenRead path)
