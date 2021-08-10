@@ -21,7 +21,9 @@ module FileType =
 type Options =
     { ModuleFileName: string
       FileType: FileType
-      HighEntropyVA: bool }
+      HighEntropyVA: bool
+      Namespace: string
+      MainClassName: string }
 
 [<RequireQualifiedAccess>]
 module Generate =
@@ -70,7 +72,34 @@ module Generate =
         let mscorlib = addCoreAssembly options metadata
         let assembly = generateAssemblyRow options metadata
 
+        let addCoreType =
+            let system = metadata.GetOrAddString "System"
+            fun name ->
+                metadata.AddTypeReference(AssemblyReferenceHandle.op_Implicit mscorlib, system, metadata.GetOrAddString name)
+
+        let object = addCoreType "Object"
+
         metadata.SetCapacity(TableIndex.TypeDef, rowCount = 2)
+
+        let globals =
+            metadata.AddTypeDefinition (
+                Unchecked.defaultof<_>,
+                StringHandle(),
+                metadata.GetOrAddString "<Module>",
+                TypeReferenceHandle.op_Implicit object,
+                FieldDefinitionHandle(),
+                MethodDefinitionHandle()
+            )
+
+        let gclass =
+            metadata.AddTypeDefinition (
+                TypeAttributes.Public ||| TypeAttributes.Sealed ||| TypeAttributes.Abstract,
+                (if String.IsNullOrEmpty options.Namespace then StringHandle() else metadata.GetOrAddString options.Namespace),
+                metadata.GetOrAddString options.MainClassName,
+                TypeReferenceHandle.op_Implicit object,
+                FieldDefinitionHandle(),
+                MethodDefinitionHandle()
+            )
 
         let cliMetadataRoot = MetadataRootBuilder metadata
         let pe =
