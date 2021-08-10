@@ -15,6 +15,8 @@ let [<Literal>] PageSize = 65536u
 type MemSize (multiple: uint16) =
     member _.Size = uint32 multiple * uint32 PageSize
 
+    override _.ToString() = multiple.ToString()
+
     static member inline op_Implicit(size: MemSize) = size.Size
     static member inline op_Explicit(size: MemSize) = Checked.int32 size.Size
 
@@ -68,6 +70,8 @@ module Types =
         | Var of ValType
 
     module Limit =
+        let ofMin min = Limit(min, ValueNone)
+
         let tryWithMax min max =
             match max with
             | ValueSome max' when max' < min -> ValueNone
@@ -375,7 +379,10 @@ type Elem = | TODOFigureOutHowToRepresentElem
 type ElementSection = IndexedVector<IndexKinds.Elem, Elem>
 
 [<Struct>]
-type Code = { Locals: ReadOnlyMemory<ValType>; Body: Expr }
+type Locals = { Count: uint32; Type: ValType }
+
+[<Struct>]
+type Code = { Locals: ImmutableArray<Locals>; Body: Expr }
 
 type CodeSection = ImmutableArray<Code>
 

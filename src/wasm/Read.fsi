@@ -1,5 +1,6 @@
-﻿[<RequireQualifiedAccess>]
-module Wasm.Read
+﻿/// Contains functions for reading WebAssembly modules.
+[<RequireQualifiedAccess>]
+module Wasm.ReadModule
 
 open Wasm.Format
 

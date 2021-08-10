@@ -1,10 +1,11 @@
-﻿module Wasm.Read
+﻿module Wasm.ReadModule
 
 open System
 open System.Collections.Immutable
 open System.IO
 
 open Wasm.Format
+open Wasm.Format.InstructionSet
 open Wasm.Format.Types
 
 type State =
@@ -18,7 +19,7 @@ type State =
         | ReadMagic -> "reading magic number"
         | ReadVersionField -> "reading version field"
         | ReadSectionId -> "reading section identifier"
-        | ReadSectionContents id -> sprintf "reading section contents of the %A (%i) section" id (uint8 id)
+        | ReadSectionContents id -> sprintf "reading contents of the %A (%i) section" id (uint8 id)
 
 type ReadException (offset: uint32, state: State, inner: exn) =
     inherit Exception(sprintf "Exception while %O at offset %i (0x%04X) from start of file" state offset offset, inner)
@@ -40,15 +41,32 @@ exception InvalidSectionIdException of id: SectionId * index: int32
 with
     override this.Message =
         let id' = uint8 this.id
-        sprintf "The ID byte  0x%02X (%i) of the section at index %i was invalid" id' id' this.index
+        sprintf "The ID byte 0x%02X (%i) of the section at index %i was invalid" id' id' this.index
 
 type ByteStream (source: Stream) =
     let mutable pos = 0u
+    member _.Stream = source
     member _.Position = pos
-    member _.Read buffer =
+    abstract Read: buffer: Span<byte> -> int32
+    default _.Read buffer =
         let read = source.Read buffer
         pos <- Checked.(+) pos (Checked.uint32 read)
         read
+
+[<Sealed>]
+type SlicedByteStream (length: uint32, source: ByteStream) =
+    inherit ByteStream(source.Stream)
+
+    let mutable remaining = length
+
+    member _.Remaining = remaining
+
+    override _.Read buffer =
+        let buffer' =
+            if uint32 buffer.Length > remaining
+            then buffer.Slice(0, Checked.int32 remaining)
+            else buffer
+        base.Read buffer'
 
 let readAllBytes (stream: ByteStream) (buffer: Span<byte>) =
     let read = stream.Read buffer
@@ -99,6 +117,20 @@ let readSectionId (stream: ByteStream) =
     | 0 -> ValueNone
     | _ -> ValueSome(LanguagePrimitives.EnumOfValue buffer.[0])
 
+let name stream =
+    let count = Checked.int32(Integer.u32 stream)
+    match count with
+    | 0 -> String.Empty
+    | _  ->
+        let buffer =
+            if count <= 512
+            then SpanHelpers.stackalloc count
+            else Span(Array.zeroCreate count)
+
+        readAllBytes stream buffer
+
+        System.Text.Encoding.UTF8.GetString(SpanHelpers.readonly buffer)
+
 let many<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T>> stream count =
     let items = ImmutableArray.CreateBuilder count
     for _ = 0 to count - 1 do items.Add(Unchecked.defaultof<'Reader>.Read stream)
@@ -147,17 +179,120 @@ module Type =
     [<Struct>]
     type FuncTypeReader = interface IReader<FuncType> with member _.Read stream = functype stream
 
+    let limit<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T> and 'T : struct and 'T : equality and 'T : comparison>
+        stream
+        =
+        let inline read() = Unchecked.defaultof<'Reader>.Read stream
+        match readByte stream with
+        | 0uy -> read() |> Limit.ofMin
+        | 1uy ->
+            let min = read()
+            let max = read()
+            match Limit.tryWithMax min (ValueSome max) with
+            | ValueSome limit -> limit
+            | ValueNone -> failwithf "TODO: Error for limit maximum %A cannot exceed limit minimum %A" max min
+        | bad -> failwithf "TODO: Error for invalid limit kind 0x%02X" bad
+
+    [<Struct>]
+    type private MemSizeParser =
+        interface IReader<MemSize> with
+            member _.Read stream =
+                let value = Integer.u32 stream
+                let multiple = value / PageSize
+                if multiple * PageSize = value
+                then MemSize(Checked.uint16 multiple)
+                else
+                    failwithf
+                        "TODO: Error for value 0x%08X (%i) is not a multiple of the WebAssembly page size (0x%08X) (%i)"
+                        value
+                        value
+                        PageSize
+                        PageSize
+
+    let memtype stream = limit<MemSizeParser, _> stream
+
 [<Struct>]
 type FunctionReader = interface IReader<Function> with member _.Read stream = { Function.Type = index stream }
+
+[<Struct>]
+type MemReader = interface IReader<Mem> with member _.Read stream = { Mem.Type = Type.memtype stream }
+
+[<Struct>]
+type ExportReader =
+    interface IReader<Export> with
+        member _.Read stream =
+            { Export.Name = name stream
+              Description =
+                match readByte stream with
+                | 0uy -> ExportDesc.Func(index stream)
+                | 1uy -> ExportDesc.Table(index stream)
+                | 2uy -> ExportDesc.Mem(index stream)
+                | 3uy -> ExportDesc.Global(index stream)
+                | bad -> failwithf "TODO: Error for unknown export kind 0x%02X" bad }
+
+[<Struct>]
+type LocalsReader =
+    interface IReader<Locals> with
+        member _.Read stream = { Locals.Count = Integer.u32 stream; Type = Type.valtype stream }
+
+let readInstructionSeq (stream: SlicedByteStream) =
+    let instructions = ImmutableArray.CreateBuilder()
+    let mutable endOpcodeCount = 0u
+
+    while stream.Remaining > 0u do
+        match readByte stream with
+        | 0uy -> unreachable
+        | 1uy -> nop
+
+
+
+        | bad -> failwithf "TODO: Error for unknown opcode 0x%02X" bad
+        |> instructions.Add
+
+    if endOpcodeCount > 0u then failwith "TODO: Error for mismatch of end opcodes"
+
+    if instructions.Capacity = instructions.Count
+    then instructions.MoveToImmutable()
+    else instructions.ToImmutable()
+
+let expression stream: Expr =
+    let instrs = readInstructionSeq stream
+    let terminator = readByte stream
+    if terminator <> Control.``end``.Opcode then
+        failwithf
+            "TODO: Error for last byte of expression was expected to be end opcode 0x%02X but got 0x%02X"
+            Control.``end``.Opcode
+            terminator
+    instrs :> seq<_>
+
+[<Struct>]
+type CodeReader =
+    interface IReader<Code> with
+        member _.Read stream =
+            let size = Integer.u32 stream
+            let stream' = SlicedByteStream(size, stream)
+            let locals = vector<LocalsReader, _> stream'
+            { Code.Locals = locals; Body = expression stream' }
 
 let readSectionContents stream i (id: SectionId) =
     match Integer.u32 stream with
     | 0u -> ValueNone
     | size ->
+        // TODO: Use SlicedByteStream
         // TODO: Wrap stream to limit the number of bytes that are read. Or just make a new exception type ___MismatchException and keep track of the number of bytes that are actually read.
         match id with
-        | SectionId.Type -> ValueSome(TypeSection(ivector<Type.FuncTypeReader, _, _> stream Index.Zero))
-        | SectionId.Function -> ValueSome(FunctionSection(ivector<FunctionReader, _, _> stream Index.Zero))
+        | SectionId.Type -> TypeSection(ivector<Type.FuncTypeReader, _, _> stream Index.Zero) |> ValueSome
+        //| SectionId.Import -> 
+        | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> stream Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
+        //| SectionId.Table -> 
+        | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> stream Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
+        //| SectionId.Global -> 
+        | SectionId.Export -> ExportSection(vector<ExportReader, _> stream) |> ValueSome
+        //| SectionId.Start -> 
+        //| SectionId.Element -> 
+        | SectionId.Code -> CodeSection(vector<CodeReader, _> stream) |> ValueSome
+
+        | SectionId.Custom -> failwith "TODO: Custom sections not supported yet."
         | _ -> raise(InvalidSectionIdException(id, i))
 
 let read (stream: ByteStream) (sections: ModuleSections.Builder) state =

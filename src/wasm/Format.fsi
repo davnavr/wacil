@@ -20,6 +20,10 @@ type Name = string
 type MemSize =
     member Size: uint32
 
+    internal new: multiple: uint16 -> MemSize
+
+    override ToString: unit -> string
+
     interface IEquatable<MemSize>
 
 module Types =
@@ -86,6 +90,7 @@ module Types =
 
     [<RequireQualifiedAccess>]
     module Limit =
+        val ofMin: min: 'T -> Limit<'T>
         val tryWithMax: min: 'T -> max: 'T voption -> Limit<'T> voption when 'T : comparison
 
 [<NoComparison; NoEquality>]
@@ -589,10 +594,15 @@ type Elem
 /// (9)
 type ElementSection = IndexedVector<IndexKinds.Elem, Elem>
 
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
+type Locals =
+    { Count: uint32
+      Type: ValType }
+
 /// Represents the body of a function.
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type Code =
-    { Locals: ReadOnlyMemory<ValType>
+    { Locals: ImmutableArray<Locals>
       Body: Expr }
 
 /// (10) Contains the local variables and bodies of the functions defined in the module.
