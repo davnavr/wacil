@@ -6,7 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Generator.fs" />
     <Compile Include="Program.fs" />
+
+    <PackageReference Include="Argu" Version="6.1.1" />
+
+    <ProjectReference Include="$(RootDirectory)\src\wasm\wasm.fsproj" />
   </ItemGroup>
 
 </Project>

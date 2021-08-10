@@ -1,4 +1,4 @@
 # wasm-il
 ```F#
-WebAssembly |> CIL
+WebAssembly |> dotnet exec
 ```
