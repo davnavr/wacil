@@ -83,6 +83,12 @@ module Integer =
     /// Reads a 32-bit unsigned integer in LEB128 encoding.
     let u32 stream = leb128 32 uint32 stream
 
+let index<'Class when 'Class :> IndexKinds.Kind> stream = Index<'Class>(Integer.u32 stream)
+
+[<Struct>]
+type IndexReader<'Class when 'Class :> IndexKinds.Kind> =
+    interface IReader<Index<'Class>> with member _.Read stream = index stream
+
 let readPreambleMagic stream = readMagicBytes stream Preamble.magic InvalidMagicException
 
 let readPreambleVersion stream = readMagicBytes stream Preamble.version InvalidVersionException
@@ -102,8 +108,8 @@ let vector<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T>> stream 
     let count = Checked.int32(Integer.u32 stream)
     (many<'Reader, 'T> stream count).ToImmutable()
 
-let ivector<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T>> stream start =
-    IndexedVector.ofBlock start (vector<'Reader, 'T> stream)
+let ivector<'Reader, 'IndexClass, 'T when 'Reader : struct and 'Reader :> IReader<'T> and 'IndexClass :> IndexKinds.Kind> stream start =
+    IndexedVector.ofBlock start (vector<'Reader, 'T> stream): IndexedVector<'IndexClass, _>
 
 [<RequireQualifiedAccess>]
 module Type =
@@ -141,13 +147,17 @@ module Type =
     [<Struct>]
     type FuncTypeReader = interface IReader<FuncType> with member _.Read stream = functype stream
 
+[<Struct>]
+type FunctionReader = interface IReader<Function> with member _.Read stream = { Function.Type = index stream }
+
 let readSectionContents stream i (id: SectionId) =
     match Integer.u32 stream with
     | 0u -> ValueNone
     | size ->
         // TODO: Wrap stream to limit the number of bytes that are read. Or just make a new exception type ___MismatchException and keep track of the number of bytes that are actually read.
         match id with
-        | SectionId.Type -> ValueSome(TypeSection(ivector<Type.FuncTypeReader, _> stream Index.Zero))
+        | SectionId.Type -> ValueSome(TypeSection(ivector<Type.FuncTypeReader, _, _> stream Index.Zero))
+        | SectionId.Function -> ValueSome(FunctionSection(ivector<FunctionReader, _, _> stream Index.Zero))
         | _ -> raise(InvalidSectionIdException(id, i))
 
 let read (stream: ByteStream) (sections: ModuleSections.Builder) state =
