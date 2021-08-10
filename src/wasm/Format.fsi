@@ -23,6 +23,14 @@ type MemSize =
     interface IEquatable<MemSize>
 
 module Types =
+    type WasmType =
+        | externref = 0x6Fuy
+        | funcref = 0x70uy
+        | i32 = 0x7Fuy
+        | i64 = 0x7Euy
+        | f32 = 0x7Duy
+        | f64 = 0x7Cuy
+
     [<NoComparison; StructuralEquality>]
     type NumType =
         | I32
@@ -153,6 +161,11 @@ module internal IndexedVector =
     val ofBlockBuilder<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> :
         start: Index<'IndexClass> ->
         builder: ImmutableArray<'T>.Builder ->
+        IndexedVector<'IndexClass, 'T>
+
+    val ofBlock<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> :
+        start: Index<'IndexClass> ->
+        vector: ImmutableArray<'T> ->
         IndexedVector<'IndexClass, 'T>
 
 val inline (|Index|) : index: Index<'Class> -> uint32
@@ -612,7 +625,10 @@ type Section =
     | DataSection of DataSection
     | DataCountSection of DataCountSection
 
-[<Sealed>]
+exception IncorrectSectionPositionException of section: Section
+
+type IncorrectSectionPositionException with override Message: string
+
 exception DuplicateSectionException of existing: Section
 
 type DuplicateSectionException with override Message: string
@@ -665,9 +681,13 @@ module ModuleSections =
         new: capacity: int32 -> Builder
         new: unit -> Builder
 
+        member Count: int32
+
         /// <exception cref="T:Wasm.Format.DuplicateSectionException" />
+        /// <exception cref="T:Wasm.Format.IncorrectSectionPositionException" />
         member Add: section: Section -> unit
         // TODO: Consider throwing exception if length of code section vector <> length of function section vector.
+        /// <exception cref="T:Wasm.Format.IncorrectSectionPositionException" />
         member TryAdd: section: Section * duplicate: outref<Section> -> bool
         member ToImmutable: unit -> ModuleSections
 

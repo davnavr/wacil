@@ -23,6 +23,14 @@ module MemSize =
 
 [<AutoOpen>]
 module Types =
+    type WasmType =
+        | externref = 0x6Fuy
+        | funcref = 0x70uy
+        | i32 = 0x7Fuy
+        | i64 = 0x7Euy
+        | f32 = 0x7Duy
+        | f64 = 0x7Cuy
+
     type NumType =
         | I32
         | I64
@@ -282,6 +290,12 @@ module IndexedVector =
             member _.First = start
             member this.Item with get index = &builder.ItemRef(int32 this.First + int32 index) }
 
+    let ofBlock<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> start (vector: ImmutableArray<'T>) =
+        { new IndexedVector<'IndexClass, 'T> with
+            member _.Length = vector.Length
+            member _.First = start
+            member this.Item with get index = &vector.ItemRef(int32 this.First + int32 index) }
+
 type Expr = seq<InstructionSet.Instruction>
 
 type TypeSection = IndexedVector<IndexKinds.Type, FuncType>
@@ -406,11 +420,20 @@ module Section =
         | DataSection _ -> SectionId.Data
         | DataCountSection _ -> SectionId.DataCount
 
+exception IncorrectSectionPositionException of section: Section
+with
+    override this.Message =
+        let id = Section.id this.section
+        sprintf
+            "The section with ID %A (%i) is in the incorrect position, non-custom sections are required to be in ascending ID order"
+            id
+            (uint8 id)
+
 exception DuplicateSectionException of existing: Section
 with
     override this.Message =
         let id = Section.id this.existing
-        sprintf "A non-custom section with the same id %A (%i) already exists" id (uint8 id)
+        sprintf "A non-custom section with the same ID %A (%i) already exists" id (uint8 id)
 
 [<Struct>]
 type ModuleSectionsEnumerator =
@@ -466,11 +489,19 @@ module ModuleSections =
     [<Sealed>]
     type Builder (capacity) =
         let sections = ImmutableArray.CreateBuilder capacity
+        let mutable next = SectionId.Custom
 
         new () = Builder 12
 
+        member _.Count = sections.Count
+
         member _.TryAdd(section, duplicate: outref<Section>) =
+            let id = Section.id section
+            if id <> SectionId.Custom && id < next then raise(IncorrectSectionPositionException section)
+            if id >= next then next <- id
+
             sections.Add section
+
             failwith "TODO: Create lookup"
             false
 
