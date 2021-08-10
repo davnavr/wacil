@@ -18,7 +18,7 @@ type State =
         | ReadMagic -> "reading magic number"
         | ReadVersionField -> "reading version field"
         | ReadSectionId -> "reading section identifier"
-        | ReadSectionContents id -> sprintf "reading section contents %A (%i)" id (uint8 id)
+        | ReadSectionContents id -> sprintf "reading section contents of the %A (%i) section" id (uint8 id)
 
 type ReadException (offset: uint32, state: State, inner: exn) =
     inherit Exception(sprintf "Exception while %O at offset %i (0x%04X) from start of file" state offset offset, inner)
@@ -40,7 +40,7 @@ exception InvalidSectionIdException of id: SectionId * index: int32
 with
     override this.Message =
         let id' = uint8 this.id
-        sprintf "The ID byte of section #%i 0x%02X (%i) was invalid" this.index id' id'
+        sprintf "The ID byte  0x%02X (%i) of the section at index %i was invalid" id' id' this.index
 
 type ByteStream (source: Stream) =
     let mutable pos = 0u

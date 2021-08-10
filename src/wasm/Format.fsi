@@ -688,7 +688,7 @@ module ModuleSections =
         member Add: section: Section -> unit
         // TODO: Consider throwing exception if length of code section vector <> length of function section vector.
         /// <exception cref="T:Wasm.Format.IncorrectSectionPositionException" />
-        member TryAdd: section: Section * duplicate: outref<Section> -> bool
+        member TryAdd: section: Section -> bool
         member ToImmutable: unit -> ModuleSections
 
     val tryOfSeq : sections: seq<Section> -> Result<ModuleSections, Section>

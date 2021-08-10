@@ -489,25 +489,23 @@ module ModuleSections =
     [<Sealed>]
     type Builder (capacity) =
         let sections = ImmutableArray.CreateBuilder capacity
+        let lookup = HashSet(capacity, comparer)
         let mutable next = SectionId.Custom
 
         new () = Builder 12
 
         member _.Count = sections.Count
 
-        member _.TryAdd(section, duplicate: outref<Section>) =
+        member _.TryAdd section =
             let id = Section.id section
             if id <> SectionId.Custom && id < next then raise(IncorrectSectionPositionException section)
-            if id >= next then next <- id
+            if lookup.Add section then
+                if id >= next then next <- id
+                sections.Add section
+                true
+            else false
 
-            sections.Add section
-
-            failwith "TODO: Create lookup"
-            false
-
-        member this.Add(section) =
-            let (duplicate, _) = this.TryAdd section
-            if duplicate then raise(DuplicateSectionException section)
+        member this.Add section = if not(this.TryAdd section) then raise(DuplicateSectionException section)
 
         member _.ToImmutable() = ModuleSections(sections.ToImmutable())
 
@@ -517,8 +515,7 @@ module ModuleSections =
         let mutable duplicate = ValueNone
 
         while duplicate.IsNone && enumerator.MoveNext() do
-            let added, duplicate' = builder.TryAdd enumerator.Current
-            if not added then duplicate <- ValueSome duplicate'
+            if not(builder.TryAdd enumerator.Current) then duplicate <- ValueSome enumerator.Current
 
         match duplicate with
         | ValueNone -> Ok(builder.ToImmutable())
