@@ -179,6 +179,13 @@ module Generate =
                         | ValueSome name' -> MethodAttributes.Public, name'
                         | ValueNone -> MethodAttributes.Private, ("func#" + string i)
 
+                    let mutable phandle = ParameterHandle()
+
+                    for i = 0 to funct.Parameters.Length - 1 do
+                        let param =
+                            metadata.AddParameter(ParameterAttributes.None, metadata.GetOrAddString("param" + string i), i + 1)
+                        if i = 0 then phandle <- param
+
                     let func' =
                         metadata.AddMethodDefinition (
                             MethodAttributes.Static ||| visibility,
@@ -186,7 +193,7 @@ module Generate =
                             metadata.GetOrAddString name,
                             (generateFunctionSignature &funct metadata),
                             (generateMethodBody (uint32 funct.Parameters.Length) code.[i] metadata bodies),
-                            ParameterHandle()
+                            phandle
                         )
 
                     if i = 0 then funci <- func'
