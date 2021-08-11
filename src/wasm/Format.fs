@@ -133,6 +133,8 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     new (index) = { Index = index }
 
+    override this.ToString() = this.Index.ToString()
+
     static member inline Zero = Index<'Class> 0u
     static member (+) (index: Index<'Class>, offset) = Index<'Class>(index.Index + offset)
     static member inline op_Implicit(index: Index<'Class>) = index.Index
@@ -534,6 +536,35 @@ module ModuleSections =
         | Ok sections' -> sections'
         | Error duplicate -> raise(DuplicateSectionException duplicate)
 
+type ModuleExports =
+    { Exports: ExportSection
+      Functions: IReadOnlyDictionary<Index<IndexKinds.Func>, int32>
+      Tables: IReadOnlyDictionary<Index<IndexKinds.Table>, int32>
+      Memories: IReadOnlyDictionary<Index<IndexKinds.Mem>, int32>
+      Globals: IReadOnlyDictionary<Index<IndexKinds.Global>, int32> }
+
+module ModuleExports =
+    let tryGetFunction { Exports = exports; Functions = functions } func =
+        match functions.TryGetValue func with
+        | true, i -> ValueSome exports.[i]
+        | false, _ -> ValueNone
+
+let getModuleExports (exports: ExportSection) =
+    let functions, tables, memories, globals = Dictionary(), Dictionary(), Dictionary(), Dictionary()
+
+    for i = 0 to exports.Length - 1 do
+        match exports.ItemRef(i).Description with
+        | ExportDesc.Func findex -> functions.Add(findex, i)
+        | ExportDesc.Table tindex -> tables.Add(tindex, i)
+        | ExportDesc.Mem mindex -> memories.Add(mindex, i)
+        | ExportDesc.Global gindex -> globals.Add(gindex, i)
+
+    { Exports = exports
+      Functions = functions
+      Tables = tables
+      Memories = memories
+      Globals = globals }
+
 type KnownSections =
     { TypeSection: TypeSection voption
       ImportSection: ImportSection voption
@@ -546,7 +577,7 @@ type KnownSections =
       ElementSection: ElementSection voption
       CodeSection: CodeSection voption
       DataSection: DataSection voption
-      DataCountSection: DataCountSection voption}
+      DataCountSection: DataCountSection voption }
 
 type WasmModule =
     { Version: uint32; Sections: ModuleSections }

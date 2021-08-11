@@ -151,6 +151,8 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     new: index: uint32 -> Index<'Class>
 
+    override ToString: unit -> string
+
     static member inline Zero: Index<'Class>
     static member (+): index: Index<'Class> * offset: uint32 -> Index<'Class>
     static member inline op_Implicit: index: Index<'Class> -> uint32
@@ -727,6 +729,15 @@ type WasmModule =
       Sections: ModuleSections }
 
 val getKnownSections : WasmModule -> KnownSections
+
+[<NoComparison; NoEquality>]
+type ModuleExports
+
+[<RequireQualifiedAccess>]
+module ModuleExports =
+    val tryGetFunction : exports: ModuleExports -> func: Index<IndexKinds.Func> -> Export voption
+
+val getModuleExports : ExportSection -> ModuleExports
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type ValidatedModule = internal Validated of WasmModule

@@ -93,6 +93,7 @@ module Generate =
 
     let toBlob (ValidatedModule file) options (destination: BlobBuilder) =
         let sections = getKnownSections file
+        let exports = ValueOption.map getModuleExports sections.ExportSection
 
         let metadata = MetadataBuilder()
         let bodies = BlobBuilder()
@@ -125,15 +126,27 @@ module Generate =
 
             match sections with
             | { TypeSection = ValueSome types; FunctionSection = ValueSome funcs; CodeSection = ValueSome code } ->
+                let getFunctionName =
+                    match exports with
+                    | ValueSome exports' -> ModuleExports.tryGetFunction exports' >> ValueOption.map (fun export -> export.Name)
+                    | ValueNone -> fun _ -> ValueNone
+
                 for i = 0 to funcs.Length - 1 do
-                    let func = funcs.[funcs.First + uint32 i]
+                    let i' = funcs.First + uint32 i
+                    let func = funcs.[i']
+
+                    let visibility, name =
+                        match getFunctionName i' with
+                        | ValueSome name' -> MethodAttributes.Public, name'
+                        | ValueNone -> MethodAttributes.Private, ("func#" + string i)
+
                     let func' =
                         metadata.AddMethodDefinition (
-                            MethodAttributes.Static, // TODO: If function is exported, make it public
+                            MethodAttributes.Static ||| visibility,
                             MethodImplAttributes.IL,
-                            metadata.GetOrAddString("func#" + string i), // TODO: If function is exported, use its name
+                            metadata.GetOrAddString name,
                             (generateFunctionSignature types func metadata),
-                            failwith "TODO: Get method body",
+                            Unchecked.defaultof<_> (*failwith "TODO: Get method body"*),
                             ParameterHandle()
                         )
 
