@@ -24,6 +24,7 @@ type Options =
     { ModuleFileName: string
       FileType: FileType
       HighEntropyVA: bool
+      TargetFramework: string
       Namespace: string
       MainClassName: string }
 
@@ -129,6 +130,36 @@ module Generate =
         bodies.Builder.Align 4
         bodies.AddMethodBody(instructions, 0, localVarSig, MethodBodyAttributes.InitLocals) // TODO: Check options to see if skip init locals should be used.
 
+    let setTargetFramework (mscorlib: AssemblyReferenceHandle) assembly options (metadata: MetadataBuilder) =
+        match assembly with
+        | ValueSome assembly' ->
+            let tfm =
+                metadata.AddTypeReference (
+                    AssemblyReferenceHandle.op_Implicit mscorlib,
+                    metadata.GetOrAddString "System.Runtime.Versioning",
+                    metadata.GetOrAddString "TargetFrameworkAttribute"
+                )
+
+            let tfm' =
+                metadata.AddMemberReference (
+                    TypeReferenceHandle.op_Implicit tfm,
+                    metadata.GetOrAddString ".ctor",
+                    metadata.GetOrAddBlob [| 0x20uy; 1uy; 1uy; 0x0Euy |]
+                )
+
+            let attr = BlobBuilder()
+            attr.WriteByte 1uy; attr.WriteByte 0uy // Prolog
+            attr.WriteSerializedString options.TargetFramework
+            attr.WriteUInt16 0us
+
+            metadata.AddCustomAttribute (
+                AssemblyDefinitionHandle.op_Implicit assembly',
+                MemberReferenceHandle.op_Implicit tfm',
+                metadata.GetOrAddBlob attr
+            )
+            |> ignore
+        | ValueNone -> ()
+
     let toBlob (ValidatedModule file) options (destination: BlobBuilder) =
         let sections = getKnownSections file
         let exports = ValueOption.map getModuleExports sections.ExportSection
@@ -139,6 +170,7 @@ module Generate =
         do addModuleRow options metadata
         let mscorlib = addCoreAssembly options metadata
         let assembly = generateAssemblyRow options metadata
+        do setTargetFramework mscorlib assembly options metadata
 
         let addCoreType =
             let system = metadata.GetOrAddString "System"

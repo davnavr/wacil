@@ -86,6 +86,7 @@ let main argv =
             { ModuleFileName = args.TryGetResult <@ Name @> |> Option.defaultValue oname
               FileType = ttype
               HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
+              TargetFramework = ".NETCoreApp,Version=v5.0" // TODO: Make option to allow setting of target framework
               Namespace = args.TryGetResult <@ Namespace @> |> Option.defaultValue String.Empty
               MainClassName = args.TryGetResult <@ Class_Name @> |> Option.defaultValue oname }
             writer
