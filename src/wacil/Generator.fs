@@ -91,12 +91,33 @@ module Generate =
 
         metadata.GetOrAddBlob signature'
 
+    let generateMethodBody { Code.Locals = locals; Body = body } (metadata: MetadataBuilder) (bodies: MethodBodyStreamEncoder) =
+        let localVarSig =
+            if locals.IsDefaultOrEmpty
+            then StandaloneSignatureHandle()
+            else
+                let locals' = BlobBuilder()
+                locals'.WriteByte 7uy // LOCAL_SIG
+            
+                for i = 0 to locals.Length - 1 do
+                    let l = locals.[i]
+                    for _ = 0 to Checked.int32 l.Count do generateValType l.Type locals'
+
+                metadata.AddStandaloneSignature(metadata.GetOrAddBlob locals')
+
+        let instructions = InstructionEncoder(BlobBuilder(), ControlFlowBuilder())
+
+        instructions.OpCode ILOpCode.Ret
+
+        bodies.Builder.Align 4
+        bodies.AddMethodBody(instructions, 0, localVarSig, MethodBodyAttributes.InitLocals) // TODO: Check options to see if skip init locals should be used.
+
     let toBlob (ValidatedModule file) options (destination: BlobBuilder) =
         let sections = getKnownSections file
         let exports = ValueOption.map getModuleExports sections.ExportSection
 
         let metadata = MetadataBuilder()
-        let bodies = BlobBuilder()
+        let bodies = MethodBodyStreamEncoder(BlobBuilder())
 
         do addModuleRow options metadata
         let mscorlib = addCoreAssembly options metadata
@@ -146,7 +167,7 @@ module Generate =
                             MethodImplAttributes.IL,
                             metadata.GetOrAddString name,
                             (generateFunctionSignature types func metadata),
-                            Unchecked.defaultof<_> (*failwith "TODO: Get method body"*),
+                            generateMethodBody code.[i] metadata bodies,
                             ParameterHandle()
                         )
 
@@ -183,7 +204,7 @@ module Generate =
                     imageCharacteristics = Characteristics.ExecutableImage
                 ),
                 metadataRootBuilder = cliMetadataRoot,
-                ilStream = bodies
+                ilStream = bodies.Builder
             )
 
         pe.Serialize destination |> ignore

@@ -19,6 +19,7 @@ type Options =
     | [<Unique>] Namespace of string
     | No_Address_Space_Layout_Randomization
     | [<Unique; AltCommandLine("-o")>] Out of file: string
+    //| [<Unique>] Skip_Init_Locals
     | [<Unique>] Type of FileType
 
     interface IArgParserTemplate with
