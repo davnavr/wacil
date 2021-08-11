@@ -7,6 +7,7 @@ open System.Reflection.Metadata.Ecma335
 open System.Reflection.PortableExecutable
 
 open Wasm.Format
+open Wasm.Format.Types
 
 [<NoComparison; NoEquality>]
 type FileType = | Assembly | Netmodule
@@ -64,7 +65,35 @@ module Generate =
             |> ValueSome
         | Netmodule -> ValueNone
 
+    let generateValType (t: ValType) (signature: BlobBuilder) =
+        match t with
+        | ValType.NumType nt ->
+            match nt with
+            | I32 -> signature.WriteByte 0x8uy // I4
+            | I64 -> signature.WriteByte 0xAuy // I8
+            | F32 -> signature.WriteByte 0xCuy // R4
+            | F64 -> signature.WriteByte 0xDuy // R8
+        | ValType.RefType rt -> failwithf "TODO: reference types not supported %A" rt
+
+    let generateFunctionSignature (types: TypeSection) { Function.Type = t } (metadata: MetadataBuilder) =
+        let signature = &types.Item t
+        let signature' = BlobBuilder()
+        signature'.WriteByte 0uy // Default
+        signature'.WriteCompressedInteger signature.Parameters.Length // ParamCount
+
+        match signature.Results.Length with
+        | 0 -> signature'.WriteByte 1uy // VOID
+        | 1 -> generateValType signature.Results.[0] signature'
+        | _ -> failwithf "TODO: Add support for multiple return types (use tuple types?) %A" signature.Results
+
+        for i = 0 to signature.Parameters.Length - 1 do
+            generateValType signature.Results.[i] signature'
+
+        metadata.GetOrAddBlob signature'
+
     let toBlob (ValidatedModule file) options (destination: BlobBuilder) =
+        let sections = getKnownSections file
+
         let metadata = MetadataBuilder()
         let bodies = BlobBuilder()
 
@@ -91,6 +120,28 @@ module Generate =
                 MethodDefinitionHandle()
             )
 
+        let functions =
+            let mutable funci = MethodDefinitionHandle()
+
+            match sections with
+            | { TypeSection = ValueSome types; FunctionSection = ValueSome funcs; CodeSection = ValueSome code } ->
+                for i = 0 to funcs.Length - 1 do
+                    let func = funcs.[funcs.First + uint32 i]
+                    let func' =
+                        metadata.AddMethodDefinition (
+                            MethodAttributes.Static, // TODO: If function is exported, make it public
+                            MethodImplAttributes.IL,
+                            metadata.GetOrAddString("func#" + string i), // TODO: If function is exported, use its name
+                            (generateFunctionSignature types func metadata),
+                            failwith "TODO: Get method body",
+                            ParameterHandle()
+                        )
+
+                    if i = 0 then funci <- func'
+            | _ -> ()
+
+            funci
+
         let gclass =
             metadata.AddTypeDefinition (
                 TypeAttributes.Public ||| TypeAttributes.Sealed ||| TypeAttributes.Abstract,
@@ -98,7 +149,7 @@ module Generate =
                 metadata.GetOrAddString options.MainClassName,
                 TypeReferenceHandle.op_Implicit object,
                 FieldDefinitionHandle(),
-                MethodDefinitionHandle()
+                functions
             )
 
         let cliMetadataRoot = MetadataRootBuilder metadata

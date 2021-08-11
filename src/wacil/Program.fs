@@ -11,13 +11,12 @@ open Wasm.Format
 open wacil.Generator
 
 type Options =
-    | Class_Name of string
+    | [<Unique>] Class_Name of string
     //| [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
     | Launch_Debugger
     | [<Unique>] Module of ``module.wasm``: string
-    | Name of string
-    | Namespace of string
-    //| [<Unique>] Namespace of string
+    | [<Unique>] Name of string
+    | [<Unique>] Namespace of string
     | No_Address_Space_Layout_Randomization
     | [<Unique; AltCommandLine("-o")>] Out of file: string
     | [<Unique>] Type of FileType
@@ -26,20 +25,21 @@ type Options =
         member this.Usage =
             match this with
             | Class_Name _ ->
-                "Specifies the name of the class to contain the generated static methods, defaults to the file name of the \
+                "the name of the class to contain the generated static methods, defaults to the file name of the \
                 WebAssembly module"
-            | Launch_Debugger -> "Launches the debugger used to debug the compiler"
+            //| Framework _ -> "specifies the target framework of the assembly, defaults to .NET 5"
+            | Launch_Debugger -> "launches the debugger used to debug the compiler"
             | Module _ ->
-                "Specifies the WebAssembly file to convert into a CIL file, defaults to searching for a WebAssembly file in the \
-                current working directory if omitted"
+                "the WebAssembly file to convert into a CIL file, defaults to searching for a WebAssembly file in the current \
+                working directory if omitted"
             | Name _ ->
-                "Specifies the name of the generated assembly and/or module, defaults to the file name of the WebAssembly \
-                module minus the extension"
+                "the name of the generated assembly and/or module, defaults to the file name of the WebAssembly module minus \
+                the extension"
             | Namespace _ ->
-                "Specifies the name of the namespace that will contain the class generated from the WebAssembly module"
+                "the name of the namespace that will contain the class generated from the WebAssembly module"
             | No_Address_Space_Layout_Randomization -> "Disables ASLR, the C# and F# compilers enable ASLR by default"
-            | Out _ -> "Specifies the path to the generated CIL file"
-            | Type _ -> "Specifies whether the generated CIL file is an assembly or module, defaults to generating an assembly"
+            | Out _ -> "the path to the generated CIL file"
+            | Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
 
 let parser = ArgumentParser.Create<Options>(programName = "wacil")
 

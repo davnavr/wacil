@@ -152,6 +152,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
     new: index: uint32 -> Index<'Class>
 
     static member inline Zero: Index<'Class>
+    static member (+): index: Index<'Class> * offset: uint32 -> Index<'Class>
     static member inline op_Implicit: index: Index<'Class> -> uint32
     static member inline op_Explicit: index: Index<'Class> -> int32
 
@@ -706,9 +707,26 @@ module ModuleSections =
     val ofSeq : sections: seq<Section> -> ModuleSections
 
 [<NoComparison; NoEquality>]
+type KnownSections =
+    { TypeSection: TypeSection voption
+      ImportSection: ImportSection voption
+      FunctionSection: FunctionSection voption
+      TableSection: TableSection voption
+      MemorySection: MemorySection voption
+      GlobalSection: GlobalSection voption
+      ExportSection: ExportSection voption
+      StartSection: StartSection voption
+      ElementSection: ElementSection voption
+      CodeSection: CodeSection voption
+      DataSection: DataSection voption
+      DataCountSection: DataCountSection voption}
+
+[<NoComparison; NoEquality>]
 type WasmModule =
     { Version: uint32
       Sections: ModuleSections }
+
+val getKnownSections : WasmModule -> KnownSections
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type ValidatedModule = internal Validated of WasmModule

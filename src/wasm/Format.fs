@@ -134,6 +134,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
     new (index) = { Index = index }
 
     static member inline Zero = Index<'Class> 0u
+    static member (+) (index: Index<'Class>, offset) = Index<'Class>(index.Index + offset)
     static member inline op_Implicit(index: Index<'Class>) = index.Index
     static member inline op_Explicit(index: Index<'Class>) = Checked.int32 index.Index
 
@@ -533,10 +534,68 @@ module ModuleSections =
         | Ok sections' -> sections'
         | Error duplicate -> raise(DuplicateSectionException duplicate)
 
+type KnownSections =
+    { TypeSection: TypeSection voption
+      ImportSection: ImportSection voption
+      FunctionSection: FunctionSection voption
+      TableSection: TableSection voption
+      MemorySection: MemorySection voption
+      GlobalSection: GlobalSection voption
+      ExportSection: ExportSection voption
+      StartSection: StartSection voption
+      ElementSection: ElementSection voption
+      CodeSection: CodeSection voption
+      DataSection: DataSection voption
+      DataCountSection: DataCountSection voption}
+
 type WasmModule =
     { Version: uint32; Sections: ModuleSections }
 
 [<Struct>]
 type ValidatedModule = Validated of WasmModule
+
+let getKnownSections { Sections = sections } =
+    let mutable types = ValueNone
+    let mutable imports = ValueNone
+    let mutable functions = ValueNone
+    let mutable tables = ValueNone
+    let mutable memories = ValueNone
+    let mutable globals = ValueNone
+    let mutable exports = ValueNone
+    let mutable start = ValueNone
+    let mutable elements = ValueNone
+    let mutable code = ValueNone
+    let mutable data = ValueNone
+    let mutable dataCounts = ValueNone
+    use mutable enumerator = sections.GetEnumerator()
+
+    while enumerator.MoveNext() do
+        match enumerator.Current with
+        | TypeSection types' -> types <- ValueSome types'
+        | ImportSection imports' -> imports <- ValueSome imports'
+        | FunctionSection functions' -> functions <- ValueSome functions'
+        | TableSection tables' -> tables <- ValueSome tables'
+        | MemorySection memories' -> memories <- ValueSome memories'
+        | GlobalSection globals' -> globals <- ValueSome globals'
+        | ExportSection exports' -> exports <- ValueSome exports'
+        | StartSection start' -> start <- ValueSome start'
+        | ElementSection elements' -> elements <- ValueSome elements'
+        | CodeSection code' -> code <- ValueSome code'
+        | DataSection data' -> data <- ValueSome data'
+        | DataCountSection dataCounts' -> dataCounts <- ValueSome dataCounts'
+        | CustomSection _ -> ()
+
+    { TypeSection = types
+      ImportSection = imports
+      FunctionSection = functions
+      TableSection = tables
+      MemorySection = memories
+      GlobalSection = globals
+      ExportSection = exports
+      StartSection = start
+      ElementSection = elements
+      CodeSection = code
+      DataSection = data
+      DataCountSection = dataCounts }
 
 let (|ValidatedModule|) (Validated m) = m
