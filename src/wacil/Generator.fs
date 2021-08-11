@@ -7,6 +7,7 @@ open System.Reflection.Metadata.Ecma335
 open System.Reflection.PortableExecutable
 
 open Wasm.Format
+open Wasm.Format.InstructionSet
 open Wasm.Format.Types
 
 [<NoComparison; NoEquality>]
@@ -75,8 +76,7 @@ module Generate =
             | F64 -> signature.WriteByte 0xDuy // R8
         | ValType.RefType rt -> failwithf "TODO: reference types not supported %A" rt
 
-    let generateFunctionSignature (types: TypeSection) { Function.Type = t } (metadata: MetadataBuilder) =
-        let signature = &types.Item t
+    let generateFunctionSignature (signature: inref<FuncType>) (metadata: MetadataBuilder) =
         let signature' = BlobBuilder()
         signature'.WriteByte 0uy // Default
         signature'.WriteCompressedInteger signature.Parameters.Length // ParamCount
@@ -91,7 +91,7 @@ module Generate =
 
         metadata.GetOrAddBlob signature'
 
-    let generateMethodBody { Code.Locals = locals; Body = body } (metadata: MetadataBuilder) (bodies: MethodBodyStreamEncoder) =
+    let generateMethodBody pcount { Code.Locals = locals; Body = body } (metadata: MetadataBuilder) (bodies: MethodBodyStreamEncoder) =
         let localVarSig =
             if locals.IsDefaultOrEmpty
             then StandaloneSignatureHandle()
@@ -106,6 +106,23 @@ module Generate =
                 metadata.AddStandaloneSignature(metadata.GetOrAddBlob locals')
 
         let instructions = InstructionEncoder(BlobBuilder(), ControlFlowBuilder())
+
+        for instr in body do
+            match instr.Opcode, instr.Arguments with
+            | 0x0Buy, InstructionArguments.Nothing -> () // end
+
+            | 0x20uy, InstructionArguments.LocalIndex(Index i) when i < pcount ->
+                instructions.LoadArgument(Checked.int32 i)
+            | 0x20uy, InstructionArguments.LocalIndex(Index i) when i < pcount ->
+                instructions.LoadLocal(Checked.int32(i - pcount))
+
+            | 0x41uy, InstructionArguments.I32 n ->
+                instructions.LoadConstantI4 n
+
+            | 0x6Auy, InstructionArguments.Nothing -> // i32.add
+                instructions.OpCode ILOpCode.Add
+
+            | bad, _ -> failwithf "TODO: Error for unknown opcode 0x%02X" bad
 
         instructions.OpCode ILOpCode.Ret
 
@@ -155,6 +172,7 @@ module Generate =
                 for i = 0 to funcs.Length - 1 do
                     let i' = funcs.First + uint32 i
                     let func = funcs.[i']
+                    let funct = &types.[func.Type]
 
                     let visibility, name =
                         match getFunctionName i' with
@@ -166,8 +184,8 @@ module Generate =
                             MethodAttributes.Static ||| visibility,
                             MethodImplAttributes.IL,
                             metadata.GetOrAddString name,
-                            (generateFunctionSignature types func metadata),
-                            generateMethodBody code.[i] metadata bodies,
+                            (generateFunctionSignature &funct metadata),
+                            (generateMethodBody (uint32 funct.Parameters.Length) code.[i] metadata bodies),
                             ParameterHandle()
                         )
 
