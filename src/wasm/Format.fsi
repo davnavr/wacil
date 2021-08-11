@@ -24,6 +24,9 @@ type MemSize =
 
     override ToString: unit -> string
 
+    static member inline op_Implicit: size: MemSize -> uint32
+    static member inline op_Explicit: size: MemSize -> int32
+
     interface IEquatable<MemSize>
 
 module Types =
