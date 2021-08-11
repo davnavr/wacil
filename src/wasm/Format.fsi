@@ -721,7 +721,9 @@ type KnownSections =
       ElementSection: ElementSection voption
       CodeSection: CodeSection voption
       DataSection: DataSection voption
-      DataCountSection: DataCountSection voption}
+      DataCountSection: DataCountSection voption }
+
+// TODO: Add a name custom section and allow retrieval of names from there.
 
 [<NoComparison; NoEquality>]
 type WasmModule =

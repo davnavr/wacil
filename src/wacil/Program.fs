@@ -11,11 +11,9 @@ open Wasm.Format
 open wacil.Generator
 
 type Options =
-    | [<Unique>] Class_Name of string
     //| [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
     | Launch_Debugger
     | [<Unique>] Module of ``module.wasm``: string
-    | [<Unique>] Name of string
     | [<Unique>] Namespace of string
     | No_Address_Space_Layout_Randomization
     | [<Unique; AltCommandLine("-o")>] Out of file: string
@@ -25,17 +23,11 @@ type Options =
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Class_Name _ ->
-                "the name of the class to contain the generated static methods, defaults to the file name of the \
-                WebAssembly module"
             //| Framework _ -> "specifies the target framework of the assembly, defaults to .NET 5"
             | Launch_Debugger -> "launches the debugger used to debug the compiler"
             | Module _ ->
                 "the WebAssembly file to convert into a CIL file, defaults to searching for a WebAssembly file in the current \
                 working directory if omitted"
-            | Name _ ->
-                "the name of the generated assembly and/or module, defaults to the file name of the WebAssembly module minus \
-                the extension"
             | Namespace _ ->
                 "the name of the namespace that will contain the class generated from the WebAssembly module"
             | No_Address_Space_Layout_Randomization -> "Disables ASLR, the C# and F# compilers enable ASLR by default"
@@ -83,12 +75,12 @@ let main argv =
 
         Generate.toStream
             input'
-            { ModuleFileName = args.TryGetResult <@ Name @> |> Option.defaultValue oname
+            { ModuleFileName = oname
               FileType = ttype
               HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
               TargetFramework = ".NETCoreApp,Version=v5.0" // TODO: Make option to allow setting of target framework
               Namespace = args.TryGetResult <@ Namespace @> |> Option.defaultValue String.Empty
-              MainClassName = args.TryGetResult <@ Class_Name @> |> Option.defaultValue oname }
+              MainClassName = oname }
             writer
         0
     with
