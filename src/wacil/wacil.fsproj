@@ -10,6 +10,8 @@
     <ProjectReference Include="$(RootDirectory)\src\wasm\wasm.fsproj" />
 
     <PackageReference Include="Argu" Version="6.1.1" />
+
+    <Compile Include="Generator.fsi" />
     
     <Compile Include="Generator.fs" />
     <Compile Include="Program.fs" />

@@ -73,15 +73,14 @@ let main argv =
 
         use writer = output.OpenWrite()
 
-        Generate.toStream
+        Generate.toPE
             input'
             { ModuleFileName = oname
               FileType = ttype
               HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
               TargetFramework = ".NETCoreApp,Version=v5.0" // TODO: Make option to allow setting of target framework
-              Namespace = args.TryGetResult <@ Namespace @> |> Option.defaultValue String.Empty
               MainClassName = oname }
-            writer
+        |> FSharpIL.Writing.WritePE.toStream writer
         0
     with
     | :? ArguException as ex ->

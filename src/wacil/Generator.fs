@@ -1,16 +1,22 @@
 ﻿module wacil.Generator
 
 open System
-open System.Reflection
-open System.Reflection.Metadata
-open System.Reflection.Metadata.Ecma335
-open System.Reflection.PortableExecutable
+open System.Collections.Generic
+open System.Collections.Immutable
+open System.Runtime.CompilerServices
+
+open FSharpIL.Metadata
+open FSharpIL.Metadata.Tables
+
+open FSharpIL.Cli
+open FSharpIL.PortableExecutable
+
+open FSharpIL.Writing
 
 open Wasm.Format
 open Wasm.Format.InstructionSet
 open Wasm.Format.Types
 
-[<NoComparison; NoEquality>]
 type FileType = | Assembly | Netmodule
 
 [<RequireQualifiedAccess>]
@@ -25,251 +31,164 @@ type Options =
       FileType: FileType
       HighEntropyVA: bool
       TargetFramework: string
-      Namespace: string
       MainClassName: string }
 
 [<RequireQualifiedAccess>]
 module Generate =
-    let addModuleRow options (metadata: MetadataBuilder) =
-        let mvid = Guid.NewGuid() // TODO: Figure out how to deterministically generate MVID
+    let addCoreAssembly (metadata: CliModuleBuilder) =
+        let mscorlib =
+            { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+              Name = FileName.ofStr "System.Runtime"
+              Culture = ValueNone
+              HashValue = ImmutableArray.Empty }
+        do metadata.ReferenceAssembly mscorlib
 
-        metadata.AddModule (
-            0,
-            metadata.GetOrAddString(options.ModuleFileName + "." + FileType.extension options.FileType),
-            metadata.GetOrAddGuid mvid,
-            GuidHandle(),
-            GuidHandle()
-        )
-        |> ignore
+        let system = ValueSome(Identifier.ofStr "System")
 
-    let addCoreAssembly options (metadata: MetadataBuilder) =
-        // TODO: Figure out how to allow usage of other core assemblies?
-        metadata.AddAssemblyReference (
-            metadata.GetOrAddString "System.Runtime",
-            Version(5, 0, 0, 0),
-            StringHandle(),
-            metadata.GetOrAddBlob [| 0xb0uy; 0x3fuy; 0x5fuy; 0x7fuy; 0x11uy; 0xd5uy; 0x0auy; 0x3auy |],
-            Unchecked.defaultof<_>,
-            BlobHandle()
-        )
+        let object =
+            { TypeReference.TypeName = Identifier.ofStr "Object"
+              TypeNamespace = system
+              Flags = ValueNone
+              ResolutionScope = TypeReferenceParent.Assembly mscorlib }
+        do metadata.ReferenceType(ReferencedType.Reference object) |> ValidationResult.get |> ignore
 
-    let generateAssemblyRow options (metadata: MetadataBuilder) =
+        let tfmattr =
+            { TypeReference.TypeName = Identifier.ofStr "TargetFrameworkAttribute"
+              TypeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning")
+              Flags = ValueNone
+              ResolutionScope = TypeReferenceParent.Assembly mscorlib }
+            |> ReferencedType.Reference
+            |> metadata.ReferenceType
+            |> ValidationResult.get
+
+        {| Assembly = mscorlib
+           Object = object
+           TargetFrameworkAttribute =
+             {| Constructor =
+                  ReferencedMethod.Constructor (
+                      visibility = ExternalVisibility.Public,
+                      parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
+                  )
+                  |> tfmattr.ReferenceMethod
+                  |> ValidationResult.get |} |}
+
+    let addAssemblyDefinition options (metadata: CliModuleBuilder) =
         match options.FileType with
         | Assembly ->
-            metadata.AddAssembly (
-                metadata.GetOrAddString options.ModuleFileName,
-                Version(1, 0, 0, 0), // TODO: Have option to set version of assembly.
-                StringHandle(),
-                BlobHandle(),
-                AssemblyFlags.EnableJitCompileTracking,
-                AssemblyHashAlgorithm.Sha1
-            )
-            |> ValueSome
+            let assembly =
+                { DefinedAssembly.Name = FileName.ofStr options.ModuleFileName
+                  Version = AssemblyVersion(1us, 0us, 0us, 0us) // TODO: Have option to set version of assembly.
+                  PublicKey = ImmutableArray.Empty
+                  Culture = ValueNone }
+            do metadata.DefineAssembly assembly |> ValidationResult.get |> ignore
+            ValueSome assembly
         | Netmodule -> ValueNone
 
-    let generateValType (t: ValType) (signature: BlobBuilder) =
-        match t with
+    let setTargetFramework options tfmattr (metadata: CliModuleBuilder) =
+        match metadata.Assembly with
+        | Some _ ->
+            validated {
+                do! metadata.SetTargetFramework(options.TargetFramework, CustomAttributeCtor.Referenced tfmattr)
+            }
+            |> ValidationResult.get
+        | None -> ()
+
+    let getValueType (vtype: ValType) =
+        match vtype with
         | ValType.NumType nt ->
             match nt with
-            | I32 -> signature.WriteByte 0x8uy // I4
-            | I64 -> signature.WriteByte 0xAuy // I8
-            | F32 -> signature.WriteByte 0xCuy // R4
-            | F64 -> signature.WriteByte 0xDuy // R8
-        | ValType.RefType rt -> failwithf "TODO: reference types not supported %A" rt
+            | NumType.I32 -> PrimitiveType.I4
+            | NumType.I64 -> PrimitiveType.I8
+            | NumType.F32 -> PrimitiveType.R4
+            | NumType.F64 -> PrimitiveType.R8
+        | ValType.RefType rt ->
+            match rt with
+            | RefType.ExternRef -> PrimitiveType.Object
+            | RefType.FuncRef -> failwith "TODO: Consider using System.Delegate or function pointers for FuncRef"
 
-    let generateFunctionSignature (signature: inref<FuncType>) (metadata: MetadataBuilder) =
-        let signature' = BlobBuilder()
-        signature'.WriteByte 0uy // Default
-        signature'.WriteCompressedInteger signature.Parameters.Length // ParamCount
+    let getReturnType (rtype: ResultType) =
+        match rtype.Length with
+        | 0 -> ReturnType.Void'
+        | 1 -> ReturnType.T(getValueType rtype.[0])
+        | _ -> failwithf "TODO: Add support for multiple return types (use tuple types?)"
 
-        match signature.Results.Length with
-        | 0 -> signature'.WriteByte 1uy // VOID
-        | 1 -> generateValType signature.Results.[0] signature'
-        | _ -> failwithf "TODO: Add support for multiple return types (use tuple types?) %A" signature.Results
+    let getParameterTypes (parameters: ResultType) =
+        let mutable parameters' = Array.zeroCreate parameters.Length
+        for i = 0 to parameters'.Length - 1 do
+            parameters'.[i] <- ParameterType.T(getValueType parameters.[i])
+        Unsafe.As<_, ImmutableArray<ParameterType>> &parameters'
 
-        for i = 0 to signature.Parameters.Length - 1 do
-            generateValType signature.Results.[i] signature'
+    let addTranslatedFunctions (members: DefinedTypeMembers) sections =
 
-        metadata.GetOrAddBlob signature'
+        match sections with
+        | { TypeSection = ValueSome types
+            FunctionSection = ValueSome funcs
+            CodeSection = ValueSome code }
+            ->
+            let exports = ValueOption.map getModuleExports sections.ExportSection
+            let methods = Dictionary<Index<IndexKinds.Func>, MethodTok> funcs.Length
 
-    let generateMethodBody pcount { Code.Locals = locals; Body = body } (metadata: MetadataBuilder) (bodies: MethodBodyStreamEncoder) =
-        let localVarSig =
-            if locals.IsDefaultOrEmpty
-            then StandaloneSignatureHandle()
-            else
-                let locals' = BlobBuilder()
-                locals'.WriteByte 7uy // LOCAL_SIG
-            
-                for i = 0 to locals.Length - 1 do
-                    let l = locals.[i]
-                    for _ = 0 to Checked.int32 l.Count do generateValType l.Type locals'
+            let getFunctionName =
+                match exports with
+                | ValueSome exports' ->
+                    ModuleExports.tryGetFunction exports' >> ValueOption.map (fun export -> MethodName.ofStr export.Name)
+                | ValueNone -> fun _ -> ValueNone
 
-                metadata.AddStandaloneSignature(metadata.GetOrAddBlob locals')
+            for i = 0 to funcs.Length - 1 do
+                let i' = funcs.First + uint32 i
+                let func = funcs.[i']
+                let funct = &types.[func.Type]
 
-        let instructions = InstructionEncoder(BlobBuilder(), ControlFlowBuilder())
+                let visibility, name =
+                    match getFunctionName i' with
+                    | ValueSome name' -> MethodDefFlags.Public, name'
+                    | ValueNone -> MethodDefFlags.Private, MethodName.ofStr ("func#" + string i)
 
-        for instr in body do
-            match instr.Opcode, instr.Arguments with
-            | 0x0Buy, InstructionArguments.Nothing -> () // end
+                let func' =
+                    DefinedMethod (
+                        MethodImplFlags.IL,
+                        MethodDefFlags.Static ||| visibility,
+                        FSharpIL.Metadata.Signatures.MethodThis.NoThis,
+                        getReturnType funct.Results,
+                        name,
+                        getParameterTypes funct.Parameters,
+                        Parameter.emptyList
+                    )
 
-            | 0x20uy, InstructionArguments.LocalIndex(Index i) when i < pcount ->
-                instructions.LoadArgument(Checked.int32 i)
-            | 0x20uy, InstructionArguments.LocalIndex(Index i) when i < pcount ->
-                instructions.LoadLocal(Checked.int32(i - pcount))
+                // TODO: Use method dictionary when generating call instructions.
 
-            | 0x41uy, InstructionArguments.I32 n ->
-                instructions.LoadConstantI4 n
+                methods.[i'] <- (members.DefineMethod(func', ValueNone, ValueNone) |> ValidationResult.get).Token
 
-            | 0x6Auy, InstructionArguments.Nothing -> // i32.add
-                instructions.OpCode ILOpCode.Add
+            methods
+        | _ -> failwith "TODO: How to deal with missing sections?"
 
-            | bad, _ -> failwithf "TODO: Error for unknown opcode 0x%02X" bad
-
-        instructions.OpCode ILOpCode.Ret
-
-        bodies.Builder.Align 4
-        bodies.AddMethodBody(instructions, 0, localVarSig, MethodBodyAttributes.InitLocals) // TODO: Check options to see if skip init locals should be used.
-
-    let setTargetFramework (mscorlib: AssemblyReferenceHandle) assembly options (metadata: MetadataBuilder) =
-        match assembly with
-        | ValueSome assembly' ->
-            let tfm =
-                metadata.AddTypeReference (
-                    AssemblyReferenceHandle.op_Implicit mscorlib,
-                    metadata.GetOrAddString "System.Runtime.Versioning",
-                    metadata.GetOrAddString "TargetFrameworkAttribute"
-                )
-
-            let tfm' =
-                metadata.AddMemberReference (
-                    TypeReferenceHandle.op_Implicit tfm,
-                    metadata.GetOrAddString ".ctor",
-                    metadata.GetOrAddBlob [| 0x20uy; 1uy; 1uy; 0x0Euy |]
-                )
-
-            let attr = BlobBuilder()
-            attr.WriteByte 1uy; attr.WriteByte 0uy // Prolog
-            attr.WriteSerializedString options.TargetFramework
-            attr.WriteUInt16 0us
-
-            metadata.AddCustomAttribute (
-                AssemblyDefinitionHandle.op_Implicit assembly',
-                MemberReferenceHandle.op_Implicit tfm',
-                metadata.GetOrAddBlob attr
-            )
-            |> ignore
-        | ValueNone -> ()
-
-    let toBlob (ValidatedModule file) options (destination: BlobBuilder) =
+    let toPE (ValidatedModule file) options = // TODO: Set file to Exe if start function is defined.
         let sections = getKnownSections file
-        let exports = ValueOption.map getModuleExports sections.ExportSection
+        let extension = FileType.extension options.FileType
 
-        let metadata = MetadataBuilder()
-        let bodies = MethodBodyStreamEncoder(BlobBuilder())
+        // TODO: Figure out how to deterministically generate MVID
+        let metadata = CliModuleBuilder(Identifier.ofStr(options.ModuleFileName + "." + extension))
+        // TODO: Figure out how to allow usage of other core assemblies?
+        let mscorlib = addCoreAssembly metadata
+        do addAssemblyDefinition options metadata |> ignore
 
-        do addModuleRow options metadata
-        let mscorlib = addCoreAssembly options metadata
-        let assembly = generateAssemblyRow options metadata
-        do setTargetFramework mscorlib assembly options metadata
+        let members =
+            let module' =
+                { TypeDefinition.TypeName = Identifier.ofStr options.ModuleFileName
+                  TypeNamespace = ValueNone // TODO: If module name is separated by periods, make the first few things the namespace
+                  Flags = TypeDefFlags.Public ||| TypeDefFlags.Sealed ||| TypeDefFlags.Abstract
+                  Extends =
+                    ReferencedType.Reference mscorlib.Object
+                    |> NamedType.ReferencedType 
+                    |> ClassExtends.Named
+                  EnclosingClass = ValueNone }
+                |> DefinedType.Definition
 
-        let addCoreType =
-            let system = metadata.GetOrAddString "System"
-            fun name ->
-                metadata.AddTypeReference(AssemblyReferenceHandle.op_Implicit mscorlib, system, metadata.GetOrAddString name)
+            metadata.DefineType(module', ValueNone) |> ValidationResult.get
 
-        let object = addCoreType "Object"
+        let _ = addTranslatedFunctions members sections
 
-        metadata.SetCapacity(TableIndex.TypeDef, rowCount = 2)
-
-        let globals =
-            metadata.AddTypeDefinition (
-                Unchecked.defaultof<_>,
-                StringHandle(),
-                metadata.GetOrAddString "<Module>",
-                TypeReferenceHandle.op_Implicit object,
-                FieldDefinitionHandle(),
-                MethodDefinitionHandle()
-            )
-
-        let functions =
-            let mutable funci = MethodDefinitionHandle()
-
-            match sections with
-            | { TypeSection = ValueSome types; FunctionSection = ValueSome funcs; CodeSection = ValueSome code } ->
-                let getFunctionName =
-                    match exports with
-                    | ValueSome exports' -> ModuleExports.tryGetFunction exports' >> ValueOption.map (fun export -> export.Name)
-                    | ValueNone -> fun _ -> ValueNone
-
-                for i = 0 to funcs.Length - 1 do
-                    let i' = funcs.First + uint32 i
-                    let func = funcs.[i']
-                    let funct = &types.[func.Type]
-
-                    let visibility, name =
-                        match getFunctionName i' with
-                        | ValueSome name' -> MethodAttributes.Public, name'
-                        | ValueNone -> MethodAttributes.Private, ("func#" + string i)
-
-                    let mutable phandle = ParameterHandle()
-
-                    for i = 0 to funct.Parameters.Length - 1 do
-                        let param =
-                            metadata.AddParameter(ParameterAttributes.None, metadata.GetOrAddString("param" + string i), i + 1)
-                        if i = 0 then phandle <- param
-
-                    let func' =
-                        metadata.AddMethodDefinition (
-                            MethodAttributes.Static ||| visibility,
-                            MethodImplAttributes.IL,
-                            metadata.GetOrAddString name,
-                            (generateFunctionSignature &funct metadata),
-                            (generateMethodBody (uint32 funct.Parameters.Length) code.[i] metadata bodies),
-                            phandle
-                        )
-
-                    if i = 0 then funci <- func'
-            | _ -> ()
-
-            funci
-
-        let gclass =
-            metadata.AddTypeDefinition (
-                TypeAttributes.Public ||| TypeAttributes.Sealed ||| TypeAttributes.Abstract,
-                (if String.IsNullOrEmpty options.Namespace then StringHandle() else metadata.GetOrAddString options.Namespace),
-                metadata.GetOrAddString options.MainClassName,
-                TypeReferenceHandle.op_Implicit object,
-                FieldDefinitionHandle(),
-                functions
-            )
-
-        let cliMetadataRoot = MetadataRootBuilder metadata
-        let pe =
-            let mutable peDllCharacteristics =
-                DllCharacteristics.NoSeh
-                ||| DllCharacteristics.DynamicBase
-                ||| DllCharacteristics.NxCompatible
-
-            if options.HighEntropyVA then
-                peDllCharacteristics <- peDllCharacteristics ||| DllCharacteristics.HighEntropyVirtualAddressSpace
-
-            let mutable peImageCharacteristics = Characteristics.ExecutableImage
-
-            ManagedPEBuilder (
-                header = PEHeaderBuilder (
-                    dllCharacteristics = peDllCharacteristics,
-                    imageCharacteristics = Characteristics.ExecutableImage
-                ),
-                metadataRootBuilder = cliMetadataRoot,
-                ilStream = bodies.Builder
-            )
-
-        pe.Serialize destination |> ignore
-
-    let toStream file options (destination: System.IO.Stream) =
-        if not destination.CanWrite then
-            invalidArg (nameof destination) "The destination stream where the CIL file is written to must support writing"
-
-        let peblob = BlobBuilder()
-        toBlob file options peblob
-        peblob.WriteContentTo destination
+        // TODO: Add FSharpIL function to allow translation of CliModuleBuilder to section contents
+        // TODO: Allow setting of ASLR flag in optional header.
+        BuildPE.ofModuleBuilder FileCharacteristics.IsDll metadata
