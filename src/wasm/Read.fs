@@ -100,10 +100,13 @@ module Integer =
             if shifted > size then failwith "TODO: Error for exceeded max allowed value for this kind of LEB128 integer"
         n
 
-    /// Reads a 32-bit unsigned integer in LEB128 encoding.
-    let u32 stream = leb128 32 uint32 stream
+    /// Reads a 32-bit integer in LEB128 encoding.
+    let i32 stream = leb128 32 uint32 stream
 
-let index<'Class when 'Class :> IndexKinds.Kind> stream = Index<'Class>(Integer.u32 stream)
+    /// Reads a 64-bit integer in LEB128 encoding.
+    let i64 stream = leb128 64 uint64 stream
+
+let index<'Class when 'Class :> IndexKinds.Kind> stream = Index<'Class>(Integer.i32 stream)
 
 [<Struct>]
 type IndexReader<'Class when 'Class :> IndexKinds.Kind> =
@@ -120,7 +123,7 @@ let readSectionId (stream: ByteStream) =
     | _ -> ValueSome(LanguagePrimitives.EnumOfValue buffer.[0])
 
 let name stream =
-    let count = Checked.int32(Integer.u32 stream)
+    let count = Checked.int32(Integer.i32 stream)
     match count with
     | 0 -> String.Empty
     | _  ->
@@ -139,7 +142,7 @@ let many<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T>> stream co
     items
 
 let vector<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T>> stream =
-    let count = Checked.int32(Integer.u32 stream)
+    let count = Checked.int32(Integer.i32 stream)
     (many<'Reader, 'T> stream count).ToImmutable()
 
 let ivector<'Reader, 'IndexClass, 'T when 'Reader : struct and 'Reader :> IReader<'T> and 'IndexClass :> IndexKinds.Kind> stream start =
@@ -199,7 +202,7 @@ module Type =
     type private MemSizeParser =
         interface IReader<MemSize> with
             member _.Read stream =
-                let value = Integer.u32 stream
+                let value = Integer.i32 stream
                 let multiple = value / PageSize
                 if multiple * PageSize = value
                 then MemSize(Checked.uint16 multiple)
@@ -235,7 +238,7 @@ type ExportReader =
 [<Struct>]
 type LocalsReader =
     interface IReader<Locals> with
-        member _.Read stream = { Locals.Count = Integer.u32 stream; Type = Type.valtype stream }
+        member _.Read stream = { Locals.Count = Integer.i32 stream; Type = Type.valtype stream }
 
 let readInstructionSeq (stream: SlicedByteStream) =
     let instructions = ImmutableArray.CreateBuilder()
@@ -263,7 +266,8 @@ let readInstructionSeq (stream: SlicedByteStream) =
             | 0x21uy
             | 0x22uy -> InstructionArguments.LocalIndex (index stream)
 
-            | 0x41uy -> InstructionArguments.I32(int32(Integer.u32 stream))
+            | 0x41uy -> int32(Integer.i32 stream) |> InstructionArguments.I32
+            | 0x42uy -> int64(Integer.i64 stream) |> InstructionArguments.I64
 
             | bad -> failwithf "TODO: Error for unknown opcode 0x%02X" bad }
         |> instructions.Add
@@ -288,13 +292,13 @@ let expression stream: Expr =
 type CodeReader =
     interface IReader<Code> with
         member _.Read stream =
-            let size = Integer.u32 stream
+            let size = Integer.i32 stream
             let stream' = SlicedByteStream(size, stream)
             let locals = vector<LocalsReader, _> stream'
             { Code.Locals = locals; Body = expression stream' }
 
 let readSectionContents stream i (id: SectionId) =
-    match Integer.u32 stream with
+    match Integer.i32 stream with
     | 0u -> ValueNone
     | size ->
         // TODO: Use SlicedByteStream

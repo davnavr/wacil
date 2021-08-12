@@ -143,6 +143,7 @@ module Generate =
                         then Shortened.ldarg(Checked.uint16 i)
                         else Shortened.ldloc(LocalVarIndex.locali i')
                     | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> Shortened.ldc_i4 n // i32.const
+                    | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> ldc_i8 n // i64.const
                     | { Opcode = 0x6Auy; Arguments = InstructionArguments.Nothing } -> add // i32.add
                     | _ -> failwithf "TODO: Error for unknown opcode %A" instr.Opcode
 
