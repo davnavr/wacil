@@ -1,17 +1,18 @@
 ﻿module wacil.Generator
 
-open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Tables
 
 open FSharpIL.Cli
 open FSharpIL.PortableExecutable
 
 open FSharpIL.Writing
+open FSharpIL.Writing.Cil
 
 open Wasm.Format
 open Wasm.Format.InstructionSet
@@ -119,8 +120,39 @@ module Generate =
             parameters'.[i] <- ParameterType.T(getValueType parameters.[i])
         Unsafe.As<_, ImmutableArray<ParameterType>> &parameters'
 
-    let addTranslatedFunctions (members: DefinedTypeMembers) sections =
+    let getMethodLocals (localTypesBuilder: ImmutableArray<_>.Builder) (locals: ImmutableArray<Locals>) =
+        localTypesBuilder.Clear()
 
+        for l in locals do
+            let t' = getValueType l.Type
+            for _ = 0 to Checked.int32 l.Count do localTypesBuilder.Add(CliType.toLocalType t')
+
+        localTypesBuilder.ToImmutable() |> LocalVariables.Locals
+
+    let translateMethodBody funcParamCount localTypesBuilder { Code.Locals = locals; Body = body } =
+        // TODO: Check options to see if skip init locals should be used.
+        MethodBody.create InitLocals ValueNone (getMethodLocals localTypesBuilder locals) [
+            seq {
+                for instr in body do
+                    match instr with
+                    | { Opcode = 0x0Buy; Arguments = InstructionArguments.Nothing } -> () // end
+                    | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex(Index i) } when i < funcParamCount ->
+                        // local.get
+                        let i' = Checked.uint16 i
+                        if i < funcParamCount
+                        then Shortened.ldarg(Checked.uint16 i)
+                        else Shortened.ldloc(LocalVarIndex.locali i')
+                    | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> Shortened.ldc_i4 n // i32.const
+                    | { Opcode = 0x6Auy; Arguments = InstructionArguments.Nothing } -> add // i32.add
+                    | _ -> failwithf "TODO: Error for unknown opcode %A" instr.Opcode
+
+                ret
+            }
+            |> InstructionBlock.ofSeq
+        ]
+        |> ValueSome
+
+    let addTranslatedFunctions (members: DefinedTypeMembers) sections =
         match sections with
         | { TypeSection = ValueSome types
             FunctionSection = ValueSome funcs
@@ -128,6 +160,7 @@ module Generate =
             ->
             let exports = ValueOption.map getModuleExports sections.ExportSection
             let methods = Dictionary<Index<IndexKinds.Func>, MethodTok> funcs.Length
+            let locals = ImmutableArray.CreateBuilder<LocalType>() // Shared to avoid extra allocations.
 
             let getFunctionName =
                 match exports with
@@ -137,15 +170,12 @@ module Generate =
 
             for i = 0 to funcs.Length - 1 do
                 let i' = funcs.First + uint32 i
-                let func = funcs.[i']
-                let funct = &types.[func.Type]
-
-                let visibility, name =
-                    match getFunctionName i' with
-                    | ValueSome name' -> MethodDefFlags.Public, name'
-                    | ValueNone -> MethodDefFlags.Private, MethodName.ofStr ("func#" + string i)
-
+                let funct = &types.[funcs.[i'].Type]
                 let func' =
+                    let visibility, name =
+                        match getFunctionName i' with
+                        | ValueSome name' -> MethodDefFlags.Public, name'
+                        | ValueNone -> MethodDefFlags.Private, MethodName.ofStr ("func#" + string i)
                     DefinedMethod (
                         MethodImplFlags.IL,
                         MethodDefFlags.Static ||| visibility,
@@ -157,8 +187,10 @@ module Generate =
                     )
 
                 // TODO: Use method dictionary when generating call instructions.
-
-                methods.[i'] <- (members.DefineMethod(func', ValueNone, ValueNone) |> ValidationResult.get).Token
+                methods.[i'] <-
+                    let body = translateMethodBody (Checked.uint32 funct.Parameters.Length) locals code.[i]
+                    let token = members.DefineMethod(func', body, ValueNone) |> ValidationResult.get
+                    token.Token
 
             methods
         | _ -> failwith "TODO: How to deal with missing sections?"
