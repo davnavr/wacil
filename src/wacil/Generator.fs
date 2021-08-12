@@ -129,6 +129,12 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
+    let translateVariableInstr argi loci funcParamCount (Index i: Index<IndexKinds.Local>): Cil.Instruction =
+        let i' = Checked.uint16 i
+        if i < funcParamCount
+        then argi(Checked.uint16 i)
+        else loci(LocalVarIndex.locali i')
+
     let translateMethodBody funcParamCount localTypesBuilder { Code.Locals = locals; Body = body } =
         // TODO: Check options to see if skip init locals should be used.
         MethodBody.create InitLocals ValueNone (getMethodLocals localTypesBuilder locals) [
@@ -136,17 +142,14 @@ module Generate =
                 for instr in body do
                     match instr with
                     | { Opcode = 0x0Buy; Arguments = InstructionArguments.Nothing } -> () // end
-                    | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex(Index i) } when i < funcParamCount ->
-                        // local.get
-                        let i' = Checked.uint16 i
-                        if i < funcParamCount
-                        then Shortened.ldarg(Checked.uint16 i)
-                        else Shortened.ldloc(LocalVarIndex.locali i')
+                    | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex i } ->
+                        translateVariableInstr Shortened.ldarg Shortened.ldloc funcParamCount i // local.get
+                    | { Opcode = 0x21uy; Arguments = InstructionArguments.LocalIndex i } ->
+                        translateVariableInstr Shortened.starg Shortened.stloc funcParamCount i // local.set
                     | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> Shortened.ldc_i4 n // i32.const
                     | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> ldc_i8 n // i64.const
                     | { Opcode = 0x6Auy; Arguments = InstructionArguments.Nothing } -> add // i32.add
-                    | _ -> failwithf "TODO: Error for unknown opcode %A" instr.Opcode
-
+                    | _ -> failwithf "TODO: Error for cannot translate unknown opcode 0x%02X" instr.Opcode
                 ret
             }
             |> InstructionBlock.ofSeq
