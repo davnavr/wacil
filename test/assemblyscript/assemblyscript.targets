@@ -1,0 +1,36 @@
+<Project DefaultTargets="Rebuild" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup>
+    <Compile Include="$(MSBuildProjectDirectory)\**\*.ts" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutDir Condition="'$(OutDir)'==''">$(MSBuildProjectDirectory)\out</OutDir>
+    <ModuleName Condition="'$(ModuleName)'==''">$(MSBuildProjectName)</ModuleName>
+    <ModuleFile>$(OutDir)\$(ModuleName).wasm</ModuleFile>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+    <OptimizeLevel Condition="'$(OptimizeLevel)'==''">3</OptimizeLevel>
+    <ShrinkLevel Condition="'$(ShrinkLevel)'==''">2</ShrinkLevel>
+    <Runtime Condition="'$(Runtime)'==''">incremental</Runtime>
+    <AscCompilerFlags>--binaryFile $(ModuleFile) --runtime $(Runtime) --optimizeLevel $(OptimizeLevel) --shrinkLevel $(ShrinkLevel)</AscCompilerFlags>
+  </PropertyGroup>
+
+  <Target Name="Clean">
+    <RemoveDir Directories="$(OutDir)" />
+  </Target>
+
+  <Target Name="Build" AfterTargets="Clean" Inputs="@(Compile)" Outputs="$(ModuleFile)">
+    <MakeDir Directories="$(OutDir)" />
+
+    <Exec
+        Command="npx asc @(Compile, ' ') $(AscCompilerFlags)"
+        CustomErrorRegularExpression="ERROR AS[0-9]+:"
+        ConsoleToMsBuild="true"
+        LogStandardErrorAsError="true" />
+  </Target>
+
+  <Target Name="Rebuild" DependsOnTargets="Clean; Build" />
+
+</Project>

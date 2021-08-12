@@ -222,5 +222,5 @@ module Generate =
         let _ = addTranslatedFunctions members sections
 
         // TODO: Add FSharpIL function to allow translation of CliModuleBuilder to section contents
-        // TODO: Allow setting of ASLR flag in optional header.
+        if not options.HighEntropyVA then failwith "// TODO: Allow setting of ASLR flag in optional header."
         BuildPE.ofModuleBuilder FileCharacteristics.IsDll metadata
