@@ -168,8 +168,9 @@ module Generate =
         for instr in body do
             match instr with
             | { Opcode = 0x01uy; Arguments = InstructionArguments.Nothing } -> instrs'.Add Cil.Instructions.nop // nop
-            | { Opcode = 0x03uy; Arguments = InstructionArguments.BlockType _ } -> createBranchBlock()
-            | { Opcode = 0x04uy; Arguments = InstructionArguments.BlockType _ } ->
+            | { Opcode = 0x03uy; Arguments = InstructionArguments.BlockType _ } -> // loop
+                createBranchBlock() // TODO: Fix, make sure label is before loop body
+            | { Opcode = 0x04uy; Arguments = InstructionArguments.BlockType _ } -> // if
                 let prev = commit
                 let l = ref Unchecked.defaultof<_>
                 instrs'.Add(Instruction.branchingRef Opcode.Brfalse (StackBehavior.PopOrPush -1y) BranchKind.Long l)
@@ -181,6 +182,7 @@ module Generate =
                     commit <- prev
 
                 createBranchBlock()
+            | { Opcode = 5uy; Arguments = InstructionArguments.Nothing } -> () // else
             | { Opcode = 0x0Cuy; Arguments = InstructionArguments.LabelIndex i } ->
                 branchToLabel Opcode.Br (StackBehavior.PopOrPush 0y) i
             | { Opcode = 0x0Buy; Arguments = InstructionArguments.Nothing } ->
@@ -193,8 +195,8 @@ module Generate =
             | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> instrs'.Add(ldc_i8 n) // i64.const
             | { Opcode = 0x52uy; Arguments = InstructionArguments.Nothing } ->
                 instrs'.Add ceq
-                instrs'.Add ldc_i4_1
-                instrs'.Add xor
+                instrs'.Add ldc_i4_0
+                instrs'.Add ceq
             | { Opcode = 0x6Auy | 0x7Cuy; Arguments = InstructionArguments.Nothing } -> instrs'.Add add // i32.add, i64.add
             | { Opcode = 0x6Buy | 0x7Duy; Arguments = InstructionArguments.Nothing } -> instrs'.Add sub // i32.sub, i64.sub
             | { Opcode = 0x6Cuy | 0x7Euy; Arguments = InstructionArguments.Nothing } -> instrs'.Add mul // i32.mul, i64.mul
