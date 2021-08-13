@@ -129,32 +129,82 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
-    let translateVariableInstr argi loci funcParamCount (Index i: Index<IndexKinds.Local>): Cil.Instruction =
-        let i' = Checked.uint16 i
-        if i < funcParamCount
-        then argi(Checked.uint16 i)
-        else loci(LocalVarIndex.locali i')
+    let translateMethodBody locinit funcParamCount localTypesBuilder { Code.Locals = locals; Body = body } =
+        // TODO: Figure out how to handle branching.
+        let blocks = List()
+        let instrs' = ImmutableArray.CreateBuilder<Cil.Instruction>()
+        // TODO: Make custom label list class.
+        let labels = List<Cil.Label ref>() // NOTE: This assumes that, within a block, labels are numbered sequentially
+        let lindices = Stack<int32>()
 
-    let translateMethodBody funcParamCount localTypesBuilder { Code.Locals = locals; Body = body } =
-        // TODO: Check options to see if skip init locals should be used.
-        MethodBody.create InitLocals ValueNone (getMethodLocals localTypesBuilder locals) [
-            seq {
-                for instr in body do
-                    match instr with
-                    | { Opcode = 0x0Buy; Arguments = InstructionArguments.Nothing } -> () // end
-                    | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex i } ->
-                        translateVariableInstr Shortened.ldarg Shortened.ldloc funcParamCount i // local.get
-                    | { Opcode = 0x21uy; Arguments = InstructionArguments.LocalIndex i } ->
-                        translateVariableInstr Shortened.starg Shortened.stloc funcParamCount i // local.set
-                    | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> Shortened.ldc_i4 n // i32.const
-                    | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> ldc_i8 n // i64.const
-                    | { Opcode = 0x6Auy; Arguments = InstructionArguments.Nothing } -> add // i32.add
-                    | _ -> failwithf "TODO: Error for cannot translate unknown opcode 0x%02X" instr.Opcode
-                ret
-            }
-            |> InstructionBlock.ofSeq
-        ]
-        |> ValueSome
+        let commitInstructionList() =
+            blocks.Add(InstructionBlock.ofBlock(instrs'.ToImmutable()))
+            instrs'.Clear()
+
+        let mutable commit = commitInstructionList
+
+        let inline translateVariableInstr argi loci (Index i) =
+            let i' = Checked.uint16 i
+            if i < funcParamCount
+            then argi(Checked.uint16 i) |> instrs'.Add
+            else loci(LocalVarIndex.locali i') |> instrs'.Add
+
+        let inline branchToLabel opcode str (Index index: Index<IndexKinds.Label>) =
+            instrs'.Add(Instruction.branchingRef opcode str BranchKind.Long labels.[labels.Count - 1 - Checked.int32 index])
+
+        let createBranchBlock() =
+            let i, prev = labels.Count, commit
+            lindices.Push i
+            labels.Add(ref Unchecked.defaultof<_>)
+
+            commit <- fun() ->
+                let struct(l, b) = InstructionBlock.label(InstructionBlock.ofBlock(instrs'.ToImmutable()))
+                instrs'.Clear()
+                labels.[i].Value <- l
+                labels.RemoveRange(lindices.Pop(), labels.Count - i)
+                blocks.Add b
+                commit <- prev
+
+        for instr in body do
+            match instr with
+            | { Opcode = 0x01uy; Arguments = InstructionArguments.Nothing } -> instrs'.Add Cil.Instructions.nop // nop
+            | { Opcode = 0x03uy; Arguments = InstructionArguments.BlockType _ } -> createBranchBlock()
+            | { Opcode = 0x04uy; Arguments = InstructionArguments.BlockType _ } ->
+                let prev = commit
+                let l = ref Unchecked.defaultof<_>
+                instrs'.Add(Instruction.branchingRef Opcode.Brfalse (StackBehavior.PopOrPush -1y) BranchKind.Long l)
+
+                commit <- fun() ->
+                    let struct(l', b) = InstructionBlock.label InstructionBlock.empty
+                    blocks.Add b
+                    l.Value <- l'
+                    commit <- prev
+
+                createBranchBlock()
+            | { Opcode = 0x0Cuy; Arguments = InstructionArguments.LabelIndex i } ->
+                branchToLabel Opcode.Br (StackBehavior.PopOrPush 0y) i
+            | { Opcode = 0x0Buy; Arguments = InstructionArguments.Nothing } ->
+                commit() // end
+            | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex i } ->
+                translateVariableInstr Shortened.ldarg Shortened.ldloc i // local.get
+            | { Opcode = 0x21uy; Arguments = InstructionArguments.LocalIndex i } ->
+                translateVariableInstr Shortened.starg Shortened.stloc i // local.set
+            | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> instrs'.Add(Shortened.ldc_i4 n) // i32.const
+            | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> instrs'.Add(ldc_i8 n) // i64.const
+            | { Opcode = 0x52uy; Arguments = InstructionArguments.Nothing } ->
+                instrs'.Add ceq
+                instrs'.Add ldc_i4_1
+                instrs'.Add xor
+            | { Opcode = 0x6Auy | 0x7Cuy; Arguments = InstructionArguments.Nothing } -> instrs'.Add add // i32.add, i64.add
+            | { Opcode = 0x6Buy | 0x7Duy; Arguments = InstructionArguments.Nothing } -> instrs'.Add sub // i32.sub, i64.sub
+            | { Opcode = 0x6Cuy | 0x7Euy; Arguments = InstructionArguments.Nothing } -> instrs'.Add mul // i32.mul, i64.mul
+            | _ -> failwithf "TODO: Error for cannot translate unknown opcode 0x%02X" instr.Opcode
+
+        if instrs'.Count > 0 then commit()
+
+        blocks.Add(InstructionBlock.singleton ret)
+
+        MethodBody.create locinit ValueNone (getMethodLocals localTypesBuilder locals) blocks |> ValueSome
 
     let addTranslatedFunctions (members: DefinedTypeMembers) sections =
         match sections with
@@ -192,7 +242,8 @@ module Generate =
 
                 // TODO: Use method dictionary when generating call instructions.
                 methods.[i'] <-
-                    let body = translateMethodBody (Checked.uint32 funct.Parameters.Length) locals code.[i]
+                    // TODO: Check options to see if skip init locals should be used.
+                    let body = translateMethodBody InitLocals (Checked.uint32 funct.Parameters.Length) locals code.[i]
                     let token = members.DefineMethod(func', body, ValueNone) |> ValidationResult.get
                     token.Token
 

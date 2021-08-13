@@ -314,6 +314,9 @@ let readInstructionSeq (stream: SlicedByteStream) =
             | 2uy
             | 3uy
             | 4uy -> InstructionArguments.BlockType(Type.blocktype stream)
+            | 5uy ->
+                failwith "TODO: Keep track of if and else pairs"
+                InstructionArguments.Nothing
 
             | 0x0Cuy // br
             | 0x0Duy -> InstructionArguments.LabelIndex(index stream)
