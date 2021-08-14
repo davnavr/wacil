@@ -130,10 +130,11 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
-    let addMemoryFields (members: DefinedTypeMembers) memories exports (metadata: CliModuleBuilder) =
+    // TODO: Define option to specify that memories should be instantiated lazily.
+    let addMemoryFields (initializer: byref<InstructionBlock>) (members: DefinedTypeMembers) memories exports (metadata: CliModuleBuilder) =
         match memories with
         | ValueSome(memories': MemorySection) ->
-            let memFieldType = CliType.SZArray PrimitiveType.U1
+            let memFieldType = CliType.SZArray(CliType.SZArray PrimitiveType.U1) // TODO: Define a Mem struct
 
             if memories'.Length > 1 then
                 raise(NotSupportedException "Multiple memory instances are not yet supported by most implementations of WebAssembly")
@@ -141,7 +142,7 @@ module Generate =
             let memories'' =
                 members.DefineField (
                     DefinedField.Static (
-                        MemberVisibility.Private,
+                        MemberVisibility.CompilerControlled,
                         FieldAttributes.InitOnly,
                         Identifier.ofStr "memories",
                         CliType.SZArray memFieldType
@@ -169,12 +170,12 @@ module Generate =
                         )
 
                     let getter' =
-                        MethodBody.ofSeq [
+                        MethodBody.ofSeq [|
                             ldsfld memories''.Token
                             Shortened.ldc_i4 fieldi
                             ldelem(TypeTok.Specified memFieldType)
                             ret
-                        ]
+                        |]
 
                     members.DefineProperty (
                         Identifier.ofStr name,
@@ -188,6 +189,11 @@ module Generate =
             | ValueNone -> ()
 
             // TODO: Define initialization function.
+            initializer <-
+                //let mutable instructions = Array.zeroCreate(5 * memories'.Length)
+
+                //InstructionBlock.ofBlock(Unsafe.As &instructions)
+                InstructionBlock.empty // TEMPORARY
 
             ValueSome memories''
         | ValueNone -> ValueNone
@@ -305,7 +311,7 @@ module Generate =
                     let visibility, name =
                         match getFunctionName i' with
                         | ValueSome name' -> MethodDefFlags.Public, name'
-                        | ValueNone -> MethodDefFlags.Private, MethodName.ofStr ("func#" + string i)
+                        | ValueNone -> MethodDefFlags.CompilerControlled, MethodName.ofStr ("func#" + string i)
                     DefinedMethod (
                         MethodImplFlags.IL,
                         MethodDefFlags.Static ||| MethodDefFlags.HideBySig ||| visibility,
@@ -361,7 +367,19 @@ module Generate =
 
             metadata.DefineType(module', ValueNone) |> ValidationResult.get
 
-        let memories = addMemoryFields members sections.MemorySection exports metadata
+        let initializer = Array.zeroCreate 2
+        let memories = addMemoryFields &initializer.[0] members sections.MemorySection exports metadata
+        //let tables = &initializer.[1]
+        initializer.[1] <- InstructionBlock.empty // TEMPORARY
+
+        members.DefineMethod (
+            DefinedMethod.ClassConstructor,
+            ValueSome(MethodBody.create InitLocals ValueNone LocalVariables.Null initializer),
+            ValueNone
+        )
+        |> ValidationResult.get
+        |> ignore
+
         let _ = addTranslatedFunctions members sections exports
 
         // TODO: Add FSharpIL function to allow translation of CliModuleBuilder to section contents
