@@ -130,42 +130,24 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
-    [<Sealed; Obsolete>]
-    type InstructionBlockStack () =
-        let mutable blocks = Array.zeroCreate 4
-        let mutable i = 0
-
-        member _.Top = blocks.[i]
-
-        member _.Push(): ImmutableArray<Cil.Instruction>.Builder =
-            if i >= blocks.Length then Array.Resize(&blocks, blocks.Length * 2)
-            let top = &blocks.[i]
-            if isNull top then top <- ImmutableArray.CreateBuilder() else top.Clear()
-            i <- i + 1
-            top
-
-        member this.Pop() =
-            let instrs = this.Top.ToImmutable()
-            i <- i - 1
-            instrs
-
-        member _.Clear() = i <- 0
-
     let translateMethodBody
         locinit
         funcParamCount
         (instrs: ImmutableArray<Cil.Instruction>.Builder)
+        (blocks: List<InstructionBlock>)
+        // TODO: Make custom label list class.
+        (labels: List<Cil.Label ref>)
+        (lindices: Stack<int32>)
+
+        (ifLabelFixups: Stack<Cil.Label ref>)
         localTypesBuilder
         { Code.Locals = locals; Body = body }
         =
-        // TODO: Figure out how to handle branching.
-        let blocks = List<InstructionBlock>()
-        // TODO: Make custom label list class.
-        let labels = List<Cil.Label ref>() // NOTE: This assumes that, within a block, labels are numbered sequentially
-        let lindices = Stack<int32>()
-        let ifLabelFixups = Stack<Cil.Label ref>()
-
         instrs.Clear()
+        blocks.Clear()
+        labels.Clear() // NOTE: This assumes that, within a block, labels are numbered sequentially
+        lindices.Clear()
+        ifLabelFixups.Clear()
 
         let inline emit op = instrs.Add op
 
@@ -244,6 +226,10 @@ module Generate =
             // Shared to avoid extra allocations.
             let locals = ImmutableArray.CreateBuilder()
             let instrs = ImmutableArray.CreateBuilder()
+            let blocks = List<InstructionBlock>()
+            let labels = List<Cil.Label ref>()
+            let lindices = Stack<int32>()
+            let ifLabelFixups = Stack<Cil.Label ref>()
 
             let getFunctionName =
                 match exports with
@@ -272,7 +258,17 @@ module Generate =
                 // TODO: Use method dictionary when generating call instructions.
                 methods.[i'] <-
                     // TODO: Check options to see if skip init locals should be used.
-                    let body = translateMethodBody InitLocals (Checked.uint32 funct.Parameters.Length) instrs locals code.[i]
+                    let body =
+                        translateMethodBody
+                            InitLocals
+                            (Checked.uint32 funct.Parameters.Length)
+                            instrs
+                            blocks
+                            labels
+                            lindices
+                            ifLabelFixups
+                            locals code.[i]
+
                     let token = members.DefineMethod(func', body, ValueNone) |> ValidationResult.get
                     token.Token
 
