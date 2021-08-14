@@ -158,6 +158,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     static member inline Zero: Index<'Class>
     static member (+): index: Index<'Class> * offset: uint32 -> Index<'Class>
+    static member (-): x: Index<'Class> * y: Index<'Class> -> uint32
     static member inline op_Implicit: index: Index<'Class> -> uint32
     static member inline op_Explicit: index: Index<'Class> -> int32
 
@@ -765,6 +766,7 @@ type ModuleExports
 [<RequireQualifiedAccess>]
 module ModuleExports =
     val tryGetFunction : exports: ModuleExports -> func: Index<IndexKinds.Func> -> Export voption
+    val memories : exports: ModuleExports -> seq<struct(Name * Index<IndexKinds.Mem>)>
 
 val getModuleExports : ExportSection -> ModuleExports
 

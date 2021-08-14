@@ -130,6 +130,68 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
+    let addMemoryFields (members: DefinedTypeMembers) memories exports (metadata: CliModuleBuilder) =
+        match memories with
+        | ValueSome(memories': MemorySection) ->
+            let memFieldType = CliType.SZArray PrimitiveType.U1
+
+            if memories'.Length > 1 then
+                raise(NotSupportedException "Multiple memory instances are not yet supported by most implementations of WebAssembly")
+
+            let memories'' =
+                members.DefineField (
+                    DefinedField.Static (
+                        MemberVisibility.Private,
+                        FieldAttributes.InitOnly,
+                        Identifier.ofStr "memories",
+                        CliType.SZArray memFieldType
+                    ),
+                    ValueNone
+                )
+                |> ValidationResult.get
+
+            match exports with
+            | ValueSome(exports': ModuleExports) ->
+                let memGetterType = ReturnType.T memFieldType
+
+                for struct(name, memi) in ModuleExports.memories exports' do
+                    //let size = memories'.[memi].Type
+                    let fieldi = int32(memories'.First - memi)
+
+                    let getter =
+                        DefinedMethod.Static (
+                            MemberVisibility.Public,
+                            MethodAttributes.SpecialName ||| MethodAttributes.HideBySig,
+                            memGetterType,
+                            MethodName.ofStr("get_" + name),
+                            ImmutableArray.Empty,
+                            Parameter.emptyList
+                        )
+
+                    let getter' =
+                        MethodBody.ofSeq [
+                            ldsfld memories''.Token
+                            Shortened.ldc_i4 fieldi
+                            ldelem(TypeTok.Specified memFieldType)
+                            ret
+                        ]
+
+                    members.DefineProperty (
+                        Identifier.ofStr name,
+                        ValueSome(getter :> DefinedMethod, ValueSome getter', ValueNone),
+                        ValueNone,
+                        List.empty,
+                        ValueNone
+                    )
+                    |> ValidationResult.get
+                    |> ignore
+            | ValueNone -> ()
+
+            // TODO: Define initialization function.
+
+            ValueSome memories''
+        | ValueNone -> ValueNone
+
     let translateMethodBody
         locinit
         funcParamCount
@@ -214,13 +276,12 @@ module Generate =
 
         MethodBody.create locinit ValueNone (getMethodLocals localTypesBuilder locals) blocks |> ValueSome
 
-    let addTranslatedFunctions (members: DefinedTypeMembers) sections =
+    let addTranslatedFunctions (members: DefinedTypeMembers) sections exports =
         match sections with
         | { TypeSection = ValueSome types
             FunctionSection = ValueSome funcs
             CodeSection = ValueSome code }
             ->
-            let exports = ValueOption.map getModuleExports sections.ExportSection
             let methods = Dictionary<Index<IndexKinds.Func>, MethodTok> funcs.Length
 
             // Shared to avoid extra allocations.
@@ -247,7 +308,7 @@ module Generate =
                         | ValueNone -> MethodDefFlags.Private, MethodName.ofStr ("func#" + string i)
                     DefinedMethod (
                         MethodImplFlags.IL,
-                        MethodDefFlags.Static ||| visibility,
+                        MethodDefFlags.Static ||| MethodDefFlags.HideBySig ||| visibility,
                         FSharpIL.Metadata.Signatures.MethodThis.NoThis,
                         getReturnType funct.Results,
                         name,
@@ -277,6 +338,7 @@ module Generate =
 
     let toPE (ValidatedModule file) options = // TODO: Set file to Exe if start function is defined.
         let sections = getKnownSections file
+        let exports = ValueOption.map getModuleExports sections.ExportSection
         let extension = FileType.extension options.FileType
 
         // TODO: Figure out how to deterministically generate MVID
@@ -299,7 +361,8 @@ module Generate =
 
             metadata.DefineType(module', ValueNone) |> ValidationResult.get
 
-        let _ = addTranslatedFunctions members sections
+        let memories = addMemoryFields members sections.MemorySection exports metadata
+        let _ = addTranslatedFunctions members sections exports
 
         // TODO: Add FSharpIL function to allow translation of CliModuleBuilder to section contents
         if not options.HighEntropyVA then failwith "// TODO: Allow setting of ASLR flag in optional header."

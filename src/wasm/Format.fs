@@ -137,6 +137,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     static member inline Zero = Index<'Class> 0u
     static member (+) (index: Index<'Class>, offset) = Index<'Class>(index.Index + offset)
+    static member (-) (x: Index<'Class>, y: Index<'Class>) = Checked.(-) x.Index y.Index
     static member inline op_Implicit(index: Index<'Class>) = index.Index
     static member inline op_Explicit(index: Index<'Class>) = Checked.int32 index.Index
 
@@ -553,6 +554,11 @@ module ModuleExports =
         match functions.TryGetValue func with
         | true, i -> ValueSome exports.[i]
         | false, _ -> ValueNone
+
+    let inline getSpecificExports { Exports = exports } =
+        Seq.map (fun (KeyValue(index, ei)) -> struct(exports.ItemRef(ei).Name, index))
+
+    let memories exports = getSpecificExports exports exports.Memories
 
 let getModuleExports (exports: ExportSection) =
     let functions, tables, memories, globals = Dictionary(), Dictionary(), Dictionary(), Dictionary()
