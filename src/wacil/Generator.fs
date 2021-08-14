@@ -37,6 +37,12 @@ type Options =
 
 [<RequireQualifiedAccess>]
 module Generate =
+    type CoreRuntimeAssembly =
+        { Assembly : ReferencedAssembly
+          Object: TypeReference
+          ValueType: TypeReference
+          TargetFrameworkAttribute: {| Constructor: MethodTok<ReferencedType, ReferencedMethod> |} }
+
     let addCoreAssembly (metadata: CliModuleBuilder) =
         let mscorlib =
             { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
@@ -55,6 +61,13 @@ module Generate =
               ResolutionScope = TypeReferenceParent.Assembly mscorlib }
         do metadata.ReferenceType(ReferencedType.Reference object) |> ValidationResult.get |> ignore
 
+        let vtype =
+            { TypeReference.TypeName = Identifier.ofStr "ValueType"
+              TypeNamespace = system
+              Flags = ValueNone
+              ResolutionScope = TypeReferenceParent.Assembly mscorlib }
+        do metadata.ReferenceType(ReferencedType.Reference vtype) |> ValidationResult.get |> ignore
+
         let tfmattr =
             { TypeReference.TypeName = Identifier.ofStr "TargetFrameworkAttribute"
               TypeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning")
@@ -64,16 +77,17 @@ module Generate =
             |> metadata.ReferenceType
             |> ValidationResult.get
 
-        {| Assembly = mscorlib
-           Object = object
-           TargetFrameworkAttribute =
-             {| Constructor =
-                  ReferencedMethod.Constructor (
-                      visibility = ExternalVisibility.Public,
-                      parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
-                  )
-                  |> tfmattr.ReferenceMethod
-                  |> ValidationResult.get |} |}
+        { Assembly = mscorlib
+          Object = object
+          ValueType = vtype
+          TargetFrameworkAttribute =
+            {| Constructor =
+                 ReferencedMethod.Constructor (
+                     visibility = ExternalVisibility.Public,
+                     parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
+                 )
+                 |> tfmattr.ReferenceMethod
+                 |> ValidationResult.get |} }
 
     let addAssemblyDefinition options (metadata: CliModuleBuilder) =
         match options.FileType with
@@ -130,14 +144,108 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
+    let addMemoryType
+        mscorlib
+        module'
+        exports
+        (metadata: CliModuleBuilder)
+        =
+        // When multi-memory proposal of WebAssembly is implemented, make Mem a ref struct
+        let mem =
+            { TypeDefinition.TypeName = Identifier.ofStr "Mem"
+              TypeNamespace = ValueNone
+              Flags =
+                match exports with
+                | ValueSome _ -> TypeDefFlags.NestedPublic
+                | ValueNone -> TypeDefFlags.NestedPrivate
+                ||| TypeDefFlags.Sealed
+              Extends =
+                ReferencedType.Reference mscorlib.Object // .ValueType
+                |> NamedType.ReferencedType 
+                |> ClassExtends.Named
+              EnclosingClass = ValueSome module' }
+            |> DefinedType.Definition
+
+        let members = metadata.DefineType(mem, ValueNone) |> ValidationResult.get
+
+        let bytearr = CliType.SZArray PrimitiveType.U1
+        let memFieldType = CliType.SZArray(CliType.SZArray PrimitiveType.U1)
+
+        let memory =
+            members.DefineField (
+                DefinedField.Instance (
+                    MemberVisibility.CompilerControlled,
+                    FieldAttributes.None,
+                    Identifier.ofStr "memory",
+                    memFieldType
+                ),
+                ValueNone
+            )
+            |> ValidationResult.get
+
+        let count =
+            members.DefineField (
+                DefinedField.Instance (
+                    MemberVisibility.CompilerControlled,
+                    FieldAttributes.None,
+                    Identifier.ofStr "count",
+                    PrimitiveType.I4
+                ),
+                ValueNone
+            )
+            |> ValidationResult.get
+
+        members.DefineMethod (
+            DefinedMethod.Instance (
+                MemberVisibility.Public,
+                MethodAttributes.HideBySig,
+                ReturnType.T bytearr,
+                MethodName.ofStr "PageAt",
+                ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
+                fun _ _ -> Parameter.named(Identifier.ofStr "index")
+            ),
+            ValueSome(MethodBody.ofSeq [| ldarg_0; ldfld memory.Token; ldarg_1; ldelem(TypeTok.Specified bytearr); ret |]), // TODO: Throw exception if index is >= count
+            ValueNone
+        )
+        |> ValidationResult.get
+        |> ignore
+
+        let ctor =
+            let body =
+                ()
+
+            members.DefineMethod (
+                DefinedMethod.Constructor (
+                    MemberVisibility.Assembly,
+                    MethodAttributes.HideBySig,
+                    ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
+                    fun _ _ -> Parameter.named(Identifier.ofStr "index")
+                ),
+                ValueSome body,
+                ValueNone
+            )
+            |> ValidationResult.get
+            |> ignore
+
+        {| Definition = mem
+           Type = CliType.ValueType(NamedType.DefinedType mem) |}
+
     // TODO: Define option to specify that memories should be instantiated lazily.
-    let addMemoryFields (initializer: byref<InstructionBlock>) (members: DefinedTypeMembers) memories exports (metadata: CliModuleBuilder) =
+    let addMemoryFields
+        mscorlib
+        module'
+        (initializer: byref<InstructionBlock>)
+        (members: DefinedTypeMembers)
+        memories
+        exports
+        metadata
+        =
         match memories with
         | ValueSome(memories': MemorySection) ->
-            let memFieldType = CliType.SZArray(CliType.SZArray PrimitiveType.U1) // TODO: Define a Mem struct
-
             if memories'.Length > 1 then
                 raise(NotSupportedException "Multiple memory instances are not yet supported by most implementations of WebAssembly")
+
+            let mem = addMemoryType mscorlib module' exports metadata
 
             let memories'' =
                 members.DefineField (
@@ -145,7 +253,7 @@ module Generate =
                         MemberVisibility.CompilerControlled,
                         FieldAttributes.InitOnly,
                         Identifier.ofStr "memories",
-                        CliType.SZArray memFieldType
+                        CliType.SZArray mem.Type
                     ),
                     ValueNone
                 )
@@ -153,7 +261,8 @@ module Generate =
 
             match exports with
             | ValueSome(exports': ModuleExports) ->
-                let memGetterType = ReturnType.T memFieldType
+                let memGetterType = ReturnType.T mem.Type
+                let memLoadType = TypeTok.Named(NamedType.DefinedType mem.Definition)
 
                 for struct(name, memi) in ModuleExports.memories exports' do
                     //let size = memories'.[memi].Type
@@ -173,7 +282,8 @@ module Generate =
                         MethodBody.ofSeq [|
                             ldsfld memories''.Token
                             Shortened.ldc_i4 fieldi
-                            ldelem(TypeTok.Specified memFieldType)
+                            ldelem memLoadType
+                            // TODO: Call constructor
                             ret
                         |]
 
@@ -353,24 +463,24 @@ module Generate =
         let mscorlib = addCoreAssembly metadata
         do addAssemblyDefinition options metadata |> ignore
 
-        let members =
-            let module' =
-                { TypeDefinition.TypeName = Identifier.ofStr options.ModuleFileName
-                  TypeNamespace = ValueNone // TODO: If module name is separated by periods, make the first few things the namespace
-                  Flags = TypeDefFlags.Public ||| TypeDefFlags.Sealed ||| TypeDefFlags.Abstract
-                  Extends =
-                    ReferencedType.Reference mscorlib.Object
-                    |> NamedType.ReferencedType 
-                    |> ClassExtends.Named
-                  EnclosingClass = ValueNone }
-                |> DefinedType.Definition
+        let module' =
+            { TypeDefinition.TypeName = Identifier.ofStr options.ModuleFileName
+              TypeNamespace = ValueNone // TODO: If module name is separated by periods, make the first few things the namespace
+              Flags = TypeDefFlags.Public ||| TypeDefFlags.Sealed ||| TypeDefFlags.Abstract
+              Extends =
+                ReferencedType.Reference mscorlib.Object
+                |> NamedType.ReferencedType 
+                |> ClassExtends.Named
+              EnclosingClass = ValueNone }
+            |> DefinedType.Definition
 
-            metadata.DefineType(module', ValueNone) |> ValidationResult.get
+        let members = metadata.DefineType(module', ValueNone) |> ValidationResult.get
 
-        let initializer = Array.zeroCreate 2
-        let memories = addMemoryFields &initializer.[0] members sections.MemorySection exports metadata
+        let initializer = Array.zeroCreate 3
+        let memories = addMemoryFields mscorlib module' &initializer.[0] members sections.MemorySection exports metadata
         //let tables = &initializer.[1]
         initializer.[1] <- InstructionBlock.empty // TEMPORARY
+        initializer.[2] <- InstructionBlock.singleton ret
 
         members.DefineMethod (
             DefinedMethod.ClassConstructor,
