@@ -186,6 +186,21 @@ open Types
 module InstructionSet =
     type Opcode = uint8
 
+    //type Opcode = { Name: string; Opcode: uint8; Arguments: ? }
+
+    // and/or
+
+    // (|unreachable|): Opcode -> bool
+    // (|nop|): Opcode -> bool
+
+    (*
+    type InstructionSomeThing =
+        | Unreachable
+        | Nop
+        | Control of ?
+        | I32 of ?
+    *)
+
     [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
     type MemArgAlignment =
         member Alignment: uint32
@@ -216,6 +231,8 @@ module InstructionSet =
         | Nothing
         | Bytes of ImmutableArray<byte>
         | RefType of RefType
+        //| Block of BlockType * Expr
+        //| BlockElse of BlockType * seq<Instruction> * Expr
         | BlockType of BlockType
         | ValTypeVector of ImmutableArray<ValType>
         | FuncIndex of Index<IndexKinds.Func>
@@ -516,7 +533,14 @@ module InstructionSet =
     //    val drop : Index<IndexKinds.Data> -> Instruction
 
 /// Represents a function body or the value of a global variable.
-type Expr = seq<InstructionSet.Instruction>
+[<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; NoEquality>]
+type Expr =
+    internal
+        { Instructions: ImmutableArray<InstructionSet.Instruction> }
+
+[<RequireQualifiedAccess>]
+module Expr =
+    val toBlock : expression: Expr -> ImmutableArray<InstructionSet.Instruction>
 
 /// (1) Defines the function types used by the module.
 type TypeSection = IndexedVector<IndexKinds.Type, FuncType>

@@ -1,5 +1,6 @@
 ﻿module wacil.Generator
 
+open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
@@ -129,80 +130,103 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
-    let translateMethodBody locinit funcParamCount localTypesBuilder { Code.Locals = locals; Body = body } =
+    [<Sealed; Obsolete>]
+    type InstructionBlockStack () =
+        let mutable blocks = Array.zeroCreate 4
+        let mutable i = 0
+
+        member _.Top = blocks.[i]
+
+        member _.Push(): ImmutableArray<Cil.Instruction>.Builder =
+            if i >= blocks.Length then Array.Resize(&blocks, blocks.Length * 2)
+            let top = &blocks.[i]
+            if isNull top then top <- ImmutableArray.CreateBuilder() else top.Clear()
+            i <- i + 1
+            top
+
+        member this.Pop() =
+            let instrs = this.Top.ToImmutable()
+            i <- i - 1
+            instrs
+
+        member _.Clear() = i <- 0
+
+    let translateMethodBody
+        locinit
+        funcParamCount
+        (instrs: ImmutableArray<Cil.Instruction>.Builder)
+        localTypesBuilder
+        { Code.Locals = locals; Body = body }
+        =
         // TODO: Figure out how to handle branching.
-        let blocks = List()
-        let instrs' = ImmutableArray.CreateBuilder<Cil.Instruction>()
+        let blocks = List<InstructionBlock>()
         // TODO: Make custom label list class.
         let labels = List<Cil.Label ref>() // NOTE: This assumes that, within a block, labels are numbered sequentially
         let lindices = Stack<int32>()
+        let ifLabelFixups = Stack<Cil.Label ref>()
 
-        let commitInstructionList() =
-            blocks.Add(InstructionBlock.ofBlock(instrs'.ToImmutable()))
-            instrs'.Clear()
+        instrs.Clear()
 
-        let mutable commit = commitInstructionList
+        let inline emit op = instrs.Add op
 
-        let inline translateVariableInstr argi loci (Index i) =
+        let inline emitVarOp argi loci (Index i) =
             let i' = Checked.uint16 i
             if i < funcParamCount
-            then argi(Checked.uint16 i) |> instrs'.Add
-            else loci(LocalVarIndex.locali i') |> instrs'.Add
+            then argi(Checked.uint16 i)
+            else loci(LocalVarIndex.locali i')
+            |> emit
+
+        let inline pushLabelRef() =
+            let i, l = labels.Count, ref Unchecked.defaultof<_>
+            lindices.Push i
+            labels.Add l
+            l
+
+        let inline insertLabelRef l =
+            let struct(l', bl) = InstructionBlock.label InstructionBlock.empty
+            blocks.Add bl
+            l.contents <- l'
 
         let inline branchToLabel opcode str (Index index: Index<IndexKinds.Label>) =
-            instrs'.Add(Instruction.branchingRef opcode str BranchKind.Long labels.[labels.Count - 1 - Checked.int32 index])
+            Instruction.branchingRef opcode str BranchKind.Long labels.[labels.Count - 1 - Checked.int32 index] |> emit
 
-        let createBranchBlock() =
-            let i, prev = labels.Count, commit
-            lindices.Push i
-            labels.Add(ref Unchecked.defaultof<_>)
+        let inline commitInstructionList() =
+            blocks.Add(InstructionBlock.ofBlock(instrs.ToImmutable()))
+            instrs.Clear()
 
-            commit <- fun() ->
-                let struct(l, b) = InstructionBlock.label(InstructionBlock.ofBlock(instrs'.ToImmutable()))
-                instrs'.Clear()
-                labels.[i].Value <- l
-                labels.RemoveRange(lindices.Pop(), labels.Count - i)
-                blocks.Add b
-                commit <- prev
-
-        for instr in body do
+        for instr in Expr.toBlock body do
             match instr with
-            | { Opcode = 0x01uy; Arguments = InstructionArguments.Nothing } -> instrs'.Add Cil.Instructions.nop // nop
+            | { Opcode = 0x01uy; Arguments = InstructionArguments.Nothing } -> emit Cil.Instructions.nop // nop
             | { Opcode = 0x03uy; Arguments = InstructionArguments.BlockType _ } -> // loop
-                createBranchBlock() // TODO: Fix, make sure label is before loop body
+                commitInstructionList()
+                pushLabelRef() |> insertLabelRef
             | { Opcode = 0x04uy; Arguments = InstructionArguments.BlockType _ } -> // if
-                let prev = commit
-                let l = ref Unchecked.defaultof<_>
-                instrs'.Add(Instruction.branchingRef Opcode.Brfalse (StackBehavior.PopOrPush -1y) BranchKind.Long l)
-
-                commit <- fun() ->
-                    let struct(l', b) = InstructionBlock.label InstructionBlock.empty
-                    blocks.Add b
-                    l.Value <- l'
-                    commit <- prev
-
-                createBranchBlock()
-            | { Opcode = 5uy; Arguments = InstructionArguments.Nothing } -> () // else
+                let l = pushLabelRef()
+                emit (Instruction.branchingRef Opcode.Brfalse (StackBehavior.PopOrPush -1y) BranchKind.Long l)
+                ifLabelFixups.Push l
+            | { Opcode = 5uy | 0x0Buy; Arguments = InstructionArguments.Nothing } -> // end, else
+                if ifLabelFixups.Count > 0 then
+                    commitInstructionList()
+                    ifLabelFixups.Pop() |> insertLabelRef
             | { Opcode = 0x0Cuy; Arguments = InstructionArguments.LabelIndex i } ->
                 branchToLabel Opcode.Br (StackBehavior.PopOrPush 0y) i
-            | { Opcode = 0x0Buy; Arguments = InstructionArguments.Nothing } ->
-                commit() // end
-            | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex i } ->
-                translateVariableInstr Shortened.ldarg Shortened.ldloc i // local.get
-            | { Opcode = 0x21uy; Arguments = InstructionArguments.LocalIndex i } ->
-                translateVariableInstr Shortened.starg Shortened.stloc i // local.set
-            | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> instrs'.Add(Shortened.ldc_i4 n) // i32.const
-            | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> instrs'.Add(ldc_i8 n) // i64.const
+            | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex i } -> // local.get
+                emitVarOp Shortened.ldarg Shortened.ldloc i
+            | { Opcode = 0x21uy; Arguments = InstructionArguments.LocalIndex i } -> // local.set
+                emitVarOp Shortened.starg Shortened.stloc i
+            | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> emit (Shortened.ldc_i4 n) // i32.const
+            | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> emit (ldc_i8 n) // i64.const
             | { Opcode = 0x52uy; Arguments = InstructionArguments.Nothing } ->
-                instrs'.Add ceq
-                instrs'.Add ldc_i4_0
-                instrs'.Add ceq
-            | { Opcode = 0x6Auy | 0x7Cuy; Arguments = InstructionArguments.Nothing } -> instrs'.Add add // i32.add, i64.add
-            | { Opcode = 0x6Buy | 0x7Duy; Arguments = InstructionArguments.Nothing } -> instrs'.Add sub // i32.sub, i64.sub
-            | { Opcode = 0x6Cuy | 0x7Euy; Arguments = InstructionArguments.Nothing } -> instrs'.Add mul // i32.mul, i64.mul
+                emit ceq
+                emit ldc_i4_0
+                emit ceq
+            | { Opcode = 0x6Auy | 0x7Cuy; Arguments = InstructionArguments.Nothing } -> emit add // i32.add, i64.add
+            | { Opcode = 0x6Buy | 0x7Duy; Arguments = InstructionArguments.Nothing } -> emit sub // i32.sub, i64.sub
+            | { Opcode = 0x6Cuy | 0x7Euy; Arguments = InstructionArguments.Nothing } -> emit mul // i32.mul, i64.mul
             | _ -> failwithf "TODO: Error for cannot translate unknown opcode 0x%02X" instr.Opcode
 
-        if instrs'.Count > 0 then commit()
+        if instrs.Count > 0 then commitInstructionList()
+        if ifLabelFixups.Count > 0 then invalidOp "Missing label for some if instructions"
 
         blocks.Add(InstructionBlock.singleton ret)
 
@@ -216,7 +240,10 @@ module Generate =
             ->
             let exports = ValueOption.map getModuleExports sections.ExportSection
             let methods = Dictionary<Index<IndexKinds.Func>, MethodTok> funcs.Length
-            let locals = ImmutableArray.CreateBuilder<LocalType>() // Shared to avoid extra allocations.
+
+            // Shared to avoid extra allocations.
+            let locals = ImmutableArray.CreateBuilder()
+            let instrs = ImmutableArray.CreateBuilder()
 
             let getFunctionName =
                 match exports with
@@ -245,7 +272,7 @@ module Generate =
                 // TODO: Use method dictionary when generating call instructions.
                 methods.[i'] <-
                     // TODO: Check options to see if skip init locals should be used.
-                    let body = translateMethodBody InitLocals (Checked.uint32 funct.Parameters.Length) locals code.[i]
+                    let body = translateMethodBody InitLocals (Checked.uint32 funct.Parameters.Length) instrs locals code.[i]
                     let token = members.DefineMethod(func', body, ValueNone) |> ValidationResult.get
                     token.Token
 

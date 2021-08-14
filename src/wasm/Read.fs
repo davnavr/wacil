@@ -338,7 +338,7 @@ let expression stream: Expr =
             "TODO: Error for last byte of expression was expected to be end opcode 0x%02X but got 0x%02X"
             Control.``end``.Opcode
             terminator.Opcode
-    instrs :> seq<_>
+    { Expr.Instructions = instrs }
 
 [<Struct>]
 type CodeReader =

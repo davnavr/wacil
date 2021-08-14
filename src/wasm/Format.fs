@@ -303,7 +303,12 @@ module IndexedVector =
             member _.First = start
             member this.Item with get index = &vector.ItemRef(int32 this.First + int32 index) }
 
-type Expr = seq<InstructionSet.Instruction>
+[<Struct; RequireQualifiedAccess>]
+type Expr = { Instructions: ImmutableArray<InstructionSet.Instruction> }
+
+[<RequireQualifiedAccess>]
+module Expr =
+    let toBlock { Expr.Instructions = instructions } = instructions
 
 type TypeSection = IndexedVector<IndexKinds.Type, FuncType>
 
