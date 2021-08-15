@@ -18,6 +18,7 @@ type Name = string
 /// Represents the size of a memory, which is always a multiple of the page size.
 [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type MemSize =
+    val Multiple: uint16
     member Size: uint32
 
     internal new: multiple: uint16 -> MemSize

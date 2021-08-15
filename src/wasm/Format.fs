@@ -12,10 +12,14 @@ module Preamble =
 let [<Literal>] PageSize = 65536u
 
 [<Struct>]
-type MemSize (multiple: uint16) =
-    member _.Size = uint32 multiple * uint32 PageSize
+type MemSize =
+    val Multiple: uint16
 
-    override _.ToString() = multiple.ToString()
+    new (multiple) = { Multiple = multiple }
+
+    member this.Size = uint32 this.Multiple * uint32 PageSize
+
+    override this.ToString() = this.Multiple.ToString()
 
     static member inline op_Implicit(size: MemSize) = size.Size
     static member inline op_Explicit(size: MemSize) = Checked.int32 size.Size

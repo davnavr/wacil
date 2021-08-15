@@ -39,7 +39,7 @@ type Options =
 module Generate =
     type CoreRuntimeAssembly =
         { Assembly : ReferencedAssembly
-          Object: TypeReference
+          Object: {| Type: TypeReference; Constructor: MethodTok<ReferencedType, ReferencedMethod> |}
           ValueType: TypeReference
           TargetFrameworkAttribute: {| Constructor: MethodTok<ReferencedType, ReferencedMethod> |} }
 
@@ -59,7 +59,7 @@ module Generate =
               TypeNamespace = system
               Flags = ValueNone
               ResolutionScope = TypeReferenceParent.Assembly mscorlib }
-        do metadata.ReferenceType(ReferencedType.Reference object) |> ValidationResult.get |> ignore
+        let object' = metadata.ReferenceType(ReferencedType.Reference object) |> ValidationResult.get
 
         let vtype =
             { TypeReference.TypeName = Identifier.ofStr "ValueType"
@@ -78,7 +78,12 @@ module Generate =
             |> ValidationResult.get
 
         { Assembly = mscorlib
-          Object = object
+          Object =
+            {| Type = object
+               Constructor =
+                 ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Empty)
+                 |> object'.ReferenceMethod
+                 |> ValidationResult.get |}
           ValueType = vtype
           TargetFrameworkAttribute =
             {| Constructor =
@@ -144,13 +149,25 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
+    let addInternalField attrs name ftype (members: DefinedTypeMembers) =
+        members.DefineField (
+            DefinedField.Instance (
+                MemberVisibility.CompilerControlled,
+                attrs,
+                Identifier.ofStr name,
+                ftype
+            ),
+            ValueNone
+        )
+        |> ValidationResult.get
+
     let addMemoryType
         mscorlib
         module'
         exports
         (metadata: CliModuleBuilder)
         =
-        // When multi-memory proposal of WebAssembly is implemented, make Mem a ref struct
+        // NOTE: When multi-memory proposal of WebAssembly is implemented, consider making Mem a ref struct
         let mem =
             { TypeDefinition.TypeName = Identifier.ofStr "Mem"
               TypeNamespace = ValueNone
@@ -160,75 +177,79 @@ module Generate =
                 | ValueNone -> TypeDefFlags.NestedPrivate
                 ||| TypeDefFlags.Sealed
               Extends =
-                ReferencedType.Reference mscorlib.Object // .ValueType
-                |> NamedType.ReferencedType 
+                ReferencedType.Reference mscorlib.Object.Type // .ValueType
+                |> NamedType.ReferencedType
                 |> ClassExtends.Named
               EnclosingClass = ValueSome module' }
             |> DefinedType.Definition
 
         let members = metadata.DefineType(mem, ValueNone) |> ValidationResult.get
 
-        let bytearr = CliType.SZArray PrimitiveType.U1
-        let memFieldType = CliType.SZArray(CliType.SZArray PrimitiveType.U1)
-
-        let memory =
-            members.DefineField (
-                DefinedField.Instance (
-                    MemberVisibility.CompilerControlled,
-                    FieldAttributes.None,
-                    Identifier.ofStr "memory",
-                    memFieldType
-                ),
-                ValueNone
-            )
-            |> ValidationResult.get
-
-        let count =
-            members.DefineField (
-                DefinedField.Instance (
-                    MemberVisibility.CompilerControlled,
-                    FieldAttributes.None,
-                    Identifier.ofStr "count",
-                    PrimitiveType.I4
-                ),
-                ValueNone
-            )
-            |> ValidationResult.get
-
-        members.DefineMethod (
-            DefinedMethod.Instance (
-                MemberVisibility.Public,
-                MethodAttributes.HideBySig,
-                ReturnType.T bytearr,
-                MethodName.ofStr "PageAt",
-                ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
-                fun _ _ -> Parameter.named(Identifier.ofStr "index")
-            ),
-            ValueSome(MethodBody.ofSeq [| ldarg_0; ldfld memory.Token; ldarg_1; ldelem(TypeTok.Specified bytearr); ret |]), // TODO: Throw exception if index is >= count
-            ValueNone
-        )
-        |> ValidationResult.get
-        |> ignore
+        // Only one region of memory is used at a time, as it would be a pain to write an int64 between two regions of memory.
+        let memory = addInternalField FieldAttributes.None "pages" PrimitiveType.I members
+        let length = addInternalField FieldAttributes.None "length" PrimitiveType.I4 members
+        let min = addInternalField FieldAttributes.InitOnly "minimum" PrimitiveType.U4 members
+        let max = addInternalField FieldAttributes.InitOnly "maximum" PrimitiveType.U4 members
+        //let lock = addInternalField FieldAttributes.InitOnly "lock" PrimitiveType.Object members
 
         let ctor =
-            let body =
-                ()
+            let body = MethodBody.create InitLocals ValueNone LocalVariables.Null [|
+                InstructionBlock.ofList [
+                    ldarg_0
+                    Cil.Instructions.call mscorlib.Object.Constructor.Token
+
+                    let setSizeField argi field = [
+                        ldarg_0
+                        Shortened.ldarg argi
+                        conv_u4
+                        ldc_i4(int32 Wasm.Format.PageSize)
+                        mul
+                        stfld field
+                    ]
+
+                    yield! setSizeField 1us min.Token
+                    yield! setSizeField 2us max.Token
+
+                    // TODO: Exception if max > min
+
+                    ldarg_0
+                    dup
+                    ldfld min.Token
+                    conv_ovf_i4_un
+                    stfld length.Token
+
+                    //ldarg_0
+                    //dup
+                    //ldfld length.Token
+                    //Cil.Instructions.call (failwith "TODO: Call Marshal.AllocHGlobal")
+                    //stfld memory.Token
+
+                    ret
+                ]
+            |]
+
+            let u2' = ParameterType.T PrimitiveType.U2
 
             members.DefineMethod (
                 DefinedMethod.Constructor (
                     MemberVisibility.Assembly,
                     MethodAttributes.HideBySig,
-                    ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
-                    fun _ _ -> Parameter.named(Identifier.ofStr "index")
+                    ImmutableArray.Create(u2', u2'),
+                    fun i _ ->
+                        match i with
+                        | 0 -> "minPageCount"
+                        | _ -> "maxPageCount"
+                        |> Identifier.ofStr
+                        |> Parameter.named
                 ),
                 ValueSome body,
                 ValueNone
             )
             |> ValidationResult.get
-            |> ignore
 
         {| Definition = mem
-           Type = CliType.ValueType(NamedType.DefinedType mem) |}
+           Type = CliType.ValueType(NamedType.DefinedType mem)
+           Constructor = ctor |}
 
     // TODO: Define option to specify that memories should be instantiated lazily.
     let addMemoryFields
@@ -247,17 +268,7 @@ module Generate =
 
             let mem = addMemoryType mscorlib module' exports metadata
 
-            let memories'' =
-                members.DefineField (
-                    DefinedField.Static (
-                        MemberVisibility.CompilerControlled,
-                        FieldAttributes.InitOnly,
-                        Identifier.ofStr "memories",
-                        CliType.SZArray mem.Type
-                    ),
-                    ValueNone
-                )
-                |> ValidationResult.get
+            let memories'' = addInternalField FieldAttributes.InitOnly "memories" (CliType.SZArray mem.Type) members
 
             match exports with
             | ValueSome(exports': ModuleExports) ->
@@ -265,7 +276,6 @@ module Generate =
                 let memLoadType = TypeTok.Named(NamedType.DefinedType mem.Definition)
 
                 for struct(name, memi) in ModuleExports.memories exports' do
-                    //let size = memories'.[memi].Type
                     let fieldi = int32(memories'.First - memi)
 
                     let getter =
@@ -300,10 +310,21 @@ module Generate =
 
             // TODO: Define initialization function.
             initializer <-
-                //let mutable instructions = Array.zeroCreate(5 * memories'.Length)
+                InstructionBlock.ofList [
+                    for i = 0 to memories'.Length - 1 do
+                        let size = memories'.[memories'.First + uint32 i].Type
+                        let max =
+                            match size.Max with
+                            | ValueSome max' -> max'.Multiple
+                            | ValueNone -> System.UInt16.MaxValue
 
-                //InstructionBlock.ofBlock(Unsafe.As &instructions)
-                InstructionBlock.empty // TEMPORARY
+                        ldsfld memories''.Token
+                        ldc_i4 i
+                        ldc_i4(int32 size.Min.Multiple)
+                        ldc_i4(int32 max)
+                        Cil.Instructions.Newobj.ofMethod mem.Constructor.Token
+                        stelem(TypeTok.Specified mem.Type)
+                ]
 
             ValueSome memories''
         | ValueNone -> ValueNone
@@ -434,10 +455,9 @@ module Generate =
 
                 // TODO: Use method dictionary when generating call instructions.
                 methods.[i'] <-
-                    // TODO: Check options to see if skip init locals should be used.
                     let body =
                         translateMethodBody
-                            InitLocals
+                            InitLocals // WebAssembly specification states that variables are all zeroed out before use.
                             (Checked.uint32 funct.Parameters.Length)
                             instrs
                             blocks
@@ -468,7 +488,7 @@ module Generate =
               TypeNamespace = ValueNone // TODO: If module name is separated by periods, make the first few things the namespace
               Flags = TypeDefFlags.Public ||| TypeDefFlags.Sealed ||| TypeDefFlags.Abstract
               Extends =
-                ReferencedType.Reference mscorlib.Object
+                ReferencedType.Reference mscorlib.Object.Type
                 |> NamedType.ReferencedType 
                 |> ClassExtends.Named
               EnclosingClass = ValueNone }
