@@ -78,7 +78,7 @@ let main argv =
             { ModuleFileName = oname
               FileType = ttype
               HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
-              TargetFramework = ".NETCoreApp,Version=v5.0" // TODO: Make option to allow setting of target framework
+              TargetFramework = ".NETStandard,Version=v2.0" // TODO: Make option to allow setting of target framework
               MainClassName = oname }
         |> FSharpIL.Writing.WritePE.toStream writer
         0

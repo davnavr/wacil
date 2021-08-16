@@ -39,38 +39,46 @@ type Options =
 module Generate =
     type CoreRuntimeAssembly =
         { Assembly : ReferencedAssembly
+          Marshal: {| AllocHGlobal: MethodTok<ReferencedType, ReferencedMethod> |}
           Object: {| Type: TypeReference; Constructor: MethodTok<ReferencedType, ReferencedMethod> |}
           ValueType: TypeReference
-          TargetFrameworkAttribute: {| Constructor: MethodTok<ReferencedType, ReferencedMethod> |} }
+          TargetFrameworkAttribute:
+            {| Constructor: MethodTok<TypeReference<TypeKinds.SealedClass>, MethodReference<MethodKinds.ObjectConstructor>> |} }
 
     let addCoreAssembly (metadata: CliModuleBuilder) =
         let mscorlib =
             { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
-              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-              Name = FileName.ofStr "System.Runtime"
+              PublicKeyOrToken = PublicKeyToken(0xCCuy, 0x7Buy, 0x13uy, 0xFFuy, 0xCDuy, 0x2Duy, 0xDDuy, 0x51uy)
+              Name = FileName.ofStr "netstandard"
               Culture = ValueNone
               HashValue = ImmutableArray.Empty }
         do metadata.ReferenceAssembly mscorlib
 
         let system = ValueSome(Identifier.ofStr "System")
-
-        let object =
-            { TypeReference.TypeName = Identifier.ofStr "Object"
+        let inline referenceSystemType name =
+            { TypeReference.TypeName = Identifier.ofStr name
               TypeNamespace = system
               Flags = ValueNone
               ResolutionScope = TypeReferenceParent.Assembly mscorlib }
+
+        let object = referenceSystemType "Object"
         let object' = metadata.ReferenceType(ReferencedType.Reference object) |> ValidationResult.get
 
-        let vtype =
-            { TypeReference.TypeName = Identifier.ofStr "ValueType"
-              TypeNamespace = system
-              Flags = ValueNone
-              ResolutionScope = TypeReferenceParent.Assembly mscorlib }
+        let vtype = referenceSystemType "ValueType"
         do metadata.ReferenceType(ReferencedType.Reference vtype) |> ValidationResult.get |> ignore
 
         let tfmattr =
-            { TypeReference.TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-              TypeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning")
+            TypeReference.SealedClass (
+                TypeReferenceParent.Assembly mscorlib,
+                ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
+                Identifier.ofStr "TargetFrameworkAttribute"
+            )
+            |> metadata.ReferenceType
+            |> ValidationResult.get
+
+        let marshal =
+            { TypeReference.TypeName = Identifier.ofStr "Marshal"
+              TypeNamespace = ValueSome(Identifier.ofStr "System.Runtime.InteropServices")
               Flags = ValueNone
               ResolutionScope = TypeReferenceParent.Assembly mscorlib }
             |> ReferencedType.Reference
@@ -78,6 +86,16 @@ module Generate =
             |> ValidationResult.get
 
         { Assembly = mscorlib
+          Marshal =
+            {| AllocHGlobal =
+                ReferencedMethod.Static (
+                    ExternalVisibility.Public,
+                    ReturnType.T PrimitiveType.I,
+                    MethodName.ofStr "AllocHGlobal",
+                    ImmutableArray.Create(ParameterType.T PrimitiveType.I4)
+                )
+                |> marshal.ReferenceMethod
+                |> ValidationResult.get |}
           Object =
             {| Type = object
                Constructor =
@@ -186,7 +204,7 @@ module Generate =
         let members = metadata.DefineType(mem, ValueNone) |> ValidationResult.get
 
         // Only one region of memory is used at a time, as it would be a pain to write an int64 between two regions of memory.
-        let memory = addInternalField FieldAttributes.None "pages" PrimitiveType.I members
+        let memory = addInternalField FieldAttributes.None "memory" PrimitiveType.I members
         let length = addInternalField FieldAttributes.None "length" PrimitiveType.I4 members
         let min = addInternalField FieldAttributes.InitOnly "minimum" PrimitiveType.U4 members
         let max = addInternalField FieldAttributes.InitOnly "maximum" PrimitiveType.U4 members
@@ -218,11 +236,11 @@ module Generate =
                     conv_ovf_i4_un
                     stfld length.Token
 
-                    //ldarg_0
-                    //dup
-                    //ldfld length.Token
-                    //Cil.Instructions.call (failwith "TODO: Call Marshal.AllocHGlobal")
-                    //stfld memory.Token
+                    ldarg_0
+                    dup
+                    ldfld length.Token
+                    Cil.Instructions.call mscorlib.Marshal.AllocHGlobal.Token
+                    stfld memory.Token
 
                     ret
                 ]
@@ -247,8 +265,11 @@ module Generate =
             )
             |> ValidationResult.get
 
+        let mem' = NamedType.DefinedType mem
+
         {| Definition = mem
-           Type = CliType.ValueType(NamedType.DefinedType mem)
+           Type = CliType.Class mem'
+           Token = TypeTok.Named mem'
            Constructor = ctor |}
 
     // TODO: Define option to specify that memories should be instantiated lazily.
@@ -273,7 +294,6 @@ module Generate =
             match exports with
             | ValueSome(exports': ModuleExports) ->
                 let memGetterType = ReturnType.T mem.Type
-                let memLoadType = TypeTok.Named(NamedType.DefinedType mem.Definition)
 
                 for struct(name, memi) in ModuleExports.memories exports' do
                     let fieldi = int32(memories'.First - memi)
@@ -292,8 +312,7 @@ module Generate =
                         MethodBody.ofSeq [|
                             ldsfld memories''.Token
                             Shortened.ldc_i4 fieldi
-                            ldelem memLoadType
-                            // TODO: Call constructor
+                            ldelem mem.Token
                             ret
                         |]
 
@@ -308,7 +327,6 @@ module Generate =
                     |> ignore
             | ValueNone -> ()
 
-            // TODO: Define initialization function.
             initializer <-
                 InstructionBlock.ofList [
                     for i = 0 to memories'.Length - 1 do
@@ -323,7 +341,7 @@ module Generate =
                         ldc_i4(int32 size.Min.Multiple)
                         ldc_i4(int32 max)
                         Cil.Instructions.Newobj.ofMethod mem.Constructor.Token
-                        stelem(TypeTok.Specified mem.Type)
+                        stelem mem.Token
                 ]
 
             ValueSome memories''
@@ -512,6 +530,8 @@ module Generate =
 
         let _ = addTranslatedFunctions members sections exports
 
+        setTargetFramework options mscorlib.TargetFrameworkAttribute.Constructor metadata
+
         // TODO: Add FSharpIL function to allow translation of CliModuleBuilder to section contents
-        if not options.HighEntropyVA then failwith "// TODO: Allow setting of ASLR flag in optional header."
+        if options.HighEntropyVA then () //failwith "// TODO: Allow setting of ASLR flag in optional header."
         BuildPE.ofModuleBuilder FileCharacteristics.IsDll metadata
