@@ -289,7 +289,17 @@ module Generate =
 
             let mem = addMemoryType mscorlib module' exports metadata
 
-            let memories'' = addInternalField FieldAttributes.InitOnly "memories" (CliType.SZArray mem.Type) members
+            let memories'' =
+                members.DefineField (
+                    DefinedField.Static (
+                        MemberVisibility.CompilerControlled,
+                        FieldAttributes.InitOnly,
+                        Identifier.ofStr "memories",
+                        CliType.SZArray mem.Type
+                    ),
+                    ValueNone
+                )
+                |> ValidationResult.get
 
             match exports with
             | ValueSome(exports': ModuleExports) ->
