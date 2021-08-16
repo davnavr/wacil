@@ -554,12 +554,15 @@ type ModuleExports =
       Globals: IReadOnlyDictionary<Index<IndexKinds.Global>, int32> }
 
 module ModuleExports =
-    let tryGetFunction { Exports = exports; Functions = functions } func =
-        match functions.TryGetValue func with
+    let inline private tryGetExport (exports: ExportSection) (lookup: IReadOnlyDictionary<Index<_>, _>) idx =
+        match lookup.TryGetValue idx with
         | true, i -> ValueSome exports.[i]
         | false, _ -> ValueNone
 
-    let inline getSpecificExports { Exports = exports } =
+    let tryGetFunction { Exports = exports; Functions = functions } func = tryGetExport exports functions func
+    let tryGetMemory { Exports = exports; Memories = memories } mem = tryGetExport exports memories mem
+
+    let inline private getSpecificExports { Exports = exports } =
         Seq.map (fun (KeyValue(index, ei)) -> struct(exports.ItemRef(ei).Name, index))
 
     let memories exports = getSpecificExports exports exports.Memories

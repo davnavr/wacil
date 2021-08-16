@@ -194,7 +194,7 @@ module Generate =
         let addInternalField attrs name ftype =
             members.DefineField (
                 DefinedField.Instance (
-                    MemberVisibility.CompilerControlled,
+                    MemberVisibility.Private,
                     attrs,
                     Identifier.ofStr name,
                     ftype
@@ -206,6 +206,7 @@ module Generate =
         // Only one region of memory is used at a time, as it would be a pain to write an int64 between two regions of memory.
         let memory = addInternalField FieldAttributes.None "memory" PrimitiveType.I
         let length = addInternalField FieldAttributes.None "length" PrimitiveType.I4
+        let capacity = addInternalField FieldAttributes.None "capacity" PrimitiveType.I4
         let min = addInternalField FieldAttributes.InitOnly "minimum" PrimitiveType.U4
         let max = addInternalField FieldAttributes.InitOnly "maximum" PrimitiveType.U4
         //let lock = addInternalField FieldAttributes.InitOnly "lock" PrimitiveType.Object members
@@ -216,7 +217,7 @@ module Generate =
                     ldarg_0
                     Cil.Instructions.call mscorlib.Object.Constructor.Token
 
-                    let setSizeField argi field = [
+                    let inline setSizeField argi field = [
                         ldarg_0
                         Shortened.ldarg argi
                         ldc_i4(int32 Wasm.Format.PageSize)
@@ -233,11 +234,17 @@ module Generate =
                     dup
                     ldfld min.Token
                     conv_ovf_i4_un
-                    stfld length.Token
+                    stfld capacity.Token
+
+                    // TODO: Fix, for some reason, this causes bad IL to be generated, seems like addition of this code causes a bad fat format method body to be generated.
+                    //ldarg_0
+                    //dup
+                    //ldfld capacity.Token
+                    //stfld length.Token
 
                     ldarg_0
                     dup
-                    ldfld length.Token
+                    ldfld capacity.Token
                     Cil.Instructions.call mscorlib.Marshal.AllocHGlobal.Token
                     stfld memory.Token
 
@@ -287,18 +294,22 @@ module Generate =
                 raise(NotSupportedException "Multiple memory instances are not yet supported by most implementations of WebAssembly")
 
             let mem = addMemoryType mscorlib module' exports metadata
+            let mutable memories'' = Array.zeroCreate<FieldTok> memories'.Length
 
-            let memories'' =
-                members.DefineField (
-                    DefinedField.Static (
-                        MemberVisibility.Private,
-                        FieldAttributes.InitOnly,
-                        Identifier.ofStr "memories",
-                        CliType.SZArray mem.Type
-                    ),
-                    ValueNone
-                )
-                |> ValidationResult.get
+            for i = 0 to memories''.Length - 1 do
+                let mfield =
+                    members.DefineField (
+                        DefinedField.Static (
+                            MemberVisibility.CompilerControlled,
+                            FieldAttributes.InitOnly,
+                            Identifier.ofStr("memory#" + string i),
+                            mem.Type
+                        ),
+                        ValueNone
+                    )
+                    |> ValidationResult.get
+
+                memories''.[i] <- mfield.Token
 
             match exports with
             | ValueSome(exports': ModuleExports) ->
@@ -319,9 +330,7 @@ module Generate =
 
                     let getter' =
                         MethodBody.ofSeq [|
-                            ldsfld memories''.Token
-                            Shortened.ldc_i4 fieldi
-                            ldelem mem.Token
+                            ldsfld memories''.[fieldi]
                             ret
                         |]
 
@@ -345,15 +354,13 @@ module Generate =
                             | ValueSome max' -> max'.Multiple
                             | ValueNone -> System.UInt16.MaxValue
 
-                        ldsfld memories''.Token
-                        ldc_i4 i
                         ldc_i4(int32 size.Min.Multiple)
                         ldc_i4(int32 max)
                         Cil.Instructions.Newobj.ofMethod mem.Constructor.Token
-                        stelem mem.Token
+                        stsfld memories''.[i]
                 ]
 
-            ValueSome memories''
+            ValueSome(Unsafe.As<_, ImmutableArray<FieldTok>> &memories'')
         | ValueNone -> ValueNone
 
     let translateMethodBody
