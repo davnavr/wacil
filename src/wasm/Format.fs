@@ -161,6 +161,10 @@ module InstructionSet =
     module MemArgAlignment =
         let ofPower (power: uint8) = MemArgAlignment(pown 2u (int32 power))
 
+        let ofInt (alignment: uint32) =
+            if alignment &&& (alignment - 1u) <> 0u then invalidArg (nameof alignment) (sprintf "The alignment %i must be a power of two" alignment)
+            MemArgAlignment alignment
+
     [<Struct>]
     type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 
@@ -177,6 +181,7 @@ module InstructionSet =
         | RefType of RefType
         | BlockType of BlockType
         | ValTypeVector of ImmutableArray<ValType>
+        | MemoryIndex of Index<IndexKinds.Mem>
         | FuncIndex of Index<IndexKinds.Func>
         | IndirectCall of Index<IndexKinds.Type> * Index<IndexKinds.Table>
         | LocalIndex of Index<IndexKinds.Local>

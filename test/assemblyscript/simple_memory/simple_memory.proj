@@ -2,4 +2,8 @@
 
   <Import Project="..\assemblyscript.targets" />
 
+  <PropertyGroup>
+    <Runtime>stub</Runtime>
+  </PropertyGroup>
+
 </Project>

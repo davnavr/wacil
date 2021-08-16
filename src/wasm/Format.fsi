@@ -217,6 +217,11 @@ module InstructionSet =
     module MemArgAlignment =
         val ofPower : power: uint8 -> MemArgAlignment
 
+        /// <exception cref="T:System.ArgumentException">
+        /// Thrown if the <paramref name="alignment"/> is not a power of two.
+        /// </exception>
+        val ofInt : alignment: uint32 -> MemArgAlignment
+
     [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
     type MemArg =
         { Alignment: MemArgAlignment
@@ -237,6 +242,7 @@ module InstructionSet =
         //| BlockElse of BlockType * seq<Instruction> * Expr
         | BlockType of BlockType
         | ValTypeVector of ImmutableArray<ValType>
+        | MemoryIndex of Index<IndexKinds.Mem>
         | FuncIndex of Index<IndexKinds.Func>
         | IndirectCall of Index<IndexKinds.Type> * Index<IndexKinds.Table>
         | LocalIndex of Index<IndexKinds.Local>

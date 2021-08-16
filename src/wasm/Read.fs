@@ -277,6 +277,10 @@ type LocalsReader =
     interface IReader<Locals> with
         member _.Read stream = { Locals.Count = Integer.u32 stream; Type = Type.valtype stream }
 
+let memarg stream =
+    { MemArg.Alignment = MemArgAlignment.ofInt(Integer.u32 stream)
+      Offset = Integer.u32 stream }
+
 let readInstructionSeq (stream: SlicedByteStream) =
     let instructions = ImmutableArray.CreateBuilder()
     let mutable endOpcodeCount = 0u
@@ -296,6 +300,8 @@ let readInstructionSeq (stream: SlicedByteStream) =
             | 1uy // nop
 
             | 0x0Buy // end
+
+            | 0x1Auy // drop
 
             | 0x52uy // i64.ne
 
@@ -320,6 +326,17 @@ let readInstructionSeq (stream: SlicedByteStream) =
 
             | 0x0Cuy // br
             | 0x0Duy -> InstructionArguments.LabelIndex(index stream)
+
+            | 0x28uy // i32.load
+            | 0x29uy // i64.load
+            | 0x2Auy // f32.load
+            | 0x2Buy // f64.load
+
+            | 0x36uy // i32.store
+            | 0x37uy -> InstructionArguments.MemArg(memarg stream)
+
+            | 0x3Fuy // memory.size
+            | 0x40uy -> InstructionArguments.MemoryIndex(index stream)
 
             | bad -> failwithf "TODO: Error for unknown opcode 0x%02X" bad }
         |> instructions.Add
@@ -363,7 +380,7 @@ let readSectionContents stream i (id: SectionId) =
         | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> stream Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
         //| SectionId.Global -> 
         | SectionId.Export -> ExportSection(vector<ExportReader, _> stream) |> ValueSome
-        //| SectionId.Start -> 
+        | SectionId.Start -> StartSection(index stream) |> ValueSome
         //| SectionId.Element -> 
         | SectionId.Code -> CodeSection(vector<CodeReader, _> stream) |> ValueSome
 

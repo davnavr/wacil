@@ -39,7 +39,9 @@ type Options =
 module Generate =
     type CoreRuntimeAssembly =
         { Assembly : ReferencedAssembly
-          Marshal: {| AllocHGlobal: MethodTok<ReferencedType, ReferencedMethod> |}
+          Marshal:
+            {| AllocHGlobal: MethodTok<ReferencedType, ReferencedMethod>
+               ReAllocHGlobal: MethodTok<ReferencedType, ReferencedMethod> |}
           Object: {| Type: TypeReference; Constructor: MethodTok<ReferencedType, ReferencedMethod> |}
           ValueType: TypeReference
           TargetFrameworkAttribute:
@@ -95,7 +97,16 @@ module Generate =
                     ImmutableArray.Create(ParameterType.T PrimitiveType.I4)
                 )
                 |> marshal.ReferenceMethod
-                |> ValidationResult.get |}
+                |> ValidationResult.get
+               ReAllocHGlobal =
+                 ReferencedMethod.Static (
+                     ExternalVisibility.Public,
+                     ReturnType.T PrimitiveType.I,
+                     MethodName.ofStr "ReAllocHGlobal",
+                     ImmutableArray.Create(ParameterType.T PrimitiveType.I, ParameterType.T PrimitiveType.I)
+                 )
+                 |> marshal.ReferenceMethod
+                 |> ValidationResult.get |}
           Object =
             {| Type = object
                Constructor =
@@ -166,6 +177,13 @@ module Generate =
             for _ = 0 to Checked.int32 l.Count do localTypesBuilder.Add(CliType.toLocalType t')
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
+
+    type MemoryType =
+        { Definition: DefinedType
+          Type: CliType
+          Token: TypeTok
+          Constructor: MethodTok<DefinedType, DefinedMethod>
+          Grow: MethodTok }
 
     let addMemoryType
         mscorlib
@@ -271,32 +289,141 @@ module Generate =
             )
             |> ValidationResult.get
 
+        let pgcount =
+            let getter =
+                DefinedMethod.Instance (
+                    MemberVisibility.Public,
+                    MethodAttributes.HideBySig ||| MethodAttributes.SpecialName,
+                    ReturnType.T PrimitiveType.I4,
+                    MethodName.ofStr "get_PageCount",
+                    ImmutableArray.Empty,
+                    Parameter.emptyList
+                )
+
+            let getter' = MethodBody.ofSeq [
+                ldarg_0
+                ldfld length.Token
+                ldc_i4(int32 Wasm.Format.PageSize)
+                div
+                ret
+            ]
+
+            members.DefineProperty (
+                Identifier.ofStr "PageCount",
+                ValueSome(getter :> DefinedMethod, ValueSome getter', ValueNone),
+                ValueNone,
+                List.empty,
+                ValueNone
+            )
+            |> ValidationResult.get
+
+        let grow =
+            let body = MethodBody.create InitLocals ValueNone LocalVariables.Null [|
+                let struct(negative, negative') =
+                    InstructionBlock.ofList [
+                        // when value is negative
+                        // TODO: Throw exception instead?
+                        ldc_i4_m1
+                        ret
+                    ]
+                    |> InstructionBlock.label
+
+                // TODO: Add a try block to return -1 if memory cannot be allocated.
+                let struct(returnl, returnl') =
+                    InstructionBlock.ofList [
+                        ldarg_0
+                        Cil.Instructions.call pgcount.Getter.Value.Token
+                        ret
+                    ]
+                    |> InstructionBlock.label
+
+                InstructionBlock.ofList [
+                    ldarg_1
+                    ldc_i4_0
+                    blt_s negative
+                    // when value is positive or zero
+
+                    ldarg_1
+                    ldc_i4_0
+                    beq returnl
+
+                    // when value is positive
+                    ldarg_0
+                    dup
+                    ldfld length.Token
+                    ldarg_1
+                    ldc_i4(int32 Wasm.Format.PageSize)
+                    mul_ovf
+                    add_ovf
+                    stfld length.Token
+
+                    ldarg_0
+                    ldfld length.Token
+                    ldarg_0
+                    ldfld capacity.Token
+                    ble_s returnl
+
+                    // when value requires a rellocation of memory
+                    // TODO: If possible, multiply capacity by 2 instead.
+                    ldarg_0
+                    dup
+                    ldfld length.Token
+                    stfld capacity.Token
+
+                    ldarg_0
+                    dup
+                    ldfld memory.Token
+                    ldarg_0
+                    ldfld capacity.Token
+                    conv_i
+                    Cil.Instructions.call mscorlib.Marshal.ReAllocHGlobal.Token
+                    stfld memory.Token
+                ]
+
+                returnl'
+                negative'
+            |]
+
+            members.DefineMethod (
+                DefinedMethod.Instance (
+                    MemberVisibility.Assembly,
+                    MethodAttributes.HideBySig,
+                    ReturnType.T PrimitiveType.I4,
+                    MethodName.ofStr "Grow",
+                    ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
+                    fun _ _ -> Parameter.named(Identifier.ofStr "by")
+                ),
+                ValueSome body,
+                ValueNone
+            )
+            |> ValidationResult.get
+
         let mem' = NamedType.DefinedType mem
 
-        {| Definition = mem
-           Type = CliType.Class mem'
-           Token = TypeTok.Named mem'
-           Constructor = ctor |}
+        { Definition = mem
+          Type = CliType.Class mem'
+          Token = TypeTok.Named mem'
+          Constructor = ctor
+          Grow = grow.Token }
 
     // TODO: Define option to specify that memories should be instantiated lazily.
     let addMemoryFields
-        mscorlib
-        module'
+        mem
         (initializer: byref<InstructionBlock>)
         (members: DefinedTypeMembers)
         memories
         exports
         metadata
         =
+        let memories'' = Dictionary<_, FieldTok>()
         match memories with
         | ValueSome(memories': MemorySection) ->
             if memories'.Length > 1 then
                 raise(NotSupportedException "Multiple memory instances are not yet supported by most implementations of WebAssembly")
 
-            let mem = addMemoryType mscorlib module' exports metadata
-            let mutable memories'' = Array.zeroCreate<FieldTok> memories'.Length
+            memories''.EnsureCapacity memories'.Length |> ignore
 
-            for i = 0 to memories''.Length - 1 do
+            for i = 0 to memories'.Length - 1 do
                 let mfield =
                     members.DefineField (
                         DefinedField.Static (
@@ -309,15 +436,13 @@ module Generate =
                     )
                     |> ValidationResult.get
 
-                memories''.[i] <- mfield.Token
+                memories''.[memories'.First + uint32 i] <- mfield.Token
 
             match exports with
             | ValueSome(exports': ModuleExports) ->
                 let memGetterType = ReturnType.T mem.Type
 
                 for struct(name, memi) in ModuleExports.memories exports' do
-                    let fieldi = int32(memories'.First - memi)
-
                     let getter =
                         DefinedMethod.Static (
                             MemberVisibility.Public,
@@ -330,7 +455,7 @@ module Generate =
 
                     let getter' =
                         MethodBody.ofSeq [|
-                            ldsfld memories''.[fieldi]
+                            ldsfld memories''.[memi]
                             ret
                         |]
 
@@ -348,7 +473,8 @@ module Generate =
             initializer <-
                 InstructionBlock.ofList [
                     for i = 0 to memories'.Length - 1 do
-                        let size = memories'.[memories'.First + uint32 i].Type
+                        let i' = memories'.First + uint32 i
+                        let size = memories'.[i'].Type
                         let max =
                             match size.Max with
                             | ValueSome max' -> max'.Multiple
@@ -357,11 +483,42 @@ module Generate =
                         ldc_i4(int32 size.Min.Multiple)
                         ldc_i4(int32 max)
                         Cil.Instructions.Newobj.ofMethod mem.Constructor.Token
-                        stsfld memories''.[i]
+                        stsfld memories''.[i']
+                ]
+        | ValueNone -> ()
+        memories''
+
+    type HelperMethods =
+        { Memory: {| Grow: MethodTok<DefinedType, DefinedMethod> |} }
+
+    let addHelperMethods mscorlib (mem: MemoryType) (members: DefinedTypeMembers) =
+        { Memory =
+            {| Grow =
+                let body = MethodBody.ofSeq [
+                    ldarg_1
+                    ldarg_0
+                    Cil.Instructions.call mem.Grow
+                    ret
                 ]
 
-            ValueSome(Unsafe.As<_, ImmutableArray<FieldTok>> &memories'')
-        | ValueNone -> ValueNone
+                members.DefineMethod (
+                    DefinedMethod.Static (
+                        MemberVisibility.CompilerControlled,
+                        MethodAttributes.None,
+                        ReturnType.T PrimitiveType.I4,
+                        MethodName.ofStr "memory.grow",
+                        ImmutableArray.Create(ParameterType.T PrimitiveType.I4, ParameterType.T mem.Type),
+                        fun i _ ->
+                            match i with
+                            | 0 -> "by"
+                            | _ -> "memory"
+                            |> Identifier.ofStr
+                            |> Parameter.named
+                    ),
+                    ValueSome body,
+                    ValueNone
+                )
+                |> ValidationResult.get |}}
 
     let translateMethodBody
         locinit
@@ -375,6 +532,8 @@ module Generate =
         (ifLabelFixups: Stack<Cil.Label ref>)
         localTypesBuilder
         { Code.Locals = locals; Body = body }
+        helpers
+        (memories: Dictionary<_, FieldTok>)
         =
         instrs.Clear()
         blocks.Clear()
@@ -417,7 +576,7 @@ module Generate =
                 pushLabelRef() |> insertLabelRef
             | { Opcode = 0x04uy; Arguments = InstructionArguments.BlockType _ } -> // if
                 let l = pushLabelRef()
-                emit (Instruction.branchingRef Opcode.Brfalse (StackBehavior.PopOrPush -1y) BranchKind.Long l)
+                emit(Instruction.branchingRef Opcode.Brfalse (StackBehavior.PopOrPush -1y) BranchKind.Long l)
                 ifLabelFixups.Push l
             | { Opcode = 5uy | 0x0Buy; Arguments = InstructionArguments.Nothing } -> // end, else
                 if ifLabelFixups.Count > 0 then
@@ -425,10 +584,14 @@ module Generate =
                     ifLabelFixups.Pop() |> insertLabelRef
             | { Opcode = 0x0Cuy; Arguments = InstructionArguments.LabelIndex i } ->
                 branchToLabel Opcode.Br (StackBehavior.PopOrPush 0y) i
+            | { Opcode = 0x1Auy; Arguments = InstructionArguments.Nothing } -> emit pop // drop
             | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex i } -> // local.get
                 emitVarOp Shortened.ldarg Shortened.ldloc i
             | { Opcode = 0x21uy; Arguments = InstructionArguments.LocalIndex i } -> // local.set
                 emitVarOp Shortened.starg Shortened.stloc i
+            | { Opcode = 0x40uy; Arguments = InstructionArguments.MemoryIndex i } -> // memory.grow
+                emit(ldsfld memories.[i])
+                emit(Cil.Instructions.call helpers.Memory.Grow.Token)
             | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> emit (Shortened.ldc_i4 n) // i32.const
             | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> emit (ldc_i8 n) // i64.const
             | { Opcode = 0x52uy; Arguments = InstructionArguments.Nothing } ->
@@ -447,7 +610,7 @@ module Generate =
 
         MethodBody.create locinit ValueNone (getMethodLocals localTypesBuilder locals) blocks |> ValueSome
 
-    let addTranslatedFunctions (members: DefinedTypeMembers) sections exports =
+    let addTranslatedFunctions helpers memories (members: DefinedTypeMembers) sections exports =
         match sections with
         | { TypeSection = ValueSome types
             FunctionSection = ValueSome funcs
@@ -499,6 +662,8 @@ module Generate =
                             lindices
                             ifLabelFixups
                             locals code.[i]
+                            helpers
+                            memories
 
                     let token = members.DefineMethod(func', body, ValueNone) |> ValidationResult.get
                     token.Token
@@ -531,11 +696,13 @@ module Generate =
         let members = metadata.DefineType(module', ValueNone) |> ValidationResult.get
 
         let initializer = Array.zeroCreate 3
-        let memories = addMemoryFields mscorlib module' &initializer.[0] members sections.MemorySection exports metadata
+        let mem = addMemoryType mscorlib module' exports metadata
+        let memories = addMemoryFields mem &initializer.[0] members sections.MemorySection exports metadata
         //let tables = &initializer.[1]
         initializer.[1] <- InstructionBlock.empty // TEMPORARY
 
-        let functions = addTranslatedFunctions members sections exports
+        let helpers = addHelperMethods mscorlib mem members
+        let functions = addTranslatedFunctions helpers memories members sections exports
 
         initializer.[2] <- InstructionBlock.ofList [
             // TODO: In WASM parsing code, check that signature of start function is valid.
