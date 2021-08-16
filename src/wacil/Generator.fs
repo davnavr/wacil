@@ -506,7 +506,7 @@ module Generate =
             methods
         | _ -> failwith "TODO: How to deal with missing sections?"
 
-    let toPE (ValidatedModule file) options = // TODO: Set file to Exe if start function is defined.
+    let toPE (ValidatedModule file) options = // TODO: Add option to set file to Exe if start function is defined.
         let sections = getKnownSections file
         let exports = ValueOption.map getModuleExports sections.ExportSection
         let extension = FileType.extension options.FileType
@@ -534,7 +534,17 @@ module Generate =
         let memories = addMemoryFields mscorlib module' &initializer.[0] members sections.MemorySection exports metadata
         //let tables = &initializer.[1]
         initializer.[1] <- InstructionBlock.empty // TEMPORARY
-        initializer.[2] <- InstructionBlock.singleton ret
+
+        let functions = addTranslatedFunctions members sections exports
+
+        initializer.[2] <- InstructionBlock.ofList [
+            // TODO: In WASM parsing code, check that signature of start function is valid.
+            match sections.StartSection with
+            | ValueSome start -> Cil.Instructions.call functions.[start]
+            | ValueNone -> ()
+
+            ret
+        ]
 
         members.DefineMethod (
             DefinedMethod.ClassConstructor,
@@ -543,8 +553,6 @@ module Generate =
         )
         |> ValidationResult.get
         |> ignore
-
-        let _ = addTranslatedFunctions members sections exports
 
         setTargetFramework options mscorlib.TargetFrameworkAttribute.Constructor metadata
 
