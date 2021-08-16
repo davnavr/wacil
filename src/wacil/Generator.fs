@@ -167,18 +167,6 @@ module Generate =
 
         localTypesBuilder.ToImmutable() |> LocalVariables.Locals
 
-    let addInternalField attrs name ftype (members: DefinedTypeMembers) =
-        members.DefineField (
-            DefinedField.Instance (
-                MemberVisibility.CompilerControlled,
-                attrs,
-                Identifier.ofStr name,
-                ftype
-            ),
-            ValueNone
-        )
-        |> ValidationResult.get
-
     let addMemoryType
         mscorlib
         module'
@@ -203,11 +191,23 @@ module Generate =
 
         let members = metadata.DefineType(mem, ValueNone) |> ValidationResult.get
 
+        let addInternalField attrs name ftype =
+            members.DefineField (
+                DefinedField.Instance (
+                    MemberVisibility.CompilerControlled,
+                    attrs,
+                    Identifier.ofStr name,
+                    ftype
+                ),
+                ValueNone
+            )
+            |> ValidationResult.get
+
         // Only one region of memory is used at a time, as it would be a pain to write an int64 between two regions of memory.
-        let memory = addInternalField FieldAttributes.None "memory" PrimitiveType.I members
-        let length = addInternalField FieldAttributes.None "length" PrimitiveType.I4 members
-        let min = addInternalField FieldAttributes.InitOnly "minimum" PrimitiveType.U4 members
-        let max = addInternalField FieldAttributes.InitOnly "maximum" PrimitiveType.U4 members
+        let memory = addInternalField FieldAttributes.None "memory" PrimitiveType.I
+        let length = addInternalField FieldAttributes.None "length" PrimitiveType.I4
+        let min = addInternalField FieldAttributes.InitOnly "minimum" PrimitiveType.U4
+        let max = addInternalField FieldAttributes.InitOnly "maximum" PrimitiveType.U4
         //let lock = addInternalField FieldAttributes.InitOnly "lock" PrimitiveType.Object members
 
         let ctor =
@@ -219,7 +219,6 @@ module Generate =
                     let setSizeField argi field = [
                         ldarg_0
                         Shortened.ldarg argi
-                        conv_u4
                         ldc_i4(int32 Wasm.Format.PageSize)
                         mul
                         stfld field
@@ -292,7 +291,7 @@ module Generate =
             let memories'' =
                 members.DefineField (
                     DefinedField.Static (
-                        MemberVisibility.CompilerControlled,
+                        MemberVisibility.Private,
                         FieldAttributes.InitOnly,
                         Identifier.ofStr "memories",
                         CliType.SZArray mem.Type
