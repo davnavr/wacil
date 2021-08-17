@@ -745,13 +745,13 @@ module Generate =
         locinit
         funcParamCount
         (instrs: ImmutableArray<Cil.Instruction>.Builder)
-        (blocks: List<InstructionBlock>)
+        (blocks: ImmutableArray<_>.Builder)
         // TODO: Make custom label list class.
         (labels: List<Cil.Label ref>)
         (lindices: Stack<int32>)
 
         (ifLabelFixups: Stack<Cil.Label ref>)
-        localTypesBuilder
+        (localTypesBuilder: ImmutableArray<_>.Builder)
         { Code.Locals = locals; Body = body }
         helpers
         mainMemIndex
@@ -762,6 +762,7 @@ module Generate =
         labels.Clear() // NOTE: This assumes that, within a block, labels are numbered sequentially
         lindices.Clear()
         ifLabelFixups.Clear()
+        localTypesBuilder.Clear()
 
         let inline emit op = instrs.Add op
 
@@ -841,7 +842,9 @@ module Generate =
 
         blocks.Add(InstructionBlock.singleton ret)
 
-        MethodBody.create locinit ValueNone (getMethodLocals localTypesBuilder locals) blocks |> ValueSome
+        blocks.ToImmutable()
+        |> MethodBody.create locinit ValueNone (getMethodLocals localTypesBuilder locals)
+        |> ValueSome
 
     let addTranslatedFunctions helpers memories (members: DefinedTypeMembers) sections exports =
         match sections with
@@ -854,7 +857,7 @@ module Generate =
             // Shared to avoid extra allocations.
             let locals = ImmutableArray.CreateBuilder()
             let instrs = ImmutableArray.CreateBuilder()
-            let blocks = List<InstructionBlock>()
+            let blocks = ImmutableArray.CreateBuilder()
             let labels = List<Cil.Label ref>()
             let lindices = Stack<int32>()
             let ifLabelFixups = Stack<Cil.Label ref>()
@@ -894,7 +897,8 @@ module Generate =
                             labels
                             lindices
                             ifLabelFixups
-                            locals code.[i]
+                            locals
+                            code.[i]
                             helpers
                             (match sections.MemorySection with
                             | ValueSome memories' -> memories'.First
