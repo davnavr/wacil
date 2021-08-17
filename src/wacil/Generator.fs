@@ -469,6 +469,11 @@ module Generate =
             )
             |> ValidationResult.get
 
+        let valueOffsetLocals =
+            CliType.toLocalType PrimitiveType.I // TODO: Should be byte pointer
+            |> ImmutableArray.Create
+            |> LocalVariables.Locals
+
         let setValueOffset = InstructionBlock.ofSeq [|
             ldarg_2
             ldarg_1
@@ -487,62 +492,75 @@ module Generate =
 
         let memoryLoadParameters = ImmutableArray.Create(ParameterType.T PrimitiveType.U4, ParameterType.T PrimitiveType.I4)
 
-        let inline defineMemoryLoad vtype vsize name initl body =
-            defineMemoryHelper
-                (ReturnType.T vtype)
-                name
-                memoryLoadParameters
-                (fun i _ -> Identifier.ofStr(if i = 0 then "alignment" else "offset") |> Parameter.named)
-                initl
-                (LocalVariables.Locals(ImmutableArray.CreateRange [ CliType.toLocalType PrimitiveType.I ])) // TODO: Should be byte pointer
-                (seq { setValueOffset; checkValueOffset vsize; yield! body })
+        let defineMemoryLoad =
+            let parameters i _ = Identifier.ofStr(if i = 0 then "alignment" else "offset") |> Parameter.named
+
+            fun vtype vsize name initl body ->
+                defineMemoryHelper
+                    (ReturnType.T vtype)
+                    name
+                    memoryLoadParameters
+                    parameters
+                    initl
+                    valueOffsetLocals
+                    (seq { setValueOffset; checkValueOffset vsize; yield! body })
 
         let inline loadIntegerValue size = InstructionBlock.ofSeq (seq {
-            for i = 0 to size - 1 do
+            for i = 1 to size do
                 ldloc_0
-                Shortened.ldc_i4 i
-                add_ovf
+                if i > 1 then
+                    Shortened.ldc_i4(i - 1)
+                    add_ovf
                 ldind_u1
                 conv_u4
-                if i > 0 then
-                    Shortened.ldc_i4(i * 8)
-                    shr_un
-                    add_ovf_un
+                if i < size then
+                    Shortened.ldc_i4((size - i) * 8)
+                    shl
+                if i > 1 then add_ovf_un
             ret
         })
 
-        let defineLoadOrStore =
-            let ptypes = ImmutableArray.Create(ParameterType.T PrimitiveType.U4, ParameterType.T PrimitiveType.I4)
-
+        let defineMemoryStore =
             let parameters i _ =
                 match i with
                 | 0 -> "alignment"
                 | 1 -> "offset"
-                | _ -> failwithf "Load or Store helper should not have a parameter at index %i" i
+                | _ -> "value"
                 |> Identifier.ofStr
                 |> Parameter.named
 
-            let check = InstructionBlock.ofSeq [|
-                ldarg_0
-                ldarg_2
-                ldarg_1
-                mul_ovf
-                conv_ovf_i4_un
-                Cil.Instructions.call checkMemoryOffset.Token
-            |]
-
-            fun rtype name ilocals locals body ->
-                seq {
-                    check
-                    yield! body
-                }
-                |> defineMemoryHelper
-                    rtype
+            fun vtype vsize name initl body ->
+                defineMemoryHelper
+                    ReturnType.Void'
                     name
-                    ptypes
+                    (ImmutableArray.Create (
+                        ParameterType.T PrimitiveType.U4,
+                        ParameterType.T PrimitiveType.I4,
+                        ParameterType.T vtype
+                    ))
                     parameters
-                    ilocals
-                    locals
+                    initl
+                    valueOffsetLocals
+                    (seq { setValueOffset; checkValueOffset vsize; yield! body })
+
+        let inline storeIntegerValue size = InstructionBlock.ofSeq (seq {
+            for i = 1 to size do
+                ldloc_0
+                if i > 1 then
+                    Shortened.ldc_i4(i - 1)
+                    add_ovf
+
+                ldarg_3
+                if i > 1 then
+                    Shortened.ldc_i4(i * 8)
+                    shr_un
+                ldc_i4 0xFF
+                Cil.Instructions.``and``
+                conv_u1
+
+                stind_i1
+            ret
+        })
 
         let mem' = NamedType.DefinedType mem
 
@@ -551,20 +569,8 @@ module Generate =
           Token = TypeTok.Named mem'
           Constructor = ctor
           Grow = grow.Token
-          LoadI32 =
-            defineMemoryLoad PrimitiveType.I4 4 "LoadI4" InitLocals [| loadIntegerValue 4 |]
-          StoreI32 =
-            defineLoadOrStore
-                ReturnType.Void'
-                "StoreI4"
-                InitLocals
-                LocalVariables.Null
-                [|
-                    InstructionBlock.ofSeq [|
-                        ldstr "TODO: Store it"
-                        throw
-                    |]
-                |] }
+          LoadI32 = defineMemoryLoad PrimitiveType.I4 4 "LoadI4" InitLocals [| loadIntegerValue 4 |]
+          StoreI32 = defineMemoryStore PrimitiveType.I4 4 "StoreI4" InitLocals [| storeIntegerValue 4 |] }
 
     // TODO: Define option to specify that memories should be instantiated lazily.
     let addMemoryFields
@@ -726,11 +732,11 @@ module Generate =
                         |> Parameter.named)
                     [|
                         ldarg_s 4uy
-                        // TODO: Supply value
                         ldarg_2
-                        ldarg_3
                         ldarg_1
+                        ldarg_3
                         add_ovf
+                        ldarg_0
                         Cil.Instructions.call mem.StoreI32.Token
                         ret
                     |] |}}
