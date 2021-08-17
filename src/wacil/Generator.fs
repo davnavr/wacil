@@ -412,7 +412,7 @@ module Generate =
 
         let checkMemoryOffset =
             let locals =
-                CliType.toLocalType PrimitiveType.I4
+                CliType.toLocalType PrimitiveType.I
                 |> ImmutableArray.Create
                 |> LocalVariables.Locals
 
@@ -421,7 +421,8 @@ module Generate =
 
                 let struct(error, error') =
                     InstructionBlock.ofSeq [|
-                        ldstr "TODO: Throw IndexOutOfRangeException for memory offset out of range"
+                        // TODO: Fix, use of string literal here causes a bug
+                        ldnull //ldstr "TODO: Throw IndexOutOfRangeException for memory offset out of range"
                         throw
                     |]
                     |> InstructionBlock.label
@@ -439,6 +440,7 @@ module Generate =
                     ldloc_0
                     ldarg_0
                     ldfld length.Token
+                    conv_ovf_i
                     bge_s error
 
                     br_s ok
@@ -454,7 +456,7 @@ module Generate =
                     MethodAttributes.HideBySig,
                     ReturnType.Void',
                     MethodName.ofStr "CheckOffset",
-                    ImmutableArray.Create(ParameterType.T PrimitiveType.I4, ParameterType.T PrimitiveType.I4),
+                    ImmutableArray.Create(ParameterType.T PrimitiveType.I, ParameterType.T PrimitiveType.I4),
                     fun i _ ->
                         match i with
                         | 0 -> "offset"
@@ -467,27 +469,47 @@ module Generate =
             )
             |> ValidationResult.get
 
-        let checkValueOffset size = InstructionBlock.ofSeq [|
-            ldarg_0
+        let setValueOffset = InstructionBlock.ofSeq [|
             ldarg_2
             ldarg_1
-            mul_ovf
             conv_ovf_i4_un
+            mul_ovf
+            conv_ovf_i
+            stloc_0
+        |]
+
+        let checkValueOffset size = InstructionBlock.ofSeq [|
+            ldarg_0
+            ldloc_0
             Shortened.ldc_i4 size
             Cil.Instructions.call checkMemoryOffset.Token
         |]
 
         let memoryLoadParameters = ImmutableArray.Create(ParameterType.T PrimitiveType.U4, ParameterType.T PrimitiveType.I4)
 
-        let inline defineMemoryLoad vtype vsize name initl locals body =
+        let inline defineMemoryLoad vtype vsize name initl body =
             defineMemoryHelper
                 (ReturnType.T vtype)
                 name
                 memoryLoadParameters
                 (fun i _ -> Identifier.ofStr(if i = 0 then "alignment" else "offset") |> Parameter.named)
                 initl
-                locals
-                (seq { checkValueOffset vsize; yield! body })
+                (LocalVariables.Locals(ImmutableArray.CreateRange [ CliType.toLocalType PrimitiveType.I ])) // TODO: Should be byte pointer
+                (seq { setValueOffset; checkValueOffset vsize; yield! body })
+
+        let inline loadIntegerValue size = InstructionBlock.ofSeq (seq {
+            for i = 0 to size - 1 do
+                ldloc_0
+                Shortened.ldc_i4 i
+                add_ovf
+                ldind_u1
+                conv_u4
+                if i > 0 then
+                    Shortened.ldc_i4(i * 8)
+                    shr_un
+                    add_ovf_un
+            ret
+        })
 
         let defineLoadOrStore =
             let ptypes = ImmutableArray.Create(ParameterType.T PrimitiveType.U4, ParameterType.T PrimitiveType.I4)
@@ -530,12 +552,7 @@ module Generate =
           Constructor = ctor
           Grow = grow.Token
           LoadI32 =
-            defineMemoryLoad PrimitiveType.I4 4 "LoadI4" InitLocals LocalVariables.Null [|
-                InstructionBlock.ofSeq [|
-                    ldstr "TODO: Load it"
-                    throw
-                |]
-            |]
+            defineMemoryLoad PrimitiveType.I4 4 "LoadI4" InitLocals [| loadIntegerValue 4 |]
           StoreI32 =
             defineLoadOrStore
                 ReturnType.Void'
