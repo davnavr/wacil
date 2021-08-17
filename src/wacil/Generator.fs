@@ -723,8 +723,8 @@ module Generate =
                     [| PrimitiveType.I4; PrimitiveType.I4; PrimitiveType.U4; PrimitiveType.I4; mem.Type |]
                     (fun i _ ->
                         match i with
-                        | 0 -> "value"
-                        | 1 -> "offset"
+                        | 0 -> "offset"
+                        | 1 -> "value"
                         | 2 -> "memarg.alignment"
                         | 3 -> "memarg.offset"
                         | _ -> "memory"
@@ -733,10 +733,10 @@ module Generate =
                     [|
                         ldarg_s 4uy
                         ldarg_2
-                        ldarg_1
+                        ldarg_0
                         ldarg_3
                         add_ovf
-                        ldarg_0
+                        ldarg_1
                         Cil.Instructions.call mem.StoreI32.Token
                         ret
                     |] |}}
