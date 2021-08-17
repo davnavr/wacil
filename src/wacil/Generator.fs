@@ -183,7 +183,9 @@ module Generate =
           Type: CliType
           Token: TypeTok
           Constructor: MethodTok<DefinedType, DefinedMethod>
-          Grow: MethodTok }
+          Grow: MethodTok
+          LoadI32: MethodTok<DefinedType, DefinedMethod>
+          StoreI32: MethodTok<DefinedType, DefinedMethod> }
 
     let addMemoryType
         mscorlib
@@ -300,13 +302,13 @@ module Generate =
                     Parameter.emptyList
                 )
 
-            let getter' = MethodBody.ofSeq [
+            let getter' = MethodBody.ofSeq [|
                 ldarg_0
                 ldfld length.Token
                 ldc_i4(int32 Wasm.Format.PageSize)
                 div
                 ret
-            ]
+            |]
 
             members.DefineProperty (
                 Identifier.ofStr "PageCount",
@@ -317,86 +319,208 @@ module Generate =
             )
             |> ValidationResult.get
 
-        let grow =
-            let body = MethodBody.create InitLocals ValueNone LocalVariables.Null [|
-                let struct(negative, negative') =
-                    InstructionBlock.ofList [
-                        // when value is negative
-                        // TODO: Throw exception instead?
-                        ldc_i4_m1
-                        ret
-                    ]
-                    |> InstructionBlock.label
-
-                // TODO: Add a try block to return -1 if memory cannot be allocated.
-                let struct(returnl, returnl') =
-                    InstructionBlock.ofList [
-                        ldarg_0
-                        Cil.Instructions.call pgcount.Getter.Value.Token
-                        ret
-                    ]
-                    |> InstructionBlock.label
-
-                InstructionBlock.ofList [
-                    ldarg_1
-                    ldc_i4_0
-                    blt_s negative
-                    // when value is positive or zero
-
-                    ldarg_1
-                    ldc_i4_0
-                    beq returnl
-
-                    // when value is positive
-                    ldarg_0
-                    dup
-                    ldfld length.Token
-                    ldarg_1
-                    ldc_i4(int32 Wasm.Format.PageSize)
-                    mul_ovf
-                    add_ovf
-                    stfld length.Token
-
-                    ldarg_0
-                    ldfld length.Token
-                    ldarg_0
-                    ldfld capacity.Token
-                    ble_s returnl
-
-                    // when value requires a rellocation of memory
-                    // TODO: If possible, multiply capacity by 2 instead.
-                    ldarg_0
-                    dup
-                    ldfld length.Token
-                    stfld capacity.Token
-
-                    ldarg_0
-                    dup
-                    ldfld memory.Token
-                    ldarg_0
-                    ldfld capacity.Token
-                    conv_i
-                    Cil.Instructions.call mscorlib.Marshal.ReAllocHGlobal.Token
-                    stfld memory.Token
-                ]
-
-                returnl'
-                negative'
-            |]
+        let inline defineMemoryHelper rtype name ptypes parameters initl locals body =
+            let body' = MethodBody.create initl ValueNone locals body
 
             members.DefineMethod (
                 DefinedMethod.Instance (
                     MemberVisibility.Assembly,
                     MethodAttributes.HideBySig,
-                    ReturnType.T PrimitiveType.I4,
-                    MethodName.ofStr "Grow",
-                    ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
-                    fun _ _ -> Parameter.named(Identifier.ofStr "by")
+                    rtype,
+                    MethodName.ofStr name,
+                    ptypes,
+                    parameters
+                ),
+                ValueSome body',
+                ValueNone
+            )
+            |> ValidationResult.get
+
+        let grow =
+            defineMemoryHelper
+                (ReturnType.T PrimitiveType.I4)
+                "Grow"
+                (ImmutableArray.Create(ParameterType.T PrimitiveType.I4))
+                (fun _ _ -> Parameter.named(Identifier.ofStr "by"))
+                InitLocals
+                LocalVariables.Null
+                [|
+                    let struct(negative, negative') =
+                        InstructionBlock.ofSeq [|
+                            // when value is negative
+                            // TODO: Throw exception instead?
+                            ldc_i4_m1
+                            ret
+                        |]
+                        |> InstructionBlock.label
+
+                    // TODO: Add a try block to return -1 if memory cannot be allocated.
+                    let struct(returnl, returnl') =
+                        InstructionBlock.ofSeq [|
+                            ldarg_0
+                            Cil.Instructions.call pgcount.Getter.Value.Token
+                            ret
+                        |]
+                        |> InstructionBlock.label
+
+                    InstructionBlock.ofSeq [|
+                        ldarg_1
+                        ldc_i4_0
+                        blt_s negative
+                        // when value is positive or zero
+
+                        ldarg_1
+                        ldc_i4_0
+                        beq returnl
+
+                        // when value is positive
+                        ldarg_0
+                        dup
+                        ldfld length.Token
+                        ldarg_1
+                        ldc_i4(int32 Wasm.Format.PageSize)
+                        mul_ovf
+                        add_ovf
+                        stfld length.Token
+
+                        ldarg_0
+                        ldfld length.Token
+                        ldarg_0
+                        ldfld capacity.Token
+                        ble_s returnl
+
+                        // when value requires a rellocation of memory
+                        // TODO: If possible, multiply capacity by 2 instead.
+                        ldarg_0
+                        dup
+                        ldfld length.Token
+                        stfld capacity.Token
+
+                        ldarg_0
+                        dup
+                        ldfld memory.Token
+                        ldarg_0
+                        ldfld capacity.Token
+                        conv_i
+                        Cil.Instructions.call mscorlib.Marshal.ReAllocHGlobal.Token
+                        stfld memory.Token
+                    |]
+
+                    returnl'
+                    negative'
+                |]
+
+        let checkMemoryOffset =
+            let locals =
+                CliType.toLocalType PrimitiveType.I4
+                |> ImmutableArray.Create
+                |> LocalVariables.Locals
+
+            let body = MethodBody.create InitLocals ValueNone locals [|
+                let struct(ok, ok') = InstructionBlock.label (InstructionBlock.singleton ret)
+
+                let struct(error, error') =
+                    InstructionBlock.ofSeq [|
+                        ldstr "TODO: Throw IndexOutOfRangeException for memory offset out of range"
+                        throw
+                    |]
+                    |> InstructionBlock.label
+
+                InstructionBlock.ofSeq [|
+                    ldarg_1
+                    ldarg_2
+                    add_ovf
+                    stloc_0
+
+                    ldloc_0
+                    ldc_i4_0
+                    blt_s error
+
+                    ldloc_0
+                    ldarg_0
+                    ldfld length.Token
+                    bge_s error
+
+                    br_s ok
+                |]
+
+                error'
+                ok'
+            |]
+
+            members.DefineMethod (
+                DefinedMethod.Instance (
+                    MemberVisibility.Private,
+                    MethodAttributes.HideBySig,
+                    ReturnType.Void',
+                    MethodName.ofStr "CheckOffset",
+                    ImmutableArray.Create(ParameterType.T PrimitiveType.I4, ParameterType.T PrimitiveType.I4),
+                    fun i _ ->
+                        match i with
+                        | 0 -> "offset"
+                        | _ -> "size"
+                        |> Identifier.ofStr
+                        |> Parameter.named
                 ),
                 ValueSome body,
                 ValueNone
             )
             |> ValidationResult.get
+
+        let checkValueOffset size = InstructionBlock.ofSeq [|
+            ldarg_0
+            ldarg_2
+            ldarg_1
+            mul_ovf
+            conv_ovf_i4_un
+            Shortened.ldc_i4 size
+            Cil.Instructions.call checkMemoryOffset.Token
+        |]
+
+        let memoryLoadParameters = ImmutableArray.Create(ParameterType.T PrimitiveType.U4, ParameterType.T PrimitiveType.I4)
+
+        let inline defineMemoryLoad vtype vsize name initl locals body =
+            defineMemoryHelper
+                (ReturnType.T vtype)
+                name
+                memoryLoadParameters
+                (fun i _ -> Identifier.ofStr(if i = 0 then "alignment" else "offset") |> Parameter.named)
+                initl
+                locals
+                (seq { checkValueOffset vsize; yield! body })
+
+        let defineLoadOrStore =
+            let ptypes = ImmutableArray.Create(ParameterType.T PrimitiveType.U4, ParameterType.T PrimitiveType.I4)
+
+            let parameters i _ =
+                match i with
+                | 0 -> "alignment"
+                | 1 -> "offset"
+                | _ -> failwithf "Load or Store helper should not have a parameter at index %i" i
+                |> Identifier.ofStr
+                |> Parameter.named
+
+            let check = InstructionBlock.ofSeq [|
+                ldarg_0
+                ldarg_2
+                ldarg_1
+                mul_ovf
+                conv_ovf_i4_un
+                Cil.Instructions.call checkMemoryOffset.Token
+            |]
+
+            fun rtype name ilocals locals body ->
+                seq {
+                    check
+                    yield! body
+                }
+                |> defineMemoryHelper
+                    rtype
+                    name
+                    ptypes
+                    parameters
+                    ilocals
+                    locals
 
         let mem' = NamedType.DefinedType mem
 
@@ -404,7 +528,26 @@ module Generate =
           Type = CliType.Class mem'
           Token = TypeTok.Named mem'
           Constructor = ctor
-          Grow = grow.Token }
+          Grow = grow.Token
+          LoadI32 =
+            defineMemoryLoad PrimitiveType.I4 4 "LoadI4" InitLocals LocalVariables.Null [|
+                InstructionBlock.ofSeq [|
+                    ldstr "TODO: Load it"
+                    throw
+                |]
+            |]
+          StoreI32 =
+            defineLoadOrStore
+                ReturnType.Void'
+                "StoreI4"
+                InitLocals
+                LocalVariables.Null
+                [|
+                    InstructionBlock.ofSeq [|
+                        ldstr "TODO: Store it"
+                        throw
+                    |]
+                |] }
 
     // TODO: Define option to specify that memories should be instantiated lazily.
     let addMemoryFields
@@ -489,36 +632,91 @@ module Generate =
         memories''
 
     type HelperMethods =
-        { Memory: {| Grow: MethodTok<DefinedType, DefinedMethod> |} }
+        { Memory:
+            {| Grow: MethodTok<DefinedType, DefinedMethod>
+               LoadI32: MethodTok<DefinedType, DefinedMethod>
+               StoreI32: MethodTok<DefinedType, DefinedMethod> |} }
 
     let addHelperMethods mscorlib (mem: MemoryType) (members: DefinedTypeMembers) =
+        let inline addMemoryHelper rtype name ptypes parameters body =
+            members.DefineMethod (
+                DefinedMethod.Static (
+                    MemberVisibility.CompilerControlled,
+                    MethodAttributes.None,
+                    rtype,
+                    MethodName.ofStr name,
+                    ImmutableArray.CreateRange(Seq.map ParameterType.T ptypes),
+                    parameters
+                ),
+                ValueSome(MethodBody.ofSeq body),
+                ValueNone
+            )
+            |> ValidationResult.get
+
+        let addMemoryLoader =
+            let parameters i _ =
+                match i with
+                | 0 -> "offset"
+                | 1 -> "memarg.alignment"
+                | 2 -> "memarg.offset"
+                | _ -> "memory"
+                |> Identifier.ofStr
+                |> Parameter.named
+
+            fun ltype name (helper: MethodTok<DefinedType, DefinedMethod>) ->
+                addMemoryHelper
+                    (ReturnType.T ltype)
+                    name
+                    [| PrimitiveType.I4; PrimitiveType.U4; PrimitiveType.I4; mem.Type |]
+                    parameters
+                    [|
+                        ldarg_3
+                        ldarg_1
+                        ldarg_2
+                        ldarg_0
+                        add_ovf
+                        Cil.Instructions.call helper.Token
+                        ret
+                    |]
+
         { Memory =
             {| Grow =
-                let body = MethodBody.ofSeq [
-                    ldarg_1
-                    ldarg_0
-                    Cil.Instructions.call mem.Grow
-                    ret
-                ]
-
-                members.DefineMethod (
-                    DefinedMethod.Static (
-                        MemberVisibility.CompilerControlled,
-                        MethodAttributes.None,
-                        ReturnType.T PrimitiveType.I4,
-                        MethodName.ofStr "memory.grow",
-                        ImmutableArray.Create(ParameterType.T PrimitiveType.I4, ParameterType.T mem.Type),
-                        fun i _ ->
-                            match i with
-                            | 0 -> "by"
-                            | _ -> "memory"
-                            |> Identifier.ofStr
-                            |> Parameter.named
-                    ),
-                    ValueSome body,
-                    ValueNone
-                )
-                |> ValidationResult.get |}}
+                addMemoryHelper
+                    (ReturnType.T PrimitiveType.I4)
+                    "memory.grow"
+                    [| PrimitiveType.I4; mem.Type |]
+                    Parameter.emptyList
+                    [
+                        ldarg_1
+                        ldarg_0
+                        Cil.Instructions.call mem.Grow
+                        ret
+                    ]
+               LoadI32 = addMemoryLoader PrimitiveType.I4 "i32.load" mem.LoadI32
+               StoreI32 =
+                addMemoryHelper
+                    ReturnType.Void'
+                    "i32.store"
+                    [| PrimitiveType.I4; PrimitiveType.I4; PrimitiveType.U4; PrimitiveType.I4; mem.Type |]
+                    (fun i _ ->
+                        match i with
+                        | 0 -> "value"
+                        | 1 -> "offset"
+                        | 2 -> "memarg.alignment"
+                        | 3 -> "memarg.offset"
+                        | _ -> "memory"
+                        |> Identifier.ofStr
+                        |> Parameter.named)
+                    [|
+                        ldarg_s 4uy
+                        // TODO: Supply value
+                        ldarg_2
+                        ldarg_3
+                        ldarg_1
+                        add_ovf
+                        Cil.Instructions.call mem.StoreI32.Token
+                        ret
+                    |] |}}
 
     let translateMethodBody
         locinit
@@ -533,6 +731,7 @@ module Generate =
         localTypesBuilder
         { Code.Locals = locals; Body = body }
         helpers
+        mainMemIndex
         (memories: Dictionary<_, FieldTok>)
         =
         instrs.Clear()
@@ -549,6 +748,11 @@ module Generate =
             then argi(Checked.uint16 i)
             else loci(LocalVarIndex.locali i')
             |> emit
+
+        let inline emitMemArg { MemArg.Alignment = MemArgAlignment align; Offset = offset } =
+            emit(ldc_i4(int32 align))
+            emit(ldc_i4(int32 offset))
+            emit(ldsfld memories.[mainMemIndex])
 
         let inline pushLabelRef() =
             let i, l = labels.Count, ref Unchecked.defaultof<_>
@@ -589,6 +793,12 @@ module Generate =
                 emitVarOp Shortened.ldarg Shortened.ldloc i
             | { Opcode = 0x21uy; Arguments = InstructionArguments.LocalIndex i } -> // local.set
                 emitVarOp Shortened.starg Shortened.stloc i
+            | { Opcode = 0x28uy; Arguments = InstructionArguments.MemArg arg } -> // i32.load
+                emitMemArg arg
+                emit(Cil.Instructions.call helpers.Memory.LoadI32.Token)
+            | { Opcode = 0x36uy; Arguments = InstructionArguments.MemArg arg } -> // i32.store
+                emitMemArg arg
+                emit(Cil.Instructions.call helpers.Memory.StoreI32.Token)
             | { Opcode = 0x40uy; Arguments = InstructionArguments.MemoryIndex i } -> // memory.grow
                 emit(ldsfld memories.[i])
                 emit(Cil.Instructions.call helpers.Memory.Grow.Token)
@@ -663,6 +873,9 @@ module Generate =
                             ifLabelFixups
                             locals code.[i]
                             helpers
+                            (match sections.MemorySection with
+                            | ValueSome memories' -> memories'.First
+                            | ValueNone -> Index.Zero)
                             memories
 
                     let token = members.DefineMethod(func', body, ValueNone) |> ValidationResult.get
