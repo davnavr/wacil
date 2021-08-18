@@ -590,7 +590,7 @@ module Generate =
                     Shortened.ldc_i4((i - 1) * 8)
                     shl
                 ldc_i4 0xFF
-                Cil.Instructions.``or``
+                Cil.Instructions.``and``
                 conv_u1
 
                 stind_i1
