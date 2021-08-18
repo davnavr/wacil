@@ -256,11 +256,10 @@ module Generate =
                     conv_ovf_i4_un
                     stfld capacity.Token
 
-                    // TODO: Fix, for some reason, this causes bad IL to be generated, seems like addition of this code causes a bad fat format method body to be generated.
-                    //ldarg_0
-                    //dup
-                    //ldfld capacity.Token
-                    //stfld length.Token
+                    ldarg_0
+                    dup
+                    ldfld capacity.Token
+                    stfld length.Token
 
                     ldarg_0
                     dup
@@ -421,8 +420,8 @@ module Generate =
 
                 let struct(error, error') =
                     InstructionBlock.ofSeq [|
-                        // TODO: Fix, use of string literal here causes a bug
-                        ldnull //ldstr "TODO: Throw IndexOutOfRangeException for memory offset out of range"
+                        // TODO: Fix FSharpIL bug where string literal that is too long results in generation of invalid index.
+                        ldstr "Indexed memory out of bounds"
                         throw
                     |]
                     |> InstructionBlock.label
