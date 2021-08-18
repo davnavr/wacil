@@ -231,6 +231,45 @@ module Generate =
         let max = addInternalField FieldAttributes.InitOnly "maximum" PrimitiveType.U4
         //let lock = addInternalField FieldAttributes.InitOnly "lock" PrimitiveType.Object members
 
+        let inline defineMemoryHelper rtype name ptypes parameters initl locals body =
+            let body' = MethodBody.create initl ValueNone locals body
+
+            members.DefineMethod (
+                DefinedMethod.Instance (
+                    MemberVisibility.Assembly,
+                    MethodAttributes.HideBySig,
+                    rtype,
+                    MethodName.ofStr name,
+                    ptypes,
+                    parameters
+                ),
+                ValueSome body',
+                ValueNone
+            )
+            |> ValidationResult.get
+
+        /// Fills allocated memory with zeroed bytes, since AllocHGlobal does not.
+        let zero =
+            InstructionBlock.ofSeq [|
+                ldarg_0
+                ldfld memory.Token
+                ldc_i4_0
+                ldarg_0
+                ldfld capacity.Token
+                conv_ovf_u4
+                Prefixes.unaligned_ 1uy
+                initblk
+                ret
+            |]
+            |> Seq.singleton
+            |> defineMemoryHelper
+                ReturnType.Void'
+                "ZeroOut"
+                ImmutableArray.Empty
+                Parameter.emptyList
+                InitLocals
+                LocalVariables.Null
+
         let ctor =
             let body = MethodBody.create InitLocals ValueNone LocalVariables.Null [|
                 InstructionBlock.ofList [
@@ -266,6 +305,9 @@ module Generate =
                     ldfld capacity.Token
                     Cil.Instructions.call mscorlib.Marshal.AllocHGlobal.Token
                     stfld memory.Token
+
+                    ldarg_0
+                    Cil.Instructions.call zero.Token
 
                     ret
                 ]
@@ -314,23 +356,6 @@ module Generate =
                 ValueSome(getter :> DefinedMethod, ValueSome getter', ValueNone),
                 ValueNone,
                 List.empty,
-                ValueNone
-            )
-            |> ValidationResult.get
-
-        let inline defineMemoryHelper rtype name ptypes parameters initl locals body =
-            let body' = MethodBody.create initl ValueNone locals body
-
-            members.DefineMethod (
-                DefinedMethod.Instance (
-                    MemberVisibility.Assembly,
-                    MethodAttributes.HideBySig,
-                    rtype,
-                    MethodName.ofStr name,
-                    ptypes,
-                    parameters
-                ),
-                ValueSome body',
                 ValueNone
             )
             |> ValidationResult.get
@@ -403,6 +428,9 @@ module Generate =
                         conv_i
                         Cil.Instructions.call mscorlib.Marshal.ReAllocHGlobal.Token
                         stfld memory.Token
+
+                        ldarg_0
+                        Cil.Instructions.call zero.Token
                     |]
 
                     returnl'
@@ -576,8 +604,8 @@ module Generate =
           Token = TypeTok.Named mem'
           Constructor = ctor
           Grow = grow.Token
-          LoadI32 = defineMemoryLoad PrimitiveType.I4 4 "LoadI4" InitLocals [| loadIntegerValue 4 |]
-          StoreI32 = defineMemoryStore PrimitiveType.I4 4 "StoreI4" InitLocals [| storeIntegerValue 4 |] }
+          LoadI32 = defineMemoryLoad PrimitiveType.I4 4 "LoadI4" SkipInitLocals [| loadIntegerValue 4 |]
+          StoreI32 = defineMemoryStore PrimitiveType.I4 4 "StoreI4" SkipInitLocals [| storeIntegerValue 4 |] }
 
     // TODO: Define option to specify that memories should be instantiated lazily.
     let addMemoryFields
