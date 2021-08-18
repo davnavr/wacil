@@ -469,8 +469,10 @@ module Generate =
             |> ValidationResult.get
 
         let valueOffsetLocals =
-            CliType.toLocalType PrimitiveType.I // TODO: Should be byte pointer
-            |> ImmutableArray.Create
+            ImmutableArray.Create (
+                CliType.toLocalType PrimitiveType.I,
+                CliType.toLocalType PrimitiveType.I // TODO: Should be byte pointer
+            )
             |> LocalVariables.Locals
 
         let setValueOffset = InstructionBlock.ofSeq [|
@@ -480,6 +482,12 @@ module Generate =
             mul_ovf
             conv_ovf_i
             stloc_0
+
+            ldarg_0
+            ldfld memory.Token
+            ldloc_0
+            add_ovf
+            stloc_1
         |]
 
         let checkValueOffset size = InstructionBlock.ofSeq [|
@@ -506,7 +514,7 @@ module Generate =
 
         let inline loadIntegerValue size = InstructionBlock.ofSeq (seq {
             for i = 1 to size do
-                ldloc_0
+                ldloc_1
                 if i > 1 then
                     Shortened.ldc_i4(i - 1)
                     add_ovf
@@ -544,7 +552,7 @@ module Generate =
 
         let inline storeIntegerValue size = InstructionBlock.ofSeq (seq {
             for i = 1 to size do
-                ldloc_0
+                ldloc_1
                 if i > 1 then
                     Shortened.ldc_i4(i - 1)
                     add_ovf
