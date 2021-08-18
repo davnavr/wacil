@@ -548,8 +548,8 @@ module Generate =
                     add_ovf
                 ldind_u1
                 conv_u4
-                if i < size then
-                    Shortened.ldc_i4((size - i) * 8)
+                if i > 1 then
+                    Shortened.ldc_i4((i - 1) * 8)
                     shl
                 if i > 1 then add_ovf_un
             ret
@@ -587,10 +587,10 @@ module Generate =
 
                 ldarg_3
                 if i > 1 then
-                    Shortened.ldc_i4(i * 8)
-                    shr_un
+                    Shortened.ldc_i4((i - 1) * 8)
+                    shl
                 ldc_i4 0xFF
-                Cil.Instructions.``and``
+                Cil.Instructions.``or``
                 conv_u1
 
                 stind_i1
