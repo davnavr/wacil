@@ -565,7 +565,9 @@ module ModuleExports =
         | false, _ -> ValueNone
 
     let tryGetFunction { Exports = exports; ModuleExports.Functions = functions } func = tryGetExport exports functions func
+    //let tryGetTable
     let tryGetMemory { Exports = exports; ModuleExports.Memories = memories } mem = tryGetExport exports memories mem
+    let tryGetGlobal { Exports = exports; ModuleExports.Globals = globals } globalv = tryGetExport exports globals globalv
 
     let inline private getSpecificExports { ModuleExports.Exports = exports } =
         Seq.map (fun (KeyValue(index, ei)) -> struct(exports.ItemRef(ei).Name, index))

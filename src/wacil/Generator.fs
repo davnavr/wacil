@@ -776,31 +776,38 @@ module Generate =
                         ret
                     |] |}}
 
+    type MethodBodyBuilder =
+        { Instructions: ImmutableArray<Cil.Instruction>.Builder
+          Blocks: ImmutableArray<Cil.InstructionBlock>.Builder
+          // TODO: Make custom label list class.
+          Labels: List<Cil.Label ref>
+          LabelIndices: Stack<int32>
+          IfLabelFixups: Stack<Cil.Label ref>
+          Helpers: HelperMethods
+          MainMemoryIndex: Index<IndexKinds.Mem>
+          MemoryLookup: Dictionary<Index<IndexKinds.Mem>, FieldTok> }
+
     type ReferencedImports =
         { Functions: Dictionary<Index<IndexKinds.Func>, MethodTok> }
 
     let translateMethodBody
-        locinit
         funcParamCount
-        (instrs: ImmutableArray<Cil.Instruction>.Builder)
-        (blocks: ImmutableArray<_>.Builder)
-        // TODO: Make custom label list class.
-        (labels: List<Cil.Label ref>)
-        (lindices: Stack<int32>)
-
-        (ifLabelFixups: Stack<Cil.Label ref>)
-        (localTypesBuilder: ImmutableArray<_>.Builder)
-        { Code.Locals = locals; Body = body }
-        helpers
-        mainMemIndex
-        (memories: Dictionary<_, FieldTok>)
+        body
+        { Instructions = instrs
+          Blocks = blocks
+          Labels = labels
+          LabelIndices = lindices
+          IfLabelFixups = ifLabelFixups
+          Helpers = helpers
+          MainMemoryIndex = mainMemIndex
+          MemoryLookup = memories }
+        finish
         =
         instrs.Clear()
         blocks.Clear()
         labels.Clear() // NOTE: This assumes that, within a block, labels are numbered sequentially
         lindices.Clear()
         ifLabelFixups.Clear()
-        localTypesBuilder.Clear()
 
         let inline emit op = instrs.Add op
 
@@ -925,13 +932,114 @@ module Generate =
         if instrs.Count > 0 then commitInstructionList()
         if ifLabelFixups.Count > 0 then invalidOp "Missing label for some if instructions"
 
-        blocks.Add(InstructionBlock.singleton ret)
-
+        finish blocks
         blocks.ToImmutable()
-        |> MethodBody.create locinit ValueNone (getMethodLocals localTypesBuilder locals)
-        |> ValueSome
 
-    let addTranslatedFunctions helpers memories (members: DefinedTypeMembers) sections exports =
+    let addTranslatedGlobals (members: DefinedTypeMembers) (globals: GlobalSection voption) exports =
+        match globals with
+        | ValueSome globals' ->
+            let lookup = Dictionary globals'.Length
+            let initializers = List globals'.Length
+
+            let getGlobalName =
+                match exports with
+                | ValueSome exports' ->
+                    ModuleExports.tryGetGlobal exports' >> ValueOption.map (fun export -> Identifier.ofStr export.Name)
+                | ValueNone -> fun _ -> ValueNone
+
+            for i = 0 to globals'.Length - 1 do
+                let i' = globals'.First + uint32 i
+                let gl = globals'.[i']
+
+                let mutability, gtype =
+                    match gl.Type with
+                    | GlobalType.Const gt -> FieldAttributes.InitOnly, gt
+                    | GlobalType.Var gt -> FieldAttributes.None, gt
+
+                let gtype' = getValueType gtype
+                let name = getGlobalName i'
+
+                let gl' =
+                    members.DefineField (
+                        DefinedField.Static (
+                            MemberVisibility.CompilerControlled,
+                            mutability,
+                            Identifier.ofStr ("global#" + string i),
+                            gtype'
+                        ),
+                        ValueNone
+                    )
+                    |> ValidationResult.get
+
+                lookup.Add(i', gl'.Token)
+
+                let initializer builder =
+                    let body =
+                        fun (blocks: ImmutableArray<_>.Builder) ->
+                            ImmutableArray.Create(stsfld gl'.Token, ret)
+                            |> InstructionBlock.ofBlock
+                            |> blocks.Add
+                        |> translateMethodBody 0u gl.Expression builder
+                        |> MethodBody.create InitLocals ValueNone LocalVariables.Null
+
+                    members.DefineMethod (
+                        DefinedMethod.Static (
+                            MemberVisibility.CompilerControlled,
+                            MethodAttributes.None,
+                            ReturnType.Void',
+                            MethodName.ofStr("initglobal#" + string i),
+                            ImmutableArray.Empty,
+                            Parameter.emptyList
+                        ),
+                        ValueSome body,
+                        ValueNone
+                    )
+                    |> ValidationResult.get
+
+                initializers.Add initializer
+
+                match name with
+                | ValueSome name' ->
+                    let getter =
+                        let getter' =
+                            DefinedMethod.Static (
+                                MemberVisibility.Public,
+                                MethodAttributes.HideBySig,
+                                ReturnType.T gtype',
+                                MethodName.ofStr("get_" + string name'),
+                                ImmutableArray.Empty,
+                                Parameter.emptyList
+                            )
+
+                        ValueSome(getter' :> DefinedMethod, ValueSome(MethodBody.ofSeq [| ldsfld gl'.Token; ret |]), ValueNone)
+
+                    let setter =
+                        if mutability = FieldAttributes.InitOnly
+                        then ValueNone
+                        else
+                            let setter' =
+                                DefinedMethod.Static (
+                                    MemberVisibility.Public,
+                                    MethodAttributes.HideBySig,
+                                    ReturnType.Void',
+                                    MethodName.ofStr("set_" + string name'),
+                                    ImmutableArray.Create(ParameterType.T gtype'),
+                                    Parameter.emptyList
+                                )
+
+                            let body = MethodBody.ofSeq [| ldarg_1; stsfld gl'.Token; ret |]
+
+                            ValueSome(setter' :> DefinedMethod, ValueSome body, ValueNone)
+
+                    members.DefineProperty(name', getter, setter, List.empty, ValueNone)
+                    |> ValidationResult.get
+                    |> ignore
+                | ValueNone -> ()
+
+            struct(lookup, initializers)
+        | ValueNone -> struct(Dictionary 0, List 0)
+
+    let addTranslatedFunctions methodBodyBuilder (members: DefinedTypeMembers) sections exports =
         match sections with
         | { TypeSection = ValueSome types
             FunctionSection = ValueSome funcs
@@ -941,11 +1049,7 @@ module Generate =
 
             // Shared to avoid extra allocations.
             let locals = ImmutableArray.CreateBuilder()
-            let instrs = ImmutableArray.CreateBuilder()
-            let blocks = ImmutableArray.CreateBuilder()
-            let labels = List<Cil.Label ref>()
-            let lindices = Stack<int32>()
-            let ifLabelFixups = Stack<Cil.Label ref>()
+            let endTranslatedFunction (blocks: ImmutableArray<_>.Builder) = blocks.Add(InstructionBlock.singleton ret)
 
             let getFunctionName =
                 match exports with
@@ -973,24 +1077,17 @@ module Generate =
 
                 // TODO: Use method dictionary when generating call instructions.
                 methods.[i'] <-
+                    let code' = &code.ItemRef(i)
                     let body =
                         translateMethodBody
-                            InitLocals // WebAssembly specification states that variables are all zeroed out before use.
                             (Checked.uint32 funct.Parameters.Length)
-                            instrs
-                            blocks
-                            labels
-                            lindices
-                            ifLabelFixups
-                            locals
-                            code.[i]
-                            helpers
-                            (match sections.MemorySection with
-                            | ValueSome memories' -> memories'.First
-                            | ValueNone -> Index.Zero)
-                            memories
+                            code'.Body
+                            methodBodyBuilder
+                            endTranslatedFunction
+                        // WebAssembly specification states that variables are all zeroed out before use.
+                        |> MethodBody.create InitLocals ValueNone (getMethodLocals locals code'.Locals)
 
-                    let token = members.DefineMethod(func', body, ValueNone) |> ValidationResult.get
+                    let token = members.DefineMethod(func', ValueSome body, ValueNone) |> ValidationResult.get
                     token.Token
 
             methods
@@ -1078,16 +1175,36 @@ module Generate =
 
         let imports = addImportReferences sections metadata
 
-        let initializer = Array.zeroCreate 3
+        let initializer = Array.zeroCreate 4
+        let struct(globals, globalVariableInitializers) = addTranslatedGlobals members sections.GlobalSection exports
         let mem = addMemoryType mscorlib module' exports metadata
-        let memories = addMemoryFields mem &initializer.[0] members sections.MemorySection exports metadata
-        //let tables = &initializer.[1]
-        initializer.[1] <- InstructionBlock.empty // TEMPORARY
+        let memories = addMemoryFields mem &initializer.[1] members sections.MemorySection exports metadata
+        //let tables = &initializer.[2]
+        initializer.[2] <- InstructionBlock.empty // TEMPORARY
 
         let helpers = addHelperMethods mscorlib mem members
-        let functions = addTranslatedFunctions helpers memories members sections exports
+        let methodBodyBuilder =
+            { Instructions = ImmutableArray.CreateBuilder()
+              Blocks = ImmutableArray.CreateBuilder()
+              Labels = List()
+              LabelIndices = Stack()
+              IfLabelFixups = Stack()
+              Helpers = helpers
+              MainMemoryIndex =
+                match sections.MemorySection with
+                | ValueSome memories' -> memories'.First
+                | ValueNone -> Index.Zero
+              MemoryLookup = memories }
 
-        initializer.[2] <- InstructionBlock.ofList [
+        let functions = addTranslatedFunctions methodBodyBuilder members sections exports
+
+        initializer.[0] <- InstructionBlock.ofSeq [|
+            for init in globalVariableInitializers do
+                let init' = init methodBodyBuilder
+                Cil.Instructions.call init'.Token
+        |]
+
+        initializer.[3] <- InstructionBlock.ofList [
             // TODO: In WASM parsing code, check that signature of start function is valid.
             match sections.StartSection with
             | ValueSome start -> Cil.Instructions.call functions.[start]

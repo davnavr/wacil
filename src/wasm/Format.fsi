@@ -756,7 +756,9 @@ type ModuleExports
 [<RequireQualifiedAccess>]
 module ModuleExports =
     val tryGetFunction : exports: ModuleExports -> func: Index<IndexKinds.Func> -> Export voption
+    //val tryGetTable
     val tryGetMemory : exports: ModuleExports -> mem: Index<IndexKinds.Mem> -> Export voption
+    val tryGetGlobal : exports: ModuleExports -> globalv: Index<IndexKinds.Global> -> Export voption
     val memories : exports: ModuleExports -> seq<struct(Name * Index<IndexKinds.Mem>)>
 
 val getModuleExports : exports: ExportSection -> ModuleExports
