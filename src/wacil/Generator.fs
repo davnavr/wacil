@@ -128,7 +128,7 @@ module Generate =
         | Assembly ->
             let assembly =
                 { DefinedAssembly.Name = FileName.ofStr options.ModuleFileName
-                  Version = AssemblyVersion(1us, 0us, 0us, 0us) // TODO: Have option to set version of assembly.
+                  Version = AssemblyVersion.Zero // TODO: Have option to set version of assembly.
                   PublicKey = ImmutableArray.Empty
                   Culture = ValueNone }
             do metadata.DefineAssembly assembly |> ValidationResult.get |> ignore
@@ -776,6 +776,9 @@ module Generate =
                         ret
                     |] |}}
 
+    type ReferencedImports =
+        { Functions: Dictionary<Index<IndexKinds.Func>, MethodTok> }
+
     let translateMethodBody
         locinit
         funcParamCount
@@ -946,6 +949,62 @@ module Generate =
             methods
         | _ -> failwith "TODO: How to deal with missing sections?"
 
+    let getOwningModule { Import.Module = mname } (modules: Dictionary<_, _>) (metadata: CliModuleBuilder) =
+        match modules.TryGetValue mname with
+        | true, existing -> existing
+        | false, _ ->
+            let assem =
+                { ReferencedAssembly.Name = FileName.ofStr mname
+                  Version = AssemblyVersion.Zero
+                  PublicKeyOrToken = NoPublicKeyOrToken
+                  Culture = ValueNone
+                  HashValue = ImmutableArray.Empty }
+
+            metadata.ReferenceAssembly assem
+
+            let tref =
+                { TypeReference.Flags = ValueNone
+                  TypeName = Identifier.ofStr mname
+                  TypeNamespace = ValueNone
+                  ResolutionScope = TypeReferenceParent.Assembly assem }
+                |> ReferencedType.Reference
+                |> metadata.ReferenceType
+                |> ValidationResult.get
+
+            modules.Add(mname, tref)
+            tref
+
+    let addImportReferences sections (metadata: CliModuleBuilder) =
+        match sections with
+        | { KnownSections.ImportSection = ValueSome imports; TypeSection = ValueSome types } ->
+            let modules = Dictionary()
+            let references =
+                { ReferencedImports.Functions = Dictionary() }
+
+            // TODO: When parsing metadata, check that there are no duplicate export names
+
+            for i = 0 to imports.Functions.Length - 1 do
+                let i' = Index<_>(uint32 i)
+                let func = imports.Functions.[i']
+                let owner = getOwningModule func modules metadata
+                let ftype = types.[func.Description]
+
+                let func' =
+                    ReferencedMethod.Static (
+                        ExternalVisibility.Public,
+                        getReturnType ftype.Results,
+                        MethodName.ofStr func.Name,
+                        getParameterTypes ftype.Parameters
+                    )
+                    |> owner.ReferenceMethod
+                    |> ValidationResult.get
+
+                references.Functions.Add(i', func'.Token)
+
+            references
+        | _ ->
+            { ReferencedImports.Functions = Dictionary() }
+
     let toPE (ValidatedModule file) options = // TODO: Add option to set file to Exe if start function is defined.
         let sections = getKnownSections file
         let exports = ValueOption.map getModuleExports sections.ExportSection
@@ -969,6 +1028,8 @@ module Generate =
             |> DefinedType.Definition
 
         let members = metadata.DefineType(module', ValueNone) |> ValidationResult.get
+
+        let imports = addImportReferences sections metadata
 
         let initializer = Array.zeroCreate 3
         let mem = addMemoryType mscorlib module' exports metadata
