@@ -1,6 +1,7 @@
 {
     "private": true,
     "devDependencies": {
-        "assemblyscript": "^0.19.10"
+        "assemblyscript": "^0.19.10",
+        "wabt": "^1.0.24"
     }
 }
