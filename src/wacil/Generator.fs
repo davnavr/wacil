@@ -675,13 +675,13 @@ module Generate =
                 InstructionBlock.ofList [
                     for i = 0 to memories'.Length - 1 do
                         let i' = memories'.First + uint32 i
-                        let size = memories'.[i'].Type
+                        let (MemType size) = memories'.[i'].Type
                         let max =
                             match size.Max with
-                            | ValueSome max' -> max'.Multiple
-                            | ValueNone -> System.UInt16.MaxValue
+                            | ValueSome max' -> max'
+                            | ValueNone -> 32768u // Maximum number of pages before length (as an int32) overflows.
 
-                        ldc_i4(int32 size.Min.Multiple)
+                        ldc_i4(int32 size.Min)
                         ldc_i4(int32 max)
                         Cil.Instructions.Newobj.ofMethod mem.Constructor.Token
                         stsfld memories''.[i']

@@ -15,21 +15,6 @@ module Preamble =
 
 type Name = string
 
-/// Represents the size of a memory, which is always a multiple of the page size.
-[<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
-type MemSize =
-    val Multiple: uint16
-    member Size: uint32
-
-    internal new: multiple: uint16 -> MemSize
-
-    override ToString: unit -> string
-
-    static member inline op_Implicit: size: MemSize -> uint32
-    static member inline op_Explicit: size: MemSize -> int32
-
-    interface IEquatable<MemSize>
-
 module Types =
     type WasmType =
         | externref = 0x6Fuy
@@ -72,21 +57,23 @@ module Types =
 
         interface IEquatable<FuncType>
 
-    [<Sealed>]
-    type Limit<'T when 'T : struct and 'T : equality> =
-        member Min: 'T
-        member Max: 'T voption
+    [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+    type Limit =
+        member Min: uint32
+        member Max: uint32 voption
 
-        interface IEquatable<Limit<'T>>
+        interface IEquatable<Limit>
 
     [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
     type TableType =
         { ElementType: RefType
-          Limit: Limit<uint32> }
+          Limit: Limit }
 
         interface IEquatable<TableType>
 
-    type MemType = Limit<MemSize>
+    /// Describes the minimum and optional maximum size of a memory, given in units of the page size.
+    [<IsReadOnly; Struct; NoComparison; NoEquality>]
+    type MemType = MemType of Limit
 
     type GlobalType =
         | Const of ValType
@@ -94,8 +81,8 @@ module Types =
 
     [<RequireQualifiedAccess>]
     module Limit =
-        val ofMin: min: 'T -> Limit<'T>
-        val tryWithMax: min: 'T -> max: 'T voption -> Limit<'T> voption when 'T : comparison
+        val ofMin: min: uint32 -> Limit
+        val tryWithMax: min: uint32 -> max: uint32 voption -> Limit voption
 
 [<NoComparison; NoEquality>]
 type CustomSection =
@@ -680,14 +667,6 @@ type IncorrectSectionPositionException with override Message: string
 exception DuplicateSectionException of existing: Section
 
 type DuplicateSectionException with override Message: string
-
-type MemSize with
-    static member inline op_Implicit: size: MemSize -> uint32
-    static member inline op_Explicit: size: MemSize -> int32
-
-[<RequireQualifiedAccess>]
-module MemSize =
-    val ofMultiple : multiple: uint16 -> MemSize
 
 [<RequireQualifiedAccess>]
 module Section =

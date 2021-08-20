@@ -11,22 +11,6 @@ module Preamble =
 
 let [<Literal>] PageSize = 65536u
 
-[<Struct>]
-type MemSize =
-    val Multiple: uint16
-
-    new (multiple) = { Multiple = multiple }
-
-    member this.Size = uint32 this.Multiple * uint32 PageSize
-
-    override this.ToString() = this.Multiple.ToString()
-
-    static member inline op_Implicit(size: MemSize) = size.Size
-    static member inline op_Explicit(size: MemSize) = Checked.int32 size.Size
-
-module MemSize =
-    let ofMultiple multiple = MemSize multiple
-
 [<AutoOpen>]
 module Types =
     type WasmType =
@@ -57,17 +41,16 @@ module Types =
     [<Struct>]
     type FuncType = { Parameters: ResultType; Results: ResultType }
 
-    [<Sealed>]
-    type Limit<'T when 'T : struct and 'T : equality> (min, max) =
-        member _.Min: 'T = min
-        member _.Max: 'T voption = max
-
-        interface IEquatable<Limit<'T>> with member _.Equals other = min = other.Min && max = other.Max
+    [<Struct>]
+    type Limit (min: uint32, max: uint32 voption) =
+        member _.Min = min
+        member _.Max = max
 
     [<Struct>]
-    type TableType = { ElementType: RefType; Limit: Limit<uint32> }
+    type TableType = { ElementType: RefType; Limit: Limit }
 
-    type MemType = Limit<MemSize>
+    [<Struct>]
+    type MemType = MemType of Limit
 
     type GlobalType =
         | Const of ValType

@@ -204,37 +204,18 @@ module Type =
     [<Struct>]
     type FuncTypeReader = interface IReader<FuncType> with member _.Read stream = functype stream
 
-    let limit<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T> and 'T : struct and 'T : equality and 'T : comparison>
-        stream
-        =
-        let inline read() = Unchecked.defaultof<'Reader>.Read stream
+    let limit stream =
         match readByte stream with
-        | 0uy -> read() |> Limit.ofMin
+        | 0uy -> Integer.u32 stream |> Limit.ofMin
         | 1uy ->
-            let min = read()
-            let max = read()
+            let min = Integer.u32 stream
+            let max = Integer.u32 stream
             match Limit.tryWithMax min (ValueSome max) with
             | ValueSome limit -> limit
             | ValueNone -> failwithf "TODO: Error for limit maximum %A cannot exceed limit minimum %A" max min
         | bad -> failwithf "TODO: Error for invalid limit kind 0x%02X" bad
 
-    [<Struct>]
-    type private MemSizeParser =
-        interface IReader<MemSize> with
-            member _.Read stream =
-                let value = Integer.u32 stream
-                let multiple = value / PageSize
-                if multiple * PageSize = value
-                then MemSize(Checked.uint16 multiple)
-                else
-                    failwithf
-                        "TODO: Error for value 0x%08X (%i) is not a multiple of the WebAssembly page size (0x%08X) (%i)"
-                        value
-                        value
-                        PageSize
-                        PageSize
-
-    let memtype stream = limit<MemSizeParser, _> stream
+    let memtype stream = MemType(limit stream)
 
     let blocktype stream =
         let sb, index =
