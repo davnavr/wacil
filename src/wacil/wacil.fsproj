@@ -6,12 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Generator.fs" />
-    <Compile Include="Program.fs" />
+    <ProjectReference Include="$(RootDirectory)\lib\FSharpIL\src\FSharpIL\FSharpIL.fsproj" />
+    <ProjectReference Include="$(RootDirectory)\src\wasm\wasm.fsproj" />
 
     <PackageReference Include="Argu" Version="6.1.1" />
 
-    <ProjectReference Include="$(RootDirectory)\src\wasm\wasm.fsproj" />
+    <Compile Include="Generator.fsi" />
+    
+    <Compile Include="Generator.fs" />
+    <Compile Include="Program.fs" />
   </ItemGroup>
 
 </Project>

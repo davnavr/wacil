@@ -1,0 +1,38 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <Import Project="$(MSBuildThisFileDirectory)\..\Directory.Build.props" />
+
+  <PropertyGroup>
+    <OutDir Condition="'$(OutDir)'==''">$(MSBuildProjectDirectory)\out</OutDir>
+    <ModuleName Condition="'$(ModuleName)'==''">$(MSBuildProjectName)</ModuleName>
+    <ModuleFile>$(OutDir)\$(ModuleName).wasm</ModuleFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <WacilOutputFile>$(OutDir)\$(ModuleName).dll</WacilOutputFile>
+    <WacilCompilerFlags>--project &quot;$(RootDirectory)\src\wacil\wacil.fsproj&quot; --module &quot;$(ModuleFile)&quot; --out &quot;$(WacilOutputFile)&quot;</WacilCompilerFlags>
+  </PropertyGroup>
+
+  <Target Name="Clean">
+    <RemoveDir Directories="$(OutDir)" />
+  </Target>
+
+  <Target Name="Compile" DependsOnTargets="CoreCompile">
+    <Message Text="$(MSBuildProjectName) -> $(ModuleFile)" Importance="high" />
+  </Target>
+
+  <Target Name="Build"
+          AfterTargets="Clean"
+          DependsOnTargets="Compile"
+          Inputs="$(ModuleFile)"
+          Outputs="$(WacilOutputFile)">
+    <Exec Command="dotnet run $(WacilCompilerFlags)"
+          ConsoleToMsBuild="true"
+          LogStandardErrorAsError="true" />
+
+    <Message Text="$(MSBuildProjectName) -> $(WacilOutputFile)" Importance="high" />
+  </Target>
+
+  <Target Name="Rebuild" DependsOnTargets="Clean; Build" />
+
+</Project>

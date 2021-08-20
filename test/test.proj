@@ -1,0 +1,11 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup>
+    <AssemblyScriptProjectFiles Include="$(MSBuildThisFileDirectory)\**\*.proj" Exclude="$(MSBuildThisFile)" />
+  </ItemGroup>
+
+  <Target Name="Build" >
+    <MSBuild Projects="@(AssemblyScriptProjectFiles)" />
+  </Target>
+
+</Project>

@@ -15,17 +15,6 @@ module Preamble =
 
 type Name = string
 
-/// Represents the size of a memory, which is always a multiple of the page size.
-[<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
-type MemSize =
-    member Size: uint32
-
-    internal new: multiple: uint16 -> MemSize
-
-    override ToString: unit -> string
-
-    interface IEquatable<MemSize>
-
 module Types =
     type WasmType =
         | externref = 0x6Fuy
@@ -48,9 +37,9 @@ module Types =
     type RefType =
         | FuncRef
         | ExternRef
-    
+
         interface IEquatable<RefType>
-    
+
     [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
     type ValType =
         | NumType of numType: NumType
@@ -68,21 +57,23 @@ module Types =
 
         interface IEquatable<FuncType>
 
-    [<Sealed>]
-    type Limit<'T when 'T : struct and 'T : equality> =
-        member Min: 'T
-        member Max: 'T voption
+    [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+    type Limit =
+        member Min: uint32
+        member Max: uint32 voption
 
-        interface IEquatable<Limit<'T>>
+        interface IEquatable<Limit>
 
     [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
     type TableType =
         { ElementType: RefType
-          Limit: Limit<uint32> }
+          Limit: Limit }
 
         interface IEquatable<TableType>
 
-    type MemType = Limit<MemSize>
+    /// Describes the minimum and optional maximum size of a memory, given in units of the page size.
+    [<IsReadOnly; Struct; NoComparison; NoEquality>]
+    type MemType = MemType of Limit
 
     type GlobalType =
         | Const of ValType
@@ -90,8 +81,8 @@ module Types =
 
     [<RequireQualifiedAccess>]
     module Limit =
-        val ofMin: min: 'T -> Limit<'T>
-        val tryWithMax: min: 'T -> max: 'T voption -> Limit<'T> voption when 'T : comparison
+        val ofMin: min: uint32 -> Limit
+        val tryWithMax: min: uint32 -> max: uint32 voption -> Limit voption
 
 [<NoComparison; NoEquality>]
 type CustomSection =
@@ -155,6 +146,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     static member inline Zero: Index<'Class>
     static member (+): index: Index<'Class> * offset: uint32 -> Index<'Class>
+    static member (-): x: Index<'Class> * y: Index<'Class> -> uint32
     static member inline op_Implicit: index: Index<'Class> -> uint32
     static member inline op_Explicit: index: Index<'Class> -> int32
 
@@ -183,6 +175,21 @@ open Types
 module InstructionSet =
     type Opcode = uint8
 
+    //type Opcode = { Name: string; Opcode: uint8; Arguments: ? }
+
+    // and/or
+
+    // (|unreachable|): Opcode -> bool
+    // (|nop|): Opcode -> bool
+
+    (*
+    type InstructionSomeThing =
+        | Unreachable
+        | Nop
+        | Control of ?
+        | I32 of ?
+    *)
+
     [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
     type MemArgAlignment =
         member Alignment: uint32
@@ -196,6 +203,11 @@ module InstructionSet =
     [<RequireQualifiedAccess>]
     module MemArgAlignment =
         val ofPower : power: uint8 -> MemArgAlignment
+
+        /// <exception cref="T:System.ArgumentException">
+        /// Thrown if the <paramref name="alignment"/> is not a power of two.
+        /// </exception>
+        val ofInt : alignment: uint32 -> MemArgAlignment
 
     [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
     type MemArg =
@@ -213,8 +225,11 @@ module InstructionSet =
         | Nothing
         | Bytes of ImmutableArray<byte>
         | RefType of RefType
+        //| Block of BlockType * Expr
+        //| BlockElse of BlockType * seq<Instruction> * Expr
         | BlockType of BlockType
         | ValTypeVector of ImmutableArray<ValType>
+        | MemoryIndex of Index<IndexKinds.Mem>
         | FuncIndex of Index<IndexKinds.Func>
         | IndirectCall of Index<IndexKinds.Type> * Index<IndexKinds.Table>
         | LocalIndex of Index<IndexKinds.Local>
@@ -513,7 +528,14 @@ module InstructionSet =
     //    val drop : Index<IndexKinds.Data> -> Instruction
 
 /// Represents a function body or the value of a global variable.
-type Expr = seq<InstructionSet.Instruction>
+[<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; NoEquality>]
+type Expr =
+    internal
+        { Instructions: ImmutableArray<InstructionSet.Instruction> }
+
+[<RequireQualifiedAccess>]
+module Expr =
+    val toBlock : expression: Expr -> ImmutableArray<InstructionSet.Instruction>
 
 /// (1) Defines the function types used by the module.
 type TypeSection = IndexedVector<IndexKinds.Type, FuncType>
@@ -533,8 +555,8 @@ type Import<'Desc> =
 
 /// (2) Defines the functions, tables, memories, and globals defined in another module used by the module.
 [<Sealed>]
-type ImportSection =
-    new: imports: ImmutableArray<Import<ImportDesc>> -> ImportSection
+type ImportSectionContents =
+    new: imports: ImmutableArray<Import<ImportDesc>> -> ImportSectionContents
 
     member Count : int32
     member Item: index: int32 -> inref<Import<ImportDesc>> with get
@@ -626,7 +648,7 @@ type DataCountSection = uint32
 type Section =
     | CustomSection of CustomSection
     | TypeSection of TypeSection
-    | ImportSection of ImportSection
+    | ImportSection of ImportSectionContents
     | FunctionSection of FunctionSection
     | TableSection of TableSection
     | MemorySection of MemorySection
@@ -645,14 +667,6 @@ type IncorrectSectionPositionException with override Message: string
 exception DuplicateSectionException of existing: Section
 
 type DuplicateSectionException with override Message: string
-
-type MemSize with
-    static member inline op_Implicit: size: MemSize -> uint32
-    static member inline op_Explicit: size: MemSize -> int32
-
-[<RequireQualifiedAccess>]
-module MemSize =
-    val ofMultiple : multiple: uint16 -> MemSize
 
 [<RequireQualifiedAccess>]
 module Section =
@@ -695,6 +709,10 @@ module ModuleSections =
         new: unit -> Builder
 
         member Count: int32
+        member FunctionStartIndex: Index<IndexKinds.Func>
+        member TableStartIndex: Index<IndexKinds.Table>
+        member MemoryStartIndex: Index<IndexKinds.Mem>
+        member GlobalStartIndex: Index<IndexKinds.Global>
 
         /// <exception cref="T:Wasm.Format.DuplicateSectionException" />
         /// <exception cref="T:Wasm.Format.IncorrectSectionPositionException" />
@@ -711,7 +729,7 @@ module ModuleSections =
 [<NoComparison; NoEquality>]
 type KnownSections =
     { TypeSection: TypeSection voption
-      ImportSection: ImportSection voption
+      ImportSection: ImportSectionContents voption
       FunctionSection: FunctionSection voption
       TableSection: TableSection voption
       MemorySection: MemorySection voption
@@ -738,8 +756,12 @@ type ModuleExports
 [<RequireQualifiedAccess>]
 module ModuleExports =
     val tryGetFunction : exports: ModuleExports -> func: Index<IndexKinds.Func> -> Export voption
+    //val tryGetTable
+    val tryGetMemory : exports: ModuleExports -> mem: Index<IndexKinds.Mem> -> Export voption
+    val tryGetGlobal : exports: ModuleExports -> globalv: Index<IndexKinds.Global> -> Export voption
+    val memories : exports: ModuleExports -> seq<struct(Name * Index<IndexKinds.Mem>)>
 
-val getModuleExports : ExportSection -> ModuleExports
+val getModuleExports : exports: ExportSection -> ModuleExports
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type ValidatedModule = internal Validated of WasmModule

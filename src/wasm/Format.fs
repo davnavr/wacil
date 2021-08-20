@@ -11,18 +11,6 @@ module Preamble =
 
 let [<Literal>] PageSize = 65536u
 
-[<Struct>]
-type MemSize (multiple: uint16) =
-    member _.Size = uint32 multiple * uint32 PageSize
-
-    override _.ToString() = multiple.ToString()
-
-    static member inline op_Implicit(size: MemSize) = size.Size
-    static member inline op_Explicit(size: MemSize) = Checked.int32 size.Size
-
-module MemSize =
-    let ofMultiple multiple = MemSize multiple
-
 [<AutoOpen>]
 module Types =
     type WasmType =
@@ -53,17 +41,16 @@ module Types =
     [<Struct>]
     type FuncType = { Parameters: ResultType; Results: ResultType }
 
-    [<Sealed>]
-    type Limit<'T when 'T : struct and 'T : equality> (min, max) =
-        member _.Min: 'T = min
-        member _.Max: 'T voption = max
-
-        interface IEquatable<Limit<'T>> with member _.Equals other = min = other.Min && max = other.Max
+    [<Struct>]
+    type Limit (min: uint32, max: uint32 voption) =
+        member _.Min = min
+        member _.Max = max
 
     [<Struct>]
-    type TableType = { ElementType: RefType; Limit: Limit<uint32> }
+    type TableType = { ElementType: RefType; Limit: Limit }
 
-    type MemType = Limit<MemSize>
+    [<Struct>]
+    type MemType = MemType of Limit
 
     type GlobalType =
         | Const of ValType
@@ -137,6 +124,7 @@ type Index<'Class when 'Class :> IndexKinds.Kind> =
 
     static member inline Zero = Index<'Class> 0u
     static member (+) (index: Index<'Class>, offset) = Index<'Class>(index.Index + offset)
+    static member (-) (x: Index<'Class>, y: Index<'Class>) = Checked.(-) x.Index y.Index
     static member inline op_Implicit(index: Index<'Class>) = index.Index
     static member inline op_Explicit(index: Index<'Class>) = Checked.int32 index.Index
 
@@ -156,6 +144,10 @@ module InstructionSet =
     module MemArgAlignment =
         let ofPower (power: uint8) = MemArgAlignment(pown 2u (int32 power))
 
+        let ofInt (alignment: uint32) =
+            if alignment &&& (alignment - 1u) <> 0u then invalidArg (nameof alignment) (sprintf "The alignment %i must be a power of two" alignment)
+            MemArgAlignment alignment
+
     [<Struct>]
     type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 
@@ -172,6 +164,7 @@ module InstructionSet =
         | RefType of RefType
         | BlockType of BlockType
         | ValTypeVector of ImmutableArray<ValType>
+        | MemoryIndex of Index<IndexKinds.Mem>
         | FuncIndex of Index<IndexKinds.Func>
         | IndirectCall of Index<IndexKinds.Type> * Index<IndexKinds.Table>
         | LocalIndex of Index<IndexKinds.Local>
@@ -295,15 +288,20 @@ module IndexedVector =
         { new IndexedVector<'IndexClass, 'T> with
             member _.Length = builder.Count
             member _.First = start
-            member this.Item with get index = &builder.ItemRef(int32 this.First + int32 index) }
+            member this.Item with get index = &builder.ItemRef(int32 index - int32 this.First) }
 
     let ofBlock<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> start (vector: ImmutableArray<'T>) =
         { new IndexedVector<'IndexClass, 'T> with
             member _.Length = vector.Length
             member _.First = start
-            member this.Item with get index = &vector.ItemRef(int32 this.First + int32 index) }
+            member this.Item with get index = &vector.ItemRef(int32 index - int32 this.First) }
 
-type Expr = seq<InstructionSet.Instruction>
+[<Struct; RequireQualifiedAccess>]
+type Expr = { Instructions: ImmutableArray<InstructionSet.Instruction> }
+
+[<RequireQualifiedAccess>]
+module Expr =
+    let toBlock { Expr.Instructions = instructions } = instructions
 
 type TypeSection = IndexedVector<IndexKinds.Type, FuncType>
 
@@ -321,7 +319,7 @@ let inline addImportDesc (builder: ImmutableArray<_>.Builder) (import: inref<Imp
     builder.Add { Module = import.Module; Name = import.Name; Description = desc }
 
 [<Sealed>]
-type ImportSection (imports: ImmutableArray<Import<ImportDesc>>) =
+type ImportSectionContents (imports: ImmutableArray<Import<ImportDesc>>) =
     let functions = ImmutableArray.CreateBuilder()
     let tables = ImmutableArray.CreateBuilder()
     let memories = ImmutableArray.CreateBuilder()
@@ -401,7 +399,7 @@ type DataCountSection = uint32
 type Section =
     | CustomSection of CustomSection
     | TypeSection of TypeSection
-    | ImportSection of ImportSection
+    | ImportSection of ImportSectionContents
     | FunctionSection of FunctionSection
     | TableSection of TableSection
     | MemorySection of MemorySection
@@ -501,10 +499,18 @@ module ModuleSections =
         let sections = ImmutableArray.CreateBuilder capacity
         let lookup = HashSet(capacity, comparer)
         let mutable next = SectionId.Custom
+        let mutable firstFuncIdx = Index<IndexKinds.Func> 0u
+        let mutable firstTableIdx = Index<IndexKinds.Table> 0u
+        let mutable firstMemIdx = Index<IndexKinds.Mem> 0u
+        let mutable firstGlobalIdx = Index<IndexKinds.Global> 0u
 
         new () = Builder 12
 
         member _.Count = sections.Count
+        member _.FunctionStartIndex = firstFuncIdx
+        member _.TableStartIndex = firstTableIdx
+        member _.MemoryStartIndex = firstMemIdx
+        member _.GlobalStartIndex = firstGlobalIdx
 
         member _.TryAdd section =
             let id = Section.id section
@@ -512,6 +518,15 @@ module ModuleSections =
             if lookup.Add section then
                 if id >= next then next <- id
                 sections.Add section
+
+                match section with
+                | ImportSection imports ->
+                    firstFuncIdx <- Index<_>(uint32 imports.Functions.Length)
+                    firstTableIdx <- Index<_>(uint32 imports.Tables.Length)
+                    firstMemIdx <- Index<_>(uint32 imports.Memories.Length)
+                    firstGlobalIdx <- Index<_>(uint32 imports.Globals.Length)
+                | _ -> ()
+
                 true
             else false
 
@@ -544,10 +559,20 @@ type ModuleExports =
       Globals: IReadOnlyDictionary<Index<IndexKinds.Global>, int32> }
 
 module ModuleExports =
-    let tryGetFunction { Exports = exports; Functions = functions } func =
-        match functions.TryGetValue func with
+    let inline private tryGetExport (exports: ExportSection) (lookup: IReadOnlyDictionary<Index<_>, _>) idx =
+        match lookup.TryGetValue idx with
         | true, i -> ValueSome exports.[i]
         | false, _ -> ValueNone
+
+    let tryGetFunction { Exports = exports; ModuleExports.Functions = functions } func = tryGetExport exports functions func
+    //let tryGetTable
+    let tryGetMemory { Exports = exports; ModuleExports.Memories = memories } mem = tryGetExport exports memories mem
+    let tryGetGlobal { Exports = exports; ModuleExports.Globals = globals } globalv = tryGetExport exports globals globalv
+
+    let inline private getSpecificExports { ModuleExports.Exports = exports } =
+        Seq.map (fun (KeyValue(index, ei)) -> struct(exports.ItemRef(ei).Name, index))
+
+    let memories exports = getSpecificExports exports exports.Memories
 
 let getModuleExports (exports: ExportSection) =
     let functions, tables, memories, globals = Dictionary(), Dictionary(), Dictionary(), Dictionary()
@@ -567,7 +592,7 @@ let getModuleExports (exports: ExportSection) =
 
 type KnownSections =
     { TypeSection: TypeSection voption
-      ImportSection: ImportSection voption
+      ImportSection: ImportSectionContents voption
       FunctionSection: FunctionSection voption
       TableSection: TableSection voption
       MemorySection: MemorySection voption

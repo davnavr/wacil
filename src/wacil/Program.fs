@@ -17,13 +17,12 @@ type Options =
     | [<Unique>] Namespace of string
     | No_Address_Space_Layout_Randomization
     | [<Unique; AltCommandLine("-o")>] Out of file: string
-    //| [<Unique>] Skip_Init_Locals
     | [<Unique>] Type of FileType
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            //| Framework _ -> "specifies the target framework of the assembly, defaults to .NET 5"
+            //| Framework _ -> "specifies the target framework of the assembly, defaults to .NET Standard 2.0"
             | Launch_Debugger -> "launches the debugger used to debug the compiler"
             | Module _ ->
                 "the WebAssembly file to convert into a CIL file, defaults to searching for a WebAssembly file in the current \
@@ -73,15 +72,14 @@ let main argv =
 
         use writer = output.OpenWrite()
 
-        Generate.toStream
+        Generate.toPE
             input'
             { ModuleFileName = oname
               FileType = ttype
               HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
-              TargetFramework = ".NETCoreApp,Version=v5.0" // TODO: Make option to allow setting of target framework
-              Namespace = args.TryGetResult <@ Namespace @> |> Option.defaultValue String.Empty
+              TargetFramework = ".NETStandard,Version=v2.0" // TODO: Make option to allow setting of target framework
               MainClassName = oname }
-            writer
+        |> FSharpIL.Writing.WritePE.toStream writer
         0
     with
     | :? ArguException as ex ->
