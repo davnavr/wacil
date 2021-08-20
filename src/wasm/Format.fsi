@@ -52,9 +52,9 @@ module Types =
     type RefType =
         | FuncRef
         | ExternRef
-    
+
         interface IEquatable<RefType>
-    
+
     [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
     type ValType =
         | NumType of numType: NumType
@@ -568,8 +568,8 @@ type Import<'Desc> =
 
 /// (2) Defines the functions, tables, memories, and globals defined in another module used by the module.
 [<Sealed>]
-type ImportSection =
-    new: imports: ImmutableArray<Import<ImportDesc>> -> ImportSection
+type ImportSectionContents =
+    new: imports: ImmutableArray<Import<ImportDesc>> -> ImportSectionContents
 
     member Count : int32
     member Item: index: int32 -> inref<Import<ImportDesc>> with get
@@ -661,7 +661,7 @@ type DataCountSection = uint32
 type Section =
     | CustomSection of CustomSection
     | TypeSection of TypeSection
-    | ImportSection of ImportSection
+    | ImportSection of ImportSectionContents
     | FunctionSection of FunctionSection
     | TableSection of TableSection
     | MemorySection of MemorySection
@@ -730,6 +730,10 @@ module ModuleSections =
         new: unit -> Builder
 
         member Count: int32
+        member FunctionStartIndex: Index<IndexKinds.Func>
+        member TableStartIndex: Index<IndexKinds.Table>
+        member MemoryStartIndex: Index<IndexKinds.Mem>
+        member GlobalStartIndex: Index<IndexKinds.Global>
 
         /// <exception cref="T:Wasm.Format.DuplicateSectionException" />
         /// <exception cref="T:Wasm.Format.IncorrectSectionPositionException" />
@@ -746,7 +750,7 @@ module ModuleSections =
 [<NoComparison; NoEquality>]
 type KnownSections =
     { TypeSection: TypeSection voption
-      ImportSection: ImportSection voption
+      ImportSection: ImportSectionContents voption
       FunctionSection: FunctionSection voption
       TableSection: TableSection voption
       MemorySection: MemorySection voption

@@ -336,7 +336,7 @@ let inline addImportDesc (builder: ImmutableArray<_>.Builder) (import: inref<Imp
     builder.Add { Module = import.Module; Name = import.Name; Description = desc }
 
 [<Sealed>]
-type ImportSection (imports: ImmutableArray<Import<ImportDesc>>) =
+type ImportSectionContents (imports: ImmutableArray<Import<ImportDesc>>) =
     let functions = ImmutableArray.CreateBuilder()
     let tables = ImmutableArray.CreateBuilder()
     let memories = ImmutableArray.CreateBuilder()
@@ -416,7 +416,7 @@ type DataCountSection = uint32
 type Section =
     | CustomSection of CustomSection
     | TypeSection of TypeSection
-    | ImportSection of ImportSection
+    | ImportSection of ImportSectionContents
     | FunctionSection of FunctionSection
     | TableSection of TableSection
     | MemorySection of MemorySection
@@ -516,10 +516,18 @@ module ModuleSections =
         let sections = ImmutableArray.CreateBuilder capacity
         let lookup = HashSet(capacity, comparer)
         let mutable next = SectionId.Custom
+        let mutable firstFuncIdx = Index<IndexKinds.Func> 0u
+        let mutable firstTableIdx = Index<IndexKinds.Table> 0u
+        let mutable firstMemIdx = Index<IndexKinds.Mem> 0u
+        let mutable firstGlobalIdx = Index<IndexKinds.Global> 0u
 
         new () = Builder 12
 
         member _.Count = sections.Count
+        member _.FunctionStartIndex = firstFuncIdx
+        member _.TableStartIndex = firstTableIdx
+        member _.MemoryStartIndex = firstMemIdx
+        member _.GlobalStartIndex = firstGlobalIdx
 
         member _.TryAdd section =
             let id = Section.id section
@@ -527,6 +535,15 @@ module ModuleSections =
             if lookup.Add section then
                 if id >= next then next <- id
                 sections.Add section
+
+                match section with
+                | ImportSection imports ->
+                    firstFuncIdx <- Index<_>(uint32 imports.Functions.Length)
+                    firstTableIdx <- Index<_>(uint32 imports.Tables.Length)
+                    firstMemIdx <- Index<_>(uint32 imports.Memories.Length)
+                    firstGlobalIdx <- Index<_>(uint32 imports.Globals.Length)
+                | _ -> ()
+
                 true
             else false
 
@@ -590,7 +607,7 @@ let getModuleExports (exports: ExportSection) =
 
 type KnownSections =
     { TypeSection: TypeSection voption
-      ImportSection: ImportSection voption
+      ImportSection: ImportSectionContents voption
       FunctionSection: FunctionSection voption
       TableSection: TableSection voption
       MemorySection: MemorySection voption

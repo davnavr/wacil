@@ -258,6 +258,20 @@ module Type =
             |> BlockType.Index
 
 [<Struct>]
+type ImportReader =
+    interface IReader<Import<ImportDesc>> with
+        member _.Read stream =
+            { Import.Module = name stream
+              Import.Name = name stream
+              Description =
+                match readByte stream with
+                | 0uy -> ImportDesc.Func(index stream)
+                //| 1uy -> ImportDesc.Table(Type.tabletype stream)
+                | 2uy -> ImportDesc.Mem(Type.memtype stream)
+                //| 3uy -> ImportDesc.Global(Type.globaltype stream)
+                | bad -> failwithf "TODO: Error for invalid import kind 0x%02X" bad }
+
+[<Struct>]
 type FunctionReader = interface IReader<Function> with member _.Read stream = { Function.Type = index stream }
 
 [<Struct>]
@@ -383,7 +397,7 @@ type SectionReadException (offset: uint32, remaining: uint32, id: SectionId, inn
     /// The section where the exception during reading occured.
     member _.Id = id
 
-let readSectionContents stream i (id: SectionId) =
+let readSectionContents stream (sections: ModuleSections.Builder) i (id: SectionId) =
     match Integer.u32 stream with
     | 0u -> ValueNone
     | size ->
@@ -391,11 +405,11 @@ let readSectionContents stream i (id: SectionId) =
         try
             match id with
             | SectionId.Type -> TypeSection(ivector<Type.FuncTypeReader, _, _> section Index.Zero) |> ValueSome
-            //| SectionId.Import -> 
-            | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> section Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
-            //| SectionId.Table -> 
-            | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> section Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
-            //| SectionId.Global -> 
+            | SectionId.Import -> ImportSection(ImportSectionContents(vector<ImportReader, _> section)) |> ValueSome
+            | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> section sections.FunctionStartIndex) |> ValueSome
+            //| SectionId.Table -> sections.TableStartIndex
+            | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> section sections.MemoryStartIndex) |> ValueSome
+            //| SectionId.Global -> sections.GlobalStartIndex
             | SectionId.Export -> ExportSection(vector<ExportReader, _> section) |> ValueSome
             | SectionId.Start -> StartSection(index section) |> ValueSome
             //| SectionId.Element -> 
@@ -407,7 +421,6 @@ let readSectionContents stream i (id: SectionId) =
         | ex -> raise(SectionReadException(section.Position, section.Remaining, id, ex))
 
 let read (stream: ByteStream) (sections: ModuleSections.Builder) state =
-    let start = stream.Position
     try
         match state with
         | ReadMagic ->
@@ -418,10 +431,10 @@ let read (stream: ByteStream) (sections: ModuleSections.Builder) state =
             ValueSome ReadSectionId
         | ReadSectionId -> ValueOption.map ReadSectionContents (readSectionId stream)
         | ReadSectionContents id ->
-            ValueOption.iter sections.Add (readSectionContents stream sections.Count id)
+            ValueOption.iter sections.Add (readSectionContents stream sections sections.Count id)
             ValueSome ReadSectionId
     with
-    | ex -> raise(ReadException(start, state, ex))
+    | ex -> raise(ReadException(stream.Position, state, ex))
 
 let rec loop stream (sections: ModuleSections.Builder) state =
     match read stream sections state with
