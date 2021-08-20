@@ -249,6 +249,13 @@ module Type =
             |> Index<_>
             |> BlockType.Index
 
+    let globaltype stream =
+        let gtype = valtype stream
+        match readByte stream with
+        | 0uy -> GlobalType.Const gtype
+        | 1uy -> GlobalType.Var gtype
+        | bad -> failwithf "TODO: Error for invalid global mutability flag 0x%02X" bad
+
 [<Struct>]
 type ImportReader =
     interface IReader<Import<ImportDesc>> with
@@ -260,27 +267,8 @@ type ImportReader =
                 | 0uy -> ImportDesc.Func(index stream)
                 //| 1uy -> ImportDesc.Table(Type.tabletype stream)
                 | 2uy -> ImportDesc.Mem(Type.memtype stream)
-                //| 3uy -> ImportDesc.Global(Type.globaltype stream)
+                | 3uy -> ImportDesc.Global(Type.globaltype stream)
                 | bad -> failwithf "TODO: Error for invalid import kind 0x%02X" bad }
-
-[<Struct>]
-type FunctionReader = interface IReader<Function> with member _.Read stream = { Function.Type = index stream }
-
-[<Struct>]
-type MemReader = interface IReader<Mem> with member _.Read stream = { Mem.Type = Type.memtype stream }
-
-[<Struct>]
-type ExportReader =
-    interface IReader<Export> with
-        member _.Read stream =
-            { Export.Name = name stream
-              Description =
-                match readByte stream with
-                | 0uy -> ExportDesc.Func(index stream)
-                | 1uy -> ExportDesc.Table(index stream)
-                | 2uy -> ExportDesc.Mem(index stream)
-                | 3uy -> ExportDesc.Global(index stream)
-                | bad -> failwithf "TODO: Error for unknown export kind 0x%02X" bad }
 
 [<Struct>]
 type LocalsReader =
@@ -291,16 +279,16 @@ let memarg stream =
     { MemArg.Alignment = MemArgAlignment.ofInt(Integer.u32 stream)
       Offset = Integer.u32 stream }
 
-let readInstructionSeq (stream: SlicedByteStream) =
+let readInstructionSeq (stream: IByteStream) =
     let instructions = ImmutableArray.CreateBuilder()
-    let mutable endOpcodeCount = 0u
+    let mutable endOpcodeCount = 0L
 
-    while stream.Remaining > 0u do
+    while endOpcodeCount >= 0L do
         let opcode = readByte stream
 
         match opcode with
-        | 0x02uy | 0x03uy | 0x04uy  -> endOpcodeCount <- Checked.(+) endOpcodeCount 1u
-        | 0x0Buy when stream.Remaining > 0u -> endOpcodeCount <- Checked.(-) endOpcodeCount 1u
+        | 0x02uy | 0x03uy | 0x04uy  -> endOpcodeCount <- Checked.(+) endOpcodeCount 1L
+        | 0x0Buy -> endOpcodeCount <- Checked.(-) endOpcodeCount 1L
         | _ -> ()
 
         { Instruction.Opcode = opcode
@@ -351,7 +339,7 @@ let readInstructionSeq (stream: SlicedByteStream) =
             | bad -> failwithf "TODO: Error for unknown opcode 0x%02X" bad }
         |> instructions.Add
 
-    if endOpcodeCount > 0u then failwith "TODO: Error for mismatch of end opcodes"
+    if endOpcodeCount > 0L || endOpcodeCount < -1L then failwith "TODO: Error for mismatch of end opcodes"
 
     if instructions.Capacity = instructions.Count
     then instructions.MoveToImmutable()
@@ -366,6 +354,34 @@ let expression stream: Expr =
             Control.``end``.Opcode
             terminator.Opcode
     { Expr.Instructions = instrs }
+
+[<Struct>]
+type FunctionReader = interface IReader<Function> with member _.Read stream = { Function.Type = index stream }
+
+//type TableReader
+
+[<Struct>]
+type MemReader = interface IReader<Mem> with member _.Read stream = { Mem.Type = Type.memtype stream }
+
+[<Struct>]
+type GlobalReader =
+    interface IReader<Global> with
+        member _.Read stream =
+            { Global.Type = Type.globaltype stream
+              Expression = expression stream }
+
+[<Struct>]
+type ExportReader =
+    interface IReader<Export> with
+        member _.Read stream =
+            { Export.Name = name stream
+              Description =
+                match readByte stream with
+                | 0uy -> ExportDesc.Func(index stream)
+                | 1uy -> ExportDesc.Table(index stream)
+                | 2uy -> ExportDesc.Mem(index stream)
+                | 3uy -> ExportDesc.Global(index stream)
+                | bad -> failwithf "TODO: Error for unknown export kind 0x%02X" bad }
 
 [<Struct>]
 type CodeReader =
@@ -402,7 +418,7 @@ let readSectionContents stream (sections: ModuleSections.Builder) i (id: Section
             | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> contents sections.FunctionStartIndex) |> ValueSome
             //| SectionId.Table -> sections.TableStartIndex
             | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> contents sections.MemoryStartIndex) |> ValueSome
-            //| SectionId.Global -> sections.GlobalStartIndex
+            | SectionId.Global -> GlobalSection(ivector<GlobalReader, _, _> contents sections.GlobalStartIndex) |> ValueSome
             | SectionId.Export -> ExportSection(vector<ExportReader, _> contents) |> ValueSome
             | SectionId.Start -> StartSection(index contents) |> ValueSome
             //| SectionId.Element -> 
