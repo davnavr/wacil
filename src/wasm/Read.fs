@@ -344,6 +344,8 @@ let readInstructionSeq (stream: IByteStream) =
                 failwith "TODO: Keep track of if and else pairs"
                 InstructionArguments.Nothing
 
+            | 0x10uy -> InstructionArguments.FuncIndex(index stream) // call
+
             | 0x0Cuy // br
             | 0x0Duy -> InstructionArguments.LabelIndex(index stream)
 

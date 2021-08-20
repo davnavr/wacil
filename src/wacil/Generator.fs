@@ -776,6 +776,9 @@ module Generate =
                         ret
                     |] |}}
 
+    type ReferencedImports =
+        { Functions: Dictionary<Index<IndexKinds.Func>, MethodTok> }
+
     type MethodBodyBuilder =
         { Instructions: ImmutableArray<Cil.Instruction>.Builder
           Blocks: ImmutableArray<Cil.InstructionBlock>.Builder
@@ -784,11 +787,9 @@ module Generate =
           LabelIndices: Stack<int32>
           IfLabelFixups: Stack<Cil.Label ref>
           Helpers: HelperMethods
+          Imports: ReferencedImports
           MainMemoryIndex: Index<IndexKinds.Mem>
           MemoryLookup: Dictionary<Index<IndexKinds.Mem>, FieldTok> }
-
-    type ReferencedImports =
-        { Functions: Dictionary<Index<IndexKinds.Func>, MethodTok> }
 
     let translateMethodBody
         funcParamCount
@@ -799,6 +800,7 @@ module Generate =
           LabelIndices = lindices
           IfLabelFixups = ifLabelFixups
           Helpers = helpers
+          Imports = imports
           MainMemoryIndex = mainMemIndex
           MemoryLookup = memories }
         finish
@@ -874,6 +876,11 @@ module Generate =
                 if ifLabelFixups.Count > 0 then
                     commitInstructionList()
                     ifLabelFixups.Pop() |> insertLabelRef
+            | { Opcode = 0x10uy; Arguments = InstructionArguments.FuncIndex i } ->
+                match imports.Functions.TryGetValue i with
+                | true, f -> emit(Cil.Instructions.call f)
+                | false, _ ->
+                    failwith "TODO: Make creation of method bodies lazy, since calls to methods defined in the current module may be messed up (later indices)"
             | { Opcode = 0x0Cuy; Arguments = InstructionArguments.LabelIndex i } ->
                 branchToLabel Opcode.Br (StackBehavior.PopOrPush 0y) i
 
@@ -1190,6 +1197,7 @@ module Generate =
               LabelIndices = Stack()
               IfLabelFixups = Stack()
               Helpers = helpers
+              Imports = imports
               MainMemoryIndex =
                 match sections.MemorySection with
                 | ValueSome memories' -> memories'.First
