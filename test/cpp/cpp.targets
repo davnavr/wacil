@@ -1,0 +1,19 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <Import Project="$(MSBuildThisFileDirectory)\..\common.targets" />
+
+  <PropertyGroup>
+    <EmccCompilerFlags>-s STANDALONE_WASM -o &quot;$(ModuleFile)&quot;</EmccCompilerFlags>
+    <EmccCompilerFlags Condition="'$(ExportedFunctions)'!=''">-s EXPORTED_FUNCTIONS=&quot;$(ExportedFunctions)&quot; $(EmccCompilerFlags)</EmccCompilerFlags>
+    <EmccCompilerFlags Condition="'$(HasEntryPoint)'!='true'">-Wl,--no-entry $(EmccCompilerFlags)</EmccCompilerFlags>
+  </PropertyGroup>
+
+  <Target Name="Compile" AfterTargets="Clean" Inputs="@(Compile)" Outputs="$(ModuleFile)">
+    <MakeDir Directories="$(OutDir)" />
+
+    <Exec Command="emcc @(Compile, ' ') $(EmccCompilerFlags)"
+          ConsoleToMsBuild="true"
+          LogStandardErrorAsError="true" />
+  </Target>
+
+</Project>
