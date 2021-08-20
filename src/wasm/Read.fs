@@ -45,34 +45,45 @@ with
         let id' = uint8 this.id
         sprintf "The ID byte 0x%02X (%i) of the section at index %i was invalid" id' id' this.index
 
-type ByteStream (source: Stream) =
-    let mutable pos = 0u
-    member _.Stream = source
-    member _.Position = pos
+type IByteStream =
+    abstract Position: uint32
     abstract Read: buffer: Span<byte> -> int32
-    default _.Read buffer =
-        let read = source.Read buffer
-        pos <- Checked.(+) pos (Checked.uint32 read)
-        read
+
+let inline pos (stream: #IByteStream) = stream.Position
 
 [<Sealed>]
-type SlicedByteStream (length: uint32, source: ByteStream) =
-    inherit ByteStream(source.Stream)
+type ByteStream (source: Stream) =
+    let mutable pos = 0u
 
+    member _.Stream = source
+
+    interface IByteStream with
+        member _.Position = pos
+        member _.Read buffer =
+            let read = source.Read buffer
+            pos <- Checked.(+) pos (Checked.uint32 read)
+            read
+
+[<Sealed>]
+type SlicedByteStream (length: uint32, source: IByteStream) =
+    let start = source.Position
     let mutable remaining = length
 
     member _.Remaining = remaining
 
-    override _.Read buffer =
-        let buffer' =
-            if uint32 buffer.Length > remaining
-            then buffer.Slice(0, Checked.int32 remaining)
-            else buffer
-        let read = base.Read buffer'
-        remaining <- Checked.(-) remaining (uint32 read)
-        read
+    interface IByteStream with
+        member _.Position = source.Position - start
 
-let readAllBytes (stream: ByteStream) (buffer: Span<byte>) =
+        member _.Read buffer =
+            let buffer' =
+                if uint32 buffer.Length > remaining
+                then buffer.Slice(0, Checked.int32 remaining)
+                else buffer
+            let read = source.Read buffer'
+            remaining <- Checked.(-) remaining (uint32 read)
+            read
+
+let readAllBytes (stream: IByteStream) (buffer: Span<byte>) =
     let read = stream.Read buffer
     if read <> buffer.Length then
         failwithf "TODO: Error for unexpected end of reader (attempted to read %i bytes but read %i bytes instead)" buffer.Length read
@@ -88,13 +99,13 @@ let readMagicBytes stream (expected: ImmutableArray<byte>) e =
     if actual.SequenceEqual(expected.AsSpan()) |> not then
         actual.ToArray() |> e |> raise
 
-type IReader<'Result> = abstract Read: stream: ByteStream -> 'Result
+type IReader<'Result> = abstract Read: stream: IByteStream -> 'Result
 
 [<RequireQualifiedAccess>]
 module Integer =
     let [<Literal>] private ContinueMask = 0b1000_0000uy
 
-    let inline private uleb128 size convert (stream: ByteStream) =
+    let inline private uleb128 size convert (stream: IByteStream) =
         let mutable cont, n, shifted = true, LanguagePrimitives.GenericZero, 0
         while cont do
             let b = readByte stream
@@ -120,7 +131,7 @@ let readPreambleMagic stream = readMagicBytes stream Preamble.magic InvalidMagic
 
 let readPreambleVersion stream = readMagicBytes stream Preamble.version InvalidVersionException
 
-let readSectionId (stream: ByteStream) =
+let readSectionId (stream: IByteStream) =
     let buffer = SpanHelpers.stackalloc 1
     match stream.Read buffer with
     | 0 -> ValueNone
@@ -385,14 +396,14 @@ type CodeReader =
             { Code.Locals = locals; Body = expression stream' }
 
 let sectionReadError: StringFormat<_> =
-    "Exception occured %i bytes from the start of the %A section, with %i bytes remaining unread"
+    "Exception occured %i bytes from the start of the %A section (at file offset 0x%04X), with %i bytes remaining unread"
 
 [<Sealed>]
-type SectionReadException (offset: uint32, remaining: uint32, id: SectionId, inner: exn) =
-    inherit Exception(sprintf sectionReadError offset id remaining, inner)
+type SectionReadException (soffset: uint32, foffset: uint32, remaining: uint32, id: SectionId, inner: exn) =
+    inherit Exception(sprintf sectionReadError soffset id foffset remaining, inner)
 
     /// The offset from the start of the section.
-    member _.Offset = offset
+    member _.SectionOffset = soffset
 
     /// The section where the exception during reading occured.
     member _.Id = id
@@ -401,24 +412,25 @@ let readSectionContents stream (sections: ModuleSections.Builder) i (id: Section
     match Integer.u32 stream with
     | 0u -> ValueNone
     | size ->
-        let section = SlicedByteStream(size, stream)
+        let contents = SlicedByteStream(size, stream)
+        let start = stream.Position
         try
             match id with
-            | SectionId.Type -> TypeSection(ivector<Type.FuncTypeReader, _, _> section Index.Zero) |> ValueSome
-            | SectionId.Import -> ImportSection(ImportSectionContents(vector<ImportReader, _> section)) |> ValueSome
-            | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> section sections.FunctionStartIndex) |> ValueSome
+            | SectionId.Type -> TypeSection(ivector<Type.FuncTypeReader, _, _> contents Index.Zero) |> ValueSome
+            | SectionId.Import -> ImportSection(ImportSectionContents(vector<ImportReader, _> contents)) |> ValueSome
+            | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> contents sections.FunctionStartIndex) |> ValueSome
             //| SectionId.Table -> sections.TableStartIndex
-            | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> section sections.MemoryStartIndex) |> ValueSome
+            | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> contents sections.MemoryStartIndex) |> ValueSome
             //| SectionId.Global -> sections.GlobalStartIndex
-            | SectionId.Export -> ExportSection(vector<ExportReader, _> section) |> ValueSome
-            | SectionId.Start -> StartSection(index section) |> ValueSome
+            | SectionId.Export -> ExportSection(vector<ExportReader, _> contents) |> ValueSome
+            | SectionId.Start -> StartSection(index contents) |> ValueSome
             //| SectionId.Element -> 
-            | SectionId.Code -> CodeSection(vector<CodeReader, _> section) |> ValueSome
+            | SectionId.Code -> CodeSection(vector<CodeReader, _> contents) |> ValueSome
 
             | SectionId.Custom -> failwith "TODO: Custom sections not supported yet."
             | _ -> raise(InvalidSectionIdException(id, i))
         with
-        | ex -> raise(SectionReadException(section.Position, section.Remaining, id, ex))
+        | ex -> raise(SectionReadException(pos contents, start, contents.Remaining, id, ex))
 
 let read (stream: ByteStream) (sections: ModuleSections.Builder) state =
     try
@@ -434,7 +446,7 @@ let read (stream: ByteStream) (sections: ModuleSections.Builder) state =
             ValueOption.iter sections.Add (readSectionContents stream sections sections.Count id)
             ValueSome ReadSectionId
     with
-    | ex -> raise(ReadException(stream.Position, state, ex))
+    | ex -> raise(ReadException(pos stream, state, ex))
 
 let rec loop stream (sections: ModuleSections.Builder) state =
     match read stream sections state with
