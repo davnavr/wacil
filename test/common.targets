@@ -17,9 +17,15 @@
     <RemoveDir Directories="$(OutDir)" />
   </Target>
 
-  <Target Name="Build" AfterTargets="Clean" DependsOnTargets="Compile" Inputs="$(ModuleFile)" Outputs="$(WacilOutputFile)">
+  <Target Name="Compile" DependsOnTargets="CoreCompile">
     <Message Text="$(MSBuildProjectName) -> $(ModuleFile)" Importance="high" />
+  </Target>
 
+  <Target Name="Build"
+          AfterTargets="Clean"
+          DependsOnTargets="Compile"
+          Inputs="$(ModuleFile)"
+          Outputs="$(WacilOutputFile)">
     <Exec Command="dotnet run $(WacilCompilerFlags)"
           ConsoleToMsBuild="true"
           LogStandardErrorAsError="true" />

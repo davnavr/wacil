@@ -13,7 +13,7 @@
     <AscCompilerFlags>--binaryFile &quot;$(ModuleFile)&quot; --runtime &quot;$(Runtime)&quot; --optimizeLevel &quot;$(OptimizeLevel)&quot; --shrinkLevel &quot;$(ShrinkLevel)&quot;</AscCompilerFlags>
   </PropertyGroup>
 
-  <Target Name="Compile" AfterTargets="Clean" Inputs="@(Compile)" Outputs="$(ModuleFile)">
+  <Target Name="CoreCompile" AfterTargets="Clean" Inputs="@(Compile)" Outputs="$(ModuleFile)">
     <MakeDir Directories="$(OutDir)" />
 
     <Exec Command="npx asc @(Compile, ' ') $(AscCompilerFlags)"
