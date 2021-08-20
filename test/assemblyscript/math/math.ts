@@ -7,3 +7,7 @@ export function factorial(n: u64): u64 {
     }
     return value
 }
+
+export function is_even(n: i32): i32 {
+    return n % 2 == 0
+}

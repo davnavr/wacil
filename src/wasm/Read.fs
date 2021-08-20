@@ -301,12 +301,34 @@ let readInstructionSeq (stream: IByteStream) =
 
             | 0x1Auy // drop
 
+            | 0x45uy // i32.eqz
+            | 0x46uy // i32.eq
+            | 0x47uy // i32.ne
+            | 0x48uy // i32.lt_s
+            | 0x49uy // i32.lt_u
+            | 0x4Auy // i32.gt_s
+            | 0x4Buy // i32.gt_u
+            | 0x4Cuy // i32.le_s
+            | 0x4Duy // i32.le_u
+            | 0x4Euy // i32.ge_s
+            | 0x4Fuy // i32.ge_u
+
             | 0x52uy // i64.ne
 
-            | 0x6Auy
+            | 0x6Auy // i32.add
+            | 0x6Buy // i32.sub
+            | 0x6Cuy // i32.mul
+            | 0x6Duy // i32.div_s
+            | 0x6Euy // i32.div_u
+
+            | 0x71uy // i32.and
+            | 0x74uy // i32.shl
+
+            | 0x76uy // i32.shr_u
 
             | 0x7Duy // i64.sub
-            | 0x7Euy -> InstructionArguments.Nothing
+            | 0x7Euy // i64.mul
+            | 0x83uy -> InstructionArguments.Nothing
 
             | 0x20uy
             | 0x21uy

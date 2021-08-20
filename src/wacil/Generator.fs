@@ -816,6 +816,9 @@ module Generate =
             emit(ldc_i4(int32 offset))
             emit(ldsfld memories.[mainMemIndex])
 
+        let inline emitShortBranchRef opcode target =
+            emit(Instruction.branchingRef opcode (StackBehavior.PopOrPush -1y) BranchKind.Short target)
+
         let inline pushLabelRef() =
             let i, l = labels.Count, ref Unchecked.defaultof<_>
             lindices.Push i
@@ -834,8 +837,24 @@ module Generate =
             blocks.Add(InstructionBlock.ofBlock(instrs.ToImmutable()))
             instrs.Clear()
 
+        let inline emitComparisonAndEqualityOperator opcode =
+            let ttrue, tfalse = ref Unchecked.defaultof<_>, ref Unchecked.defaultof<_>
+            emitShortBranchRef opcode ttrue
+            commitInstructionList()
+            ImmutableArray.Create (
+                ldc_i4_0,
+                Instruction.branchingRef Opcode.Br_s (StackBehavior.PopOrPush -1y) BranchKind.Short tfalse
+            )
+            |> InstructionBlock.ofBlock
+            |> blocks.Add
+            let struct(ttrue', true') = InstructionBlock.singleton ldc_i4_1 |> InstructionBlock.label
+            blocks.Add(true')
+            ttrue.contents <- ttrue'
+            insertLabelRef tfalse
+
         for instr in Expr.toBlock body do
             match instr with
+            // Control Instructions
             | { Opcode = 0x01uy; Arguments = InstructionArguments.Nothing } -> emit Cil.Instructions.nop // nop
             | { Opcode = 0x03uy; Arguments = InstructionArguments.BlockType _ } -> // loop
                 commitInstructionList()
@@ -850,6 +869,8 @@ module Generate =
                     ifLabelFixups.Pop() |> insertLabelRef
             | { Opcode = 0x0Cuy; Arguments = InstructionArguments.LabelIndex i } ->
                 branchToLabel Opcode.Br (StackBehavior.PopOrPush 0y) i
+
+            // Memory Instructions
             | { Opcode = 0x1Auy; Arguments = InstructionArguments.Nothing } -> emit pop // drop
             | { Opcode = 0x20uy; Arguments = InstructionArguments.LocalIndex i } -> // local.get
                 emitVarOp Shortened.ldarg Shortened.ldloc i
@@ -864,8 +885,29 @@ module Generate =
             | { Opcode = 0x40uy; Arguments = InstructionArguments.MemoryIndex i } -> // memory.grow
                 emit(ldsfld memories.[i])
                 emit(Cil.Instructions.call helpers.Memory.Grow.Token)
+
+            // Numeric Instructions
             | { Opcode = 0x41uy; Arguments = InstructionArguments.I32 n } -> emit (Shortened.ldc_i4 n) // i32.const
             | { Opcode = 0x42uy; Arguments = InstructionArguments.I64 n } -> emit (ldc_i8 n) // i64.const
+            | { Opcode = 0x45uy; Arguments = InstructionArguments.Nothing } -> // i32.eqz
+                emit ldc_i4_0
+                emit ceq
+            | { Opcode = 0x46uy; Arguments = InstructionArguments.Nothing } -> emit ceq // i32.eq
+            | { Opcode = 0x47uy; Arguments = InstructionArguments.Nothing } -> // i32.ne
+                emit ceq
+                emit ldc_i4_0
+                emit ceq
+            | { Opcode = 0x48uy; Arguments = InstructionArguments.Nothing } -> emit clt // i32.lt_s
+            | { Opcode = 0x49uy; Arguments = InstructionArguments.Nothing } -> emit clt_un // i32.lt_u
+            | { Opcode = 0x4Auy; Arguments = InstructionArguments.Nothing } -> emit cgt // i32.gt_s
+            | { Opcode = 0x4Buy; Arguments = InstructionArguments.Nothing } -> emit cgt_un // i32.gt_u
+            // CIL does not have any comparison opcodes for both greater than/less than and equality at the same time, so
+            // branching instructions need to be used instead.
+            | { Opcode = 0x4Cuy; Arguments = InstructionArguments.Nothing } -> emitComparisonAndEqualityOperator Opcode.Ble_s // i32.le_s
+            | { Opcode = 0x4Duy; Arguments = InstructionArguments.Nothing } -> emitComparisonAndEqualityOperator Opcode.Ble_un_s // i32.le_u
+            | { Opcode = 0x4Euy; Arguments = InstructionArguments.Nothing } -> emitComparisonAndEqualityOperator Opcode.Bge_s // i32.ge_s
+            | { Opcode = 0x4Fuy; Arguments = InstructionArguments.Nothing } -> emitComparisonAndEqualityOperator Opcode.Bge_un_s // i32.ge_u
+
             | { Opcode = 0x52uy; Arguments = InstructionArguments.Nothing } ->
                 emit ceq
                 emit ldc_i4_0
@@ -873,6 +915,11 @@ module Generate =
             | { Opcode = 0x6Auy | 0x7Cuy; Arguments = InstructionArguments.Nothing } -> emit add // i32.add, i64.add
             | { Opcode = 0x6Buy | 0x7Duy; Arguments = InstructionArguments.Nothing } -> emit sub // i32.sub, i64.sub
             | { Opcode = 0x6Cuy | 0x7Euy; Arguments = InstructionArguments.Nothing } -> emit mul // i32.mul, i64.mul
+            | { Opcode = 0x6Duy | 0x7Fuy; Arguments = InstructionArguments.Nothing } -> emit div // i32.div_s, i64.div_s
+            | { Opcode = 0x6Euy | 0x80uy; Arguments = InstructionArguments.Nothing } -> emit div_un // i32.div_u, i64.div_u
+            | { Opcode = 0x71uy | 0x83uy; Arguments = InstructionArguments.Nothing } -> emit ``and`` // i32.and, i64.and
+            | { Opcode = 0x74uy; Arguments = InstructionArguments.Nothing } -> emit shl // i32.shl
+            | { Opcode = 0x76uy; Arguments = InstructionArguments.Nothing } -> emit shr_un // i32.shr_u
             | _ -> failwithf "TODO: Error for cannot translate unknown opcode 0x%02X" instr.Opcode
 
         if instrs.Count > 0 then commitInstructionList()
