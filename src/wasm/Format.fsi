@@ -776,7 +776,7 @@ module ModuleExports =
     val tryGetMemory : exports: ModuleExports -> mem: Index<IndexKinds.Mem> -> Export voption
     val memories : exports: ModuleExports -> seq<struct(Name * Index<IndexKinds.Mem>)>
 
-val getModuleExports : ExportSection -> ModuleExports
+val getModuleExports : exports: ExportSection -> ModuleExports
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type ValidatedModule = internal Validated of WasmModule

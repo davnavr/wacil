@@ -4,6 +4,8 @@ open System
 open System.Collections.Immutable
 open System.IO
 
+open Microsoft.FSharp.Core.Printf
+
 open Wasm.Format
 open Wasm.Format.InstructionSet
 open Wasm.Format.Types
@@ -90,13 +92,15 @@ type IReader<'Result> = abstract Read: stream: ByteStream -> 'Result
 
 [<RequireQualifiedAccess>]
 module Integer =
+    let [<Literal>] private ContinueMask = 0b1000_0000uy
+
     let inline private uleb128 size convert (stream: ByteStream) =
         let mutable cont, n, shifted = true, LanguagePrimitives.GenericZero, 0
         while cont do
             let b = readByte stream
-            cont <- b &&& 0b1000_0000uy = 0b1000_0000uy
-            n <- n ||| (convert (b &&& 0b0111_1111uy) <<< shifted)
-            shifted <- Checked.(+) shifted 7
+            cont <- b &&& ContinueMask = ContinueMask
+            n <- n ||| (convert (b &&& (~~~ContinueMask)) <<< shifted)
+            if b <> ContinueMask then shifted <- Checked.(+) shifted 7
             if shifted > size then failwith "TODO: Error for exceeded max allowed value for this kind of LEB128 integer"
         n
 
@@ -366,26 +370,41 @@ type CodeReader =
             let locals = vector<LocalsReader, _> stream'
             { Code.Locals = locals; Body = expression stream' }
 
+let sectionReadError: StringFormat<_> =
+    "Exception occured %i bytes from the start of the %A section, with %i bytes remaining unread"
+
+[<Sealed>]
+type SectionReadException (offset: uint32, remaining: uint32, id: SectionId, inner: exn) =
+    inherit Exception(sprintf sectionReadError offset id remaining, inner)
+
+    /// The offset from the start of the section.
+    member _.Offset = offset
+
+    /// The section where the exception during reading occured.
+    member _.Id = id
+
 let readSectionContents stream i (id: SectionId) =
     match Integer.u32 stream with
     | 0u -> ValueNone
     | size ->
-        // TODO: Use SlicedByteStream
-        // TODO: Wrap stream to limit the number of bytes that are read. Or just make a new exception type ___MismatchException and keep track of the number of bytes that are actually read.
-        match id with
-        | SectionId.Type -> TypeSection(ivector<Type.FuncTypeReader, _, _> stream Index.Zero) |> ValueSome
-        //| SectionId.Import -> 
-        | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> stream Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
-        //| SectionId.Table -> 
-        | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> stream Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
-        //| SectionId.Global -> 
-        | SectionId.Export -> ExportSection(vector<ExportReader, _> stream) |> ValueSome
-        | SectionId.Start -> StartSection(index stream) |> ValueSome
-        //| SectionId.Element -> 
-        | SectionId.Code -> CodeSection(vector<CodeReader, _> stream) |> ValueSome
+        let section = SlicedByteStream(size, stream)
+        try
+            match id with
+            | SectionId.Type -> TypeSection(ivector<Type.FuncTypeReader, _, _> section Index.Zero) |> ValueSome
+            //| SectionId.Import -> 
+            | SectionId.Function -> FunctionSection(ivector<FunctionReader, _, _> section Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
+            //| SectionId.Table -> 
+            | SectionId.Memory -> MemorySection(ivector<MemReader, _, _> section Index.Zero) |> ValueSome // TODO: Set starting indices if import table exists.
+            //| SectionId.Global -> 
+            | SectionId.Export -> ExportSection(vector<ExportReader, _> section) |> ValueSome
+            | SectionId.Start -> StartSection(index section) |> ValueSome
+            //| SectionId.Element -> 
+            | SectionId.Code -> CodeSection(vector<CodeReader, _> section) |> ValueSome
 
-        | SectionId.Custom -> failwith "TODO: Custom sections not supported yet."
-        | _ -> raise(InvalidSectionIdException(id, i))
+            | SectionId.Custom -> failwith "TODO: Custom sections not supported yet."
+            | _ -> raise(InvalidSectionIdException(id, i))
+        with
+        | ex -> raise(SectionReadException(section.Position, section.Remaining, id, ex))
 
 let read (stream: ByteStream) (sections: ModuleSections.Builder) state =
     let start = stream.Position

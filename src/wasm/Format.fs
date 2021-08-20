@@ -564,10 +564,10 @@ module ModuleExports =
         | true, i -> ValueSome exports.[i]
         | false, _ -> ValueNone
 
-    let tryGetFunction { Exports = exports; Functions = functions } func = tryGetExport exports functions func
-    let tryGetMemory { Exports = exports; Memories = memories } mem = tryGetExport exports memories mem
+    let tryGetFunction { Exports = exports; ModuleExports.Functions = functions } func = tryGetExport exports functions func
+    let tryGetMemory { Exports = exports; ModuleExports.Memories = memories } mem = tryGetExport exports memories mem
 
-    let inline private getSpecificExports { Exports = exports } =
+    let inline private getSpecificExports { ModuleExports.Exports = exports } =
         Seq.map (fun (KeyValue(index, ei)) -> struct(exports.ItemRef(ei).Name, index))
 
     let memories exports = getSpecificExports exports exports.Memories
