@@ -288,13 +288,13 @@ module IndexedVector =
         { new IndexedVector<'IndexClass, 'T> with
             member _.Length = builder.Count
             member _.First = start
-            member this.Item with get index = &builder.ItemRef(int32 this.First + int32 index) }
+            member this.Item with get index = &builder.ItemRef(int32 index - int32 this.First) }
 
     let ofBlock<'IndexClass, 'T when 'IndexClass :> IndexKinds.Kind> start (vector: ImmutableArray<'T>) =
         { new IndexedVector<'IndexClass, 'T> with
             member _.Length = vector.Length
             member _.First = start
-            member this.Item with get index = &vector.ItemRef(int32 this.First + int32 index) }
+            member this.Item with get index = &vector.ItemRef(int32 index - int32 this.First) }
 
 [<Struct; RequireQualifiedAccess>]
 type Expr = { Instructions: ImmutableArray<InstructionSet.Instruction> }

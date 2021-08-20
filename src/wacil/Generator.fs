@@ -617,6 +617,7 @@ module Generate =
         metadata
         =
         let memories'' = Dictionary<_, FieldTok>()
+
         match memories with
         | ValueSome(memories': MemorySection) ->
             if memories'.Length > 1 then
@@ -686,7 +687,9 @@ module Generate =
                         Cil.Instructions.Newobj.ofMethod mem.Constructor.Token
                         stsfld memories''.[i']
                 ]
-        | ValueNone -> ()
+        | ValueNone ->
+            initializer <- InstructionBlock.empty
+
         memories''
 
     type HelperMethods =
