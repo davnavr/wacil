@@ -156,6 +156,15 @@ let many<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T>> stream co
     for _ = 0 to count - 1 do items.Add(Unchecked.defaultof<'Reader>.Read stream)
     items
 
+let bytes stream =
+    let count = Integer.u32 stream
+    let mutable bytes = Array.zeroCreate<byte>(Checked.int32 count)
+    if bytes.Length <> stream.Read(Span bytes) then
+        failwithf "TODO: Error for unable to read byte array of length %i" count
+    System.Runtime.CompilerServices.Unsafe.As<_, ImmutableArray<byte>> &bytes
+
+let inline bytes' stream = (bytes stream).AsMemory()
+
 let vector<'Reader, 'T when 'Reader : struct and 'Reader :> IReader<'T>> stream =
     let count = Checked.int32(Integer.u32 stream)
     (many<'Reader, 'T> stream count).ToImmutable()
@@ -416,6 +425,16 @@ type CodeReader =
             let locals = vector<LocalsReader, _> stream'
             { Code.Locals = locals; Body = expression stream' }
 
+[<Struct>]
+type DataReader =
+    interface IReader<Data> with
+        member _.Read stream =
+            match readByte stream with
+            | 0uy -> Data.Active(Index.Zero, expression stream, bytes' stream)
+            | 1uy -> Data.Passive(bytes' stream)
+            | 2uy -> Data.Active(index stream, expression stream, bytes' stream)
+            | bad -> failwithf "TODO: Error for unknown data kind 0x%02X" bad
+
 let sectionReadError: StringFormat<_> =
     "Exception occured %i bytes from the start of the %A section (at file offset 0x%04X), with %i bytes remaining unread"
 
@@ -447,6 +466,8 @@ let readSectionContents stream (sections: ModuleSections.Builder) i (id: Section
             | SectionId.Start -> StartSection(index contents) |> ValueSome
             //| SectionId.Element -> 
             | SectionId.Code -> CodeSection(vector<CodeReader, _> contents) |> ValueSome
+            | SectionId.Data -> DataSection(ivector<DataReader, _, _> contents Index.Zero) |> ValueSome
+            | SectionId.DataCount -> DataCountSection(Integer.u32 contents) |> ValueSome // TODO: Check that data counts match
 
             | SectionId.Custom -> failwith "TODO: Custom sections not supported yet."
             | _ -> raise(InvalidSectionIdException(id, i))
