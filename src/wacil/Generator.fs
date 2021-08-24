@@ -218,7 +218,8 @@ module Generate =
           Constructor: MethodTok<DefinedType, DefinedMethod>
           Grow: MethodTok
           LoadI32: MethodTok<DefinedType, DefinedMethod>
-          StoreI32: MethodTok<DefinedType, DefinedMethod> }
+          StoreI32: MethodTok<DefinedType, DefinedMethod>
+          CopyBytesFrom: MethodTok<DefinedType, DefinedMethod> }
 
     let addMemoryType
         mscorlib
@@ -630,6 +631,39 @@ module Generate =
             ret
         })
 
+        let copyBytesFrom =
+            InstructionBlock.ofSeq [|
+                ldarg_0
+                ldarg_3
+                ldarg_2
+                Cil.Instructions.call checkMemoryOffset.Token
+
+                // TODO: Call copy block instruction
+                ldarg_0
+                ldfld memory.Token
+                ldarg_3
+                add_ovf
+                ldarg_1
+                ldarg_2
+                cpblk
+
+                ret
+            |]
+            |> List.singleton
+            |> defineMemoryHelper
+                ReturnType.Void'
+                "CopyBytesFrom"
+                (ImmutableArray.Create(ParameterType.T PrimitiveType.I, ParameterType.T PrimitiveType.I4, ParameterType.T PrimitiveType.I))
+                (fun i _ ->
+                    match i with
+                    | 0 -> "source"
+                    | 1 -> "length"
+                    | _ -> "destination"
+                    |> Identifier.ofStr
+                    |> Parameter.named)
+                InitLocals
+                LocalVariables.Null
+
         let mem' = NamedType.DefinedType mem
 
         { Definition = mem
@@ -638,7 +672,8 @@ module Generate =
           Constructor = ctor
           Grow = grow.Token
           LoadI32 = defineMemoryLoad PrimitiveType.I4 4 "LoadI4" SkipInitLocals [| loadIntegerValue 4 |]
-          StoreI32 = defineMemoryStore PrimitiveType.I4 4 "StoreI4" SkipInitLocals [| storeIntegerValue 4 |] }
+          StoreI32 = defineMemoryStore PrimitiveType.I4 4 "StoreI4" SkipInitLocals [| storeIntegerValue 4 |]
+          CopyBytesFrom = copyBytesFrom }
 
     // TODO: Define option to specify that memories should be instantiated lazily.
     let addMemoryFields
@@ -1368,22 +1403,23 @@ module Generate =
 
         // TODO: Initialize active data segments
         do
-            let code = List((passiveDataSegments.Count * 6) + (activeDataSegments.Count * 555))
+            let code = List((passiveDataSegments.Count * 6) + (activeDataSegments.Count * 5))
             let bytearr = TypeTok.Specified(CliType.SZArray PrimitiveType.U1) // TODO: Cache these types
-            let inline loadFieldValue (field: FieldTok<_, _>) len =
-                code.Add(Shortened.ldc_i4 len)
-                code.Add(newarr bytearr)
-                code.Add dup
-                code.Add(Ldtoken.ofField field.Token)
-                code.Add(Cil.Instructions.call mscorlib.RuntimeHelpers.InitializeArray.Token)
 
             for segment in passiveDataSegments.Values do
-                loadFieldValue segment.BackingField segment.Length
+                code.Add(Shortened.ldc_i4 segment.Length)
+                code.Add(newarr bytearr)
+                code.Add dup
+                code.Add(Ldtoken.ofField segment.BackingField.Token)
+                code.Add(Cil.Instructions.call mscorlib.RuntimeHelpers.InitializeArray.Token)
                 code.Add(stsfld segment.DataField.Token)
 
             for (field, len, memi, init) in activeDataSegments do
-                loadFieldValue field len
-                code.Add pop // TEMPORARY
+                code.Add(ldsfld memories.[memi])
+                code.Add(ldsflda field.Token)
+                code.Add(Shortened.ldc_i4 len)
+                code.Add(Cil.Instructions.call (init methodBodyBuilder).Token)
+                code.Add(Cil.Instructions.call mem.CopyBytesFrom.Token)
 
             initializer.[3] <- InstructionBlock.ofSeq code
 
