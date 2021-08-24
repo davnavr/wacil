@@ -39,13 +39,16 @@ type Options =
 module Generate =
     type CoreRuntimeAssembly =
         { Assembly : ReferencedAssembly
+          Array: TypeReference
+          Object: {| Type: TypeReference; Constructor: MethodTok<ReferencedType, ReferencedMethod> |}
           Marshal:
             {| AllocHGlobal: MethodTok<ReferencedType, ReferencedMethod>
                ReAllocHGlobal: MethodTok<ReferencedType, ReferencedMethod> |}
-          Object: {| Type: TypeReference; Constructor: MethodTok<ReferencedType, ReferencedMethod> |}
-          ValueType: TypeReference
+          RuntimeFieldHandle: TypeReference
+          RuntimeHelpers: {| InitializeArray: MethodTok<ReferencedType, ReferencedMethod> |}
           TargetFrameworkAttribute:
-            {| Constructor: MethodTok<TypeReference<TypeKinds.SealedClass>, MethodReference<MethodKinds.ObjectConstructor>> |} }
+            {| Constructor: MethodTok<TypeReference<TypeKinds.SealedClass>, MethodReference<MethodKinds.ObjectConstructor>> |}
+          ValueType: TypeReference }
 
     let addCoreAssembly (metadata: CliModuleBuilder) =
         let mscorlib =
@@ -66,6 +69,9 @@ module Generate =
         let object = referenceSystemType "Object"
         let object' = metadata.ReferenceType(ReferencedType.Reference object) |> ValidationResult.get
 
+        let array = referenceSystemType "Array"
+        let array' = metadata.ReferenceType(ReferencedType.Reference array) |> ValidationResult.get
+
         let vtype = referenceSystemType "ValueType"
         do metadata.ReferenceType(ReferencedType.Reference vtype) |> ValidationResult.get |> ignore
 
@@ -81,6 +87,18 @@ module Generate =
         let marshal =
             { TypeReference.TypeName = Identifier.ofStr "Marshal"
               TypeNamespace = ValueSome(Identifier.ofStr "System.Runtime.InteropServices")
+              Flags = ValueNone
+              ResolutionScope = TypeReferenceParent.Assembly mscorlib }
+            |> ReferencedType.Reference
+            |> metadata.ReferenceType
+            |> ValidationResult.get
+
+        let rtFieldHandle = referenceSystemType "RuntimeFieldHandle"
+        let rtFieldHandle' = metadata.ReferenceType(ReferencedType.Reference rtFieldHandle) |> ValidationResult.get
+
+        let rtHelpers =
+            { TypeReference.TypeName = Identifier.ofStr "RuntimeHelpers"
+              TypeNamespace = ValueSome(Identifier.ofStr "System.Runtime.CompilerServices")
               Flags = ValueNone
               ResolutionScope = TypeReferenceParent.Assembly mscorlib }
             |> ReferencedType.Reference
@@ -113,6 +131,7 @@ module Generate =
                  ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Empty)
                  |> object'.ReferenceMethod
                  |> ValidationResult.get |}
+          Array = array
           ValueType = vtype
           TargetFrameworkAttribute =
             {| Constructor =
@@ -121,7 +140,21 @@ module Generate =
                      parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
                  )
                  |> tfmattr.ReferenceMethod
-                 |> ValidationResult.get |} }
+                 |> ValidationResult.get |}
+          RuntimeHelpers =
+            {| InitializeArray =
+                ReferencedMethod.Static (
+                    ExternalVisibility.Public,
+                    ReturnType.Void',
+                    MethodName.ofStr "InitializeArray",
+                    ImmutableArray.Create (
+                        ParameterType.T(CliType.Class (NamedType.ReferencedType (ReferencedType.Reference array))),
+                        ParameterType.T(CliType.ValueType (NamedType.ReferencedType (ReferencedType.Reference rtFieldHandle)))
+                    )
+                )
+                |> rtHelpers.ReferenceMethod
+                |> ValidationResult.get |}
+          RuntimeFieldHandle = rtFieldHandle }
 
     let addAssemblyDefinition options (metadata: CliModuleBuilder) =
         match options.FileType with
@@ -997,7 +1030,7 @@ module Generate =
                             MemberVisibility.CompilerControlled,
                             MethodAttributes.None,
                             ReturnType.Void',
-                            MethodName.ofStr("initglobal#" + string i),
+                            MethodName.ofStr("InitializeGlobal#" + string i),
                             ImmutableArray.Empty,
                             Parameter.emptyList
                         ),
@@ -1048,6 +1081,115 @@ module Generate =
 
             struct(lookup, initializers)
         | ValueNone -> struct(Dictionary 0, List 0)
+
+    [<Sealed>]
+    type DataBackingField (i: int32, itype) =
+        inherit DefinedField (
+            FieldFlags.Static ||| FieldFlags.InitOnly ||| FieldFlags.HasFieldRva,
+            Identifier.ofStr("initializedDataSegment#" + string i),
+            itype
+        )
+
+    let addTranslatedData
+        mscorlib
+        (members: DefinedTypeMembers)
+        module'
+        (memories: Dictionary<_, _>)
+        (datas: DataSection voption)
+        (metadata: CliModuleBuilder)
+        =
+        match datas with
+        | ValueSome datas' when datas'.Length > 0 ->
+            let passive = Dictionary()
+            let active = List()
+            let tdata = CliType.SZArray PrimitiveType.U1
+            let tactive = ReturnType.T PrimitiveType.I4
+
+            /// Adds an internal struct to help store the raw data with the specified size.
+            let addInitType =
+                let lookup = Dictionary()
+
+                fun (size: int32) ->
+                    match lookup.TryGetValue size with
+                    | true, existing -> existing
+                    | false, _ ->
+                        let itype =
+                            { TypeDefinition.Flags =
+                                TypeDefFlags.NestedPrivate ||| TypeDefFlags.ExplicitLayout ||| TypeDefFlags.Sealed
+                              TypeName = Identifier.ofStr("DataInitializationTypeSize=" + string size)
+                              TypeNamespace = ValueNone
+                              Extends =
+                                ReferencedType.Reference mscorlib.ValueType
+                                |> NamedType.ReferencedType
+                                |> ClassExtends.Named
+                              EnclosingClass = ValueSome module' }
+                            |> DefinedType.Definition
+
+                        metadata.DefineType itype |> ValidationResult.get |> ignore
+
+                        metadata.SetClassLayout(itype, PackingSize.ofInt 1us, Checked.uint32 size)
+
+                        let itype' = CliType.ValueType(NamedType.DefinedType itype)
+                        lookup.Add(size, itype')
+                        itype'
+
+            for i = 0 to datas'.Length - 1 do
+                let i' = datas'.First + uint32 i
+                match datas'.[i'] with
+                | Data.Active(_, _, bytes) when bytes.Length = 0 ->
+                    failwith "TODO: How to handle active data segment with length of zero?"
+                | Data.Active(_, _, bytes)
+                | Data.Passive bytes as data ->
+                    let field =
+                        members.DefineField(DataBackingField(i, addInitType bytes.Length), ValueNone)
+                        |> ValidationResult.get
+
+                    metadata.SetFieldRva(field.Field, bytes)
+
+                    match data with
+                    | Data.Active(memi, iexpr, _) ->
+                        let initializer builder =
+                            let body =
+                                translateMethodBody
+                                    0u
+                                    iexpr
+                                    builder
+                                    (fun body' -> body'.Add(InstructionBlock.singleton ret))
+                                |> MethodBody.create InitLocals ValueNone LocalVariables.Null
+                                |> ValueSome
+
+                            members.DefineMethod (
+                                DefinedMethod.Static (
+                                    MemberVisibility.CompilerControlled,
+                                    MethodAttributes.None,
+                                    tactive,
+                                    MethodName.ofStr("ActiveDataInitializer#" + string i),
+                                    ImmutableArray.Empty,
+                                    Parameter.emptyList
+                                ),
+                                body,
+                                ValueNone
+                            )
+                            |> ValidationResult.get
+
+                        active.Add(field, bytes.Length, memi, initializer)
+                    | Data.Passive _ ->
+                        let field' =
+                            members.DefineField (
+                                DefinedField.Static (
+                                    MemberVisibility.CompilerControlled,
+                                    FieldAttributes.InitOnly,
+                                    Identifier.ofStr("passiveDataSegment#" + string i),
+                                    tdata
+                                ),
+                                ValueNone
+                            )
+                            |> ValidationResult.get
+
+                        passive.Add(i', {| BackingField = field; DataField = field'; Length = bytes.Length |})
+
+            struct(passive, active)
+        | _ -> struct(Dictionary(), List())
 
     let addTranslatedFunctions methodBodyBuilder (members: DefinedTypeMembers) sections exports =
         match sections with
@@ -1185,12 +1327,18 @@ module Generate =
 
         let imports = addImportReferences sections metadata
 
-        let initializer = Array.zeroCreate 4
+        let initializer = Array.zeroCreate 5
+
         let struct(globals, globalVariableInitializers) = addTranslatedGlobals members sections.GlobalSection exports
+
         let mem = addMemoryType mscorlib module' exports metadata
         let memories = addMemoryFields mem &initializer.[1] members sections.MemorySection exports metadata
+
         //let tables = &initializer.[2]
         initializer.[2] <- InstructionBlock.empty // TEMPORARY
+
+        let struct(passiveDataSegments, activeDataSegments) =
+            addTranslatedData mscorlib members module' memories sections.DataSection metadata
 
         let helpers = addHelperMethods mscorlib mem members
         let methodBodyBuilder =
@@ -1206,8 +1354,11 @@ module Generate =
                 | ValueSome memories' -> memories'.First
                 | ValueNone -> Index.Zero
               MemoryLookup = memories }
+              // passiveDataSegments
 
         let functions = addTranslatedFunctions methodBodyBuilder members sections exports
+
+        // NOTE: Can make small optimization here since # of instructions are known beforehand
 
         initializer.[0] <- InstructionBlock.ofSeq [|
             for init in globalVariableInitializers do
@@ -1215,7 +1366,28 @@ module Generate =
                 Cil.Instructions.call init'.Token
         |]
 
-        initializer.[3] <- InstructionBlock.ofList [
+        // TODO: Initialize active data segments
+        do
+            let code = List((passiveDataSegments.Count * 6) + (activeDataSegments.Count * 555))
+            let bytearr = TypeTok.Specified(CliType.SZArray PrimitiveType.U1) // TODO: Cache these types
+            let inline loadFieldValue (field: FieldTok<_, _>) len =
+                code.Add(Shortened.ldc_i4 len)
+                code.Add(newarr bytearr)
+                code.Add dup
+                code.Add(Ldtoken.ofField field.Token)
+                code.Add(Cil.Instructions.call mscorlib.RuntimeHelpers.InitializeArray.Token)
+
+            for segment in passiveDataSegments.Values do
+                loadFieldValue segment.BackingField segment.Length
+                code.Add(stsfld segment.DataField.Token)
+
+            for (field, len, memi, init) in activeDataSegments do
+                loadFieldValue field len
+                code.Add pop // TEMPORARY
+
+            initializer.[3] <- InstructionBlock.ofSeq code
+
+        initializer.[4] <- InstructionBlock.ofList [
             // TODO: In WASM parsing code, check that signature of start function is valid.
             match sections.StartSection with
             | ValueSome start -> Cil.Instructions.call functions.[start]
