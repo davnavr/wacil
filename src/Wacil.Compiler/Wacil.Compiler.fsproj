@@ -7,6 +7,7 @@
   <ItemGroup>
     <Compile Include="Helpers\Unsafe.fsi" />
     <Compile Include="Helpers\Unsafe.fs" />
+    <Compile Include="Helpers\Collections\ArrayBuilder.fs" />
     
     <Compile Include="Wasm\Format.fsi" />
     <Compile Include="Wasm\Format.fs" />
