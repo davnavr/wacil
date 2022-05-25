@@ -99,5 +99,6 @@ type Section =
     | Import of ImmutableArray<Import>
     | Function of types: ImmutableArray<Index>
     | Table of ImmutableArray<TableType>
+    | Memory of ImmutableArray<Limits>
 
 type Module = ImmutableArray<Section>
