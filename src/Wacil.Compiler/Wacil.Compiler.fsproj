@@ -10,6 +10,8 @@
     
     <Compile Include="Wasm\Format.fsi" />
     <Compile Include="Wasm\Format.fs" />
+    <Compile Include="Wasm\Parser.fsi" />
+    <Compile Include="Wasm\Parser.fs" />
   </ItemGroup>
 
 </Project>
