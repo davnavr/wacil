@@ -15,6 +15,8 @@ module Preamble =
 
 type Name = string
 
+type Index = uint32
+
 type SectionId =
     | Custom = 0uy
     | Type = 1uy
@@ -30,7 +32,7 @@ type SectionId =
     | Data = 11uy
     | DataCount = 12uy
 
-[<NoComparison; NoEquality>]
+[<NoComparison; StructuralEquality>]
 type CustomSection = { Name: Name; Contents: ImmutableArray<byte> }
 
 type Type =
@@ -43,15 +45,57 @@ type Type =
     | F64 = 0x7Cuy
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type ValueType = I32 | I64 | F32 | F64 | V128 | FuncRef | ExternRef
+type NumType = I32 | I64 | F32 | F64
 
-type ResultType = ImmutableArray<ValueType>
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type VecType = V128
 
-type FunctionType = { Parameters: ResultType; Results: ResultType }
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type RefType = FuncRef | ExternRef
 
-[<NoComparison; NoEquality>]
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
+
+type ResultType = ImmutableArray<ValType>
+
+[<NoComparison; StructuralEquality>]
+type FuncType = { Parameters: ResultType; Results: ResultType }
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type Limits =
+    member Minimum: uint32
+    member Maximum: uint32 voption
+    
+[<RequireQualifiedAccess>]
+module Limits =
+    val ofMin: min: uint32 -> Limits
+    val tryWithMax: min: uint32 -> max: uint32 voption -> Limits voption
+
+[<NoComparison; StructuralEquality>]
+type TableType = { ElementType: RefType; Limits: Limits }
+
+type MemType = Limits
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type Mutability = Const | Var
+
+[<NoComparison; StructuralEquality>]
+type GlobalType = { Type: ValType; Mutability: Mutability }
+
+[<NoComparison; StructuralEquality>]
+type ImportDesc =
+    | Func of Index
+    | Table of TableType
+    | Mem of MemType
+    | Global of GlobalType
+
+[<NoComparison; StructuralEquality>]
+type Import = { Module: string; Name: string; Description: ImportDesc }
+
+[<NoComparison; StructuralEquality>]
 type Section =
     | Custom of CustomSection
-    | Type of ImmutableArray<FunctionType>
+    | Type of ImmutableArray<FuncType>
+    | Import of ImmutableArray<Import>
 
 type Module = ImmutableArray<Section>

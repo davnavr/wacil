@@ -10,6 +10,8 @@ module Preamble =
 
 type Name = string
 
+type Index = uint32
+
 type SectionId =
     | Custom = 0uy
     | Type = 1uy
@@ -37,14 +39,55 @@ type Type =
     | F64 = 0x7Cuy
 
 [<Struct>]
-type ValueType = I32 | I64 | F32 | F64 | V128 | FuncRef | ExternRef
+type NumType = I32 | I64 | F32 | F64
 
-type ResultType = ImmutableArray<ValueType>
+[<Struct>]
+type VecType = V128
 
-type FunctionType = { Parameters: ResultType; Results: ResultType }
+[<Struct>]
+type RefType = FuncRef | ExternRef
+
+[<Struct>]
+type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
+
+type ResultType = ImmutableArray<ValType>
+
+type FuncType = { Parameters: ResultType; Results: ResultType }
+
+[<Struct>]
+type Limits (minimum: uint32, maximum: uint32 voption) =
+    member _.Minimum = minimum
+    member _.Maximum = maximum
+
+module Limits =
+    let ofMin min = Limits(min, ValueNone)
+
+    let tryWithMax min max =
+        match max with
+        | ValueSome max' when max' < min -> ValueNone
+        | _ -> ValueSome(Limits(min, max))
+
+
+type TableType = { ElementType: RefType; Limits: Limits }
+
+type MemType = Limits
+
+[<Struct>]
+type Mutability = Const | Var
+
+type GlobalType = { Type: ValType; Mutability: Mutability }
+
+type ImportDesc =
+    | Func of Index
+    | Table of TableType
+    | Mem of MemType
+    | Global of GlobalType
+
+type Import = { Module: string; Name: string; Description: ImportDesc }
 
 type Section =
     | Custom of CustomSection
-    | Type of ImmutableArray<FunctionType>
+    | Type of ImmutableArray<FuncType>
+    | Import of ImmutableArray<Import>
 
 type Module = ImmutableArray<Section>
