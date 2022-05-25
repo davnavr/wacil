@@ -5,6 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Helpers\Unsafe.fsi" />
+    <Compile Include="Helpers\Unsafe.fs" />
+    
     <Compile Include="Wasm\Format.fsi" />
     <Compile Include="Wasm\Format.fs" />
   </ItemGroup>
