@@ -3,6 +3,12 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30114.105
 MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{640FC328-91A4-4B05-B80A-9ADC9C0144FE}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Wasm", "src\Wasm\Wasm.fsproj", "{50A9AE41-06F5-4F9B-B794-3B1CE41BEB3B}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Wacil", "src\Wacil\Wacil.fsproj", "{E4B5951F-B189-4D23-B1B6-7BEFA6C187DB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -10,5 +16,19 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{50A9AE41-06F5-4F9B-B794-3B1CE41BEB3B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50A9AE41-06F5-4F9B-B794-3B1CE41BEB3B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50A9AE41-06F5-4F9B-B794-3B1CE41BEB3B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50A9AE41-06F5-4F9B-B794-3B1CE41BEB3B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4B5951F-B189-4D23-B1B6-7BEFA6C187DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4B5951F-B189-4D23-B1B6-7BEFA6C187DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4B5951F-B189-4D23-B1B6-7BEFA6C187DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4B5951F-B189-4D23-B1B6-7BEFA6C187DB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{50A9AE41-06F5-4F9B-B794-3B1CE41BEB3B} = {640FC328-91A4-4B05-B80A-9ADC9C0144FE}
+		{E4B5951F-B189-4D23-B1B6-7BEFA6C187DB} = {640FC328-91A4-4B05-B80A-9ADC9C0144FE}
 	EndGlobalSection
 EndGlobal
