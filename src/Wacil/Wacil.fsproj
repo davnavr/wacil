@@ -6,8 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(RootDirectory)\lib\FSharpIL\src\FSharpIL\FSharpIL.fsproj" />
-    <ProjectReference Include="$(RootDirectory)\src\wasm\wasm.fsproj" />
+    <ProjectReference Include="$(RootDirectory)\src\Wasm\Wasm.fsproj" />
 
     <PackageReference Include="Argu" Version="6.1.1" />
 
