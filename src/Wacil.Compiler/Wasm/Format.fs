@@ -89,5 +89,6 @@ type Section =
     | Custom of CustomSection
     | Type of ImmutableArray<FuncType>
     | Import of ImmutableArray<Import>
+    | Function of types: ImmutableArray<Index>
 
 type Module = ImmutableArray<Section>
