@@ -5,7 +5,7 @@ open System.IO
 
 open Wacil.Compiler.Helpers.Collections
 
-let parseFromStream (stream: #Stream): Format.Module =
+let parseFromStream (stream: Stream): Format.Module =
     if isNull stream then nullArg (nameof stream)
     try
         if not stream.CanRead then invalidArg (nameof stream) "The stream must support reading"
