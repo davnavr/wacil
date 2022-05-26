@@ -113,6 +113,11 @@ type ElementMode =
 
 type Element = { Type: RefType; Expressions: Expression; Mode: ElementMode }
 
+[<Struct>]
+type Local = { Count: uint32; Type: ValType }
+
+type Code = { Locals: ImmutableArray<Local>; Body: Expression }
+
 type Section =
     | Custom of CustomSection
     | Type of ImmutableArray<FuncType>
@@ -124,5 +129,6 @@ type Section =
     | Export of ImmutableArray<Export>
     | Start of Index
     | Element of ImmutableArray<Element>
+    | Code of ImmutableArray<Code>
 
 type Module = ImmutableArray<Section>

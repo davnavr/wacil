@@ -125,6 +125,12 @@ type ElementMode =
 [<NoComparison; StructuralEquality>]
 type Element = { Type: RefType; Expressions: Expression; Mode: ElementMode }
 
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type Local = { Count: uint32; Type: ValType }
+
+[<NoComparison; StructuralEquality>]
+type Code = { Locals: ImmutableArray<Local>; Body: Expression }
+
 [<NoComparison; StructuralEquality>]
 type Section =
     | Custom of CustomSection
@@ -137,5 +143,6 @@ type Section =
     | Export of ImmutableArray<Export>
     | Start of Index
     | Element of ImmutableArray<Element>
+    | Code of ImmutableArray<Code>
 
 type Module = ImmutableArray<Section>
