@@ -17,6 +17,8 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
 
     let mutable offset = 0
 
+    member _.Offset = offset
+
     member _.Read(buffer: Span<byte>) =
         let count = source.Read buffer
         offset <- offset + count
@@ -91,16 +93,28 @@ let parseFromStream (stream: Stream): Module =
 
         let sections = ArrayBuilder<Section>.Create()
         let sectionTagBuffer = magicNumberBuffer.Slice(0, 1);
+        use sectionContentBuffer = new MemoryStream();
 
         while reader.Read sectionTagBuffer > 0 do
+            let size = reader.ReadUInt64() |> Checked.int32
+            let sectionStartOffset = reader.Offset
+
+            sectionContentBuffer.Capacity <- size
+            sectionContentBuffer.Seek(0, SeekOrigin.Begin) |> ignore
+
             match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
             | SectionId.Custom ->
                 let name = reader.ReadName()
                 let contents = reader.ReadUInt64() |> Checked.int32 |> Array.zeroCreate
                 reader.ReadAll(Span(contents))
                 sections.Add(Section.Custom { Custom.Name = name; Custom.Contents = Unsafe.Array.toImmutable contents })
+            
             | unknown ->
                 failwithf "unknown section id 0x%02X" (uint8 unknown)
+
+            let actualSectionSize = reader.Offset - sectionStartOffset
+            if actualSectionSize <> size then
+                failwithf "expected section to contain 0x%02X bytes, but got 0x%02X bytes" size actualSectionSize
 
         sections.ToImmutableArray()
     finally
