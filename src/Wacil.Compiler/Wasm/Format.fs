@@ -94,6 +94,16 @@ type ImportDesc =
 
 type Import = { Module: string; Name: string; Description: ImportDesc }
 
+type Global = { Type: GlobalType; Expression: ImmutableArray<Instruction> }
+
+type ExportDesc =
+    | Func of Index
+    | Table of Index
+    | Mem of Index
+    | Global of Index
+
+type Export = { Name: string; Description: ExportDesc }
+
 type Section =
     | Custom of CustomSection
     | Type of ImmutableArray<FuncType>
@@ -102,5 +112,6 @@ type Section =
     | Table of ImmutableArray<TableType>
     | Memory of ImmutableArray<Limits>
     | Global of ImmutableArray<Global>
+    | Export of ImmutableArray<Export>
 
 type Module = ImmutableArray<Section>
