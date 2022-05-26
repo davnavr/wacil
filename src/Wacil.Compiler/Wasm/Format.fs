@@ -94,6 +94,8 @@ type ImportDesc =
 
 type Import = { Module: string; Name: string; Description: ImportDesc }
 
+type Expression = ImmutableArray<Instruction>
+
 type Global = { Type: GlobalType; Expression: ImmutableArray<Instruction> }
 
 type ExportDesc =
@@ -103,6 +105,13 @@ type ExportDesc =
     | Global of Index
 
 type Export = { Name: string; Description: ExportDesc }
+
+type ElementMode =
+    | Passive
+    | Active of table: Index * offset: Expression
+    | Declarative
+
+type Element = { Type: RefType; Expressions: Expression; Mode: ElementMode }
 
 type Section =
     | Custom of CustomSection
@@ -114,5 +123,6 @@ type Section =
     | Global of ImmutableArray<Global>
     | Export of ImmutableArray<Export>
     | Start of Index
+    | Element of ImmutableArray<Element>
 
 type Module = ImmutableArray<Section>
