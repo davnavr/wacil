@@ -124,14 +124,15 @@ let parseFromStream (stream: Stream): Module =
 
         let sections = ArrayBuilder<Section>.Create()
         let sectionTagBuffer = magicNumberBuffer.Slice(0, 1);
-        use sectionContentBuffer = new MemoryStream();
+        //use sectionContentBuffer = new MemoryStream();
+        //let sectionContentReader = Reader(sectionContentBuffer, ArrayPool.Shared)
 
         while reader.Read sectionTagBuffer > 0 do
             let size = reader.ReadUInt64() |> Checked.int32
             let sectionStartOffset = reader.Offset
 
-            sectionContentBuffer.Capacity <- size
-            sectionContentBuffer.Seek(0, SeekOrigin.Begin) |> ignore
+            //sectionContentBuffer.Capacity <- size
+            //sectionContentBuffer.Seek(0, SeekOrigin.Begin) |> ignore
 
             match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
             | SectionId.Custom ->
@@ -151,7 +152,7 @@ let parseFromStream (stream: Stream): Module =
                 failwithf "unknown section id 0x%02X" (uint8 unknown)
 
             let actualSectionSize = reader.Offset - sectionStartOffset
-            assert (int64 actualSectionSize = sectionContentBuffer.Length)
+            //assert (int64 actualSectionSize = sectionContentBuffer.Length)
             if actualSectionSize <> size then
                 failwithf "expected section to contain 0x%02X bytes, but got 0x%02X bytes" size actualSectionSize
 
