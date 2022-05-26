@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Helpers\Span.fs" />
     <Compile Include="Helpers\Unsafe.fsi" />
     <Compile Include="Helpers\Unsafe.fs" />
     <Compile Include="Helpers\Collections\ArrayBuilder.fs" />
