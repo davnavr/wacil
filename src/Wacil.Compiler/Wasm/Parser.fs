@@ -86,6 +86,17 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         { FuncType.Parameters = this.ReadResultType()
           FuncType.Results = this.ReadResultType() }
 
+    member this.ReadLimits() =
+        match this.ReadByte() with
+        | 0uy -> Limits.ofMin(this.ReadUInt64() |> Checked.uint32)
+        | 1uy ->
+            let minimum = this.ReadUInt64() |> Checked.uint32
+            let maximum = this.ReadUInt64() |> Checked.uint32
+            match Limits.tryWithMax minimum (ValueSome maximum) with
+            | ValueSome(limits) -> limits
+            | ValueNone -> failwith "maximum of limit must be less than minimum"
+        | bad -> failwithf "bad limit kind 0x%02X" bad
+
 [<Sealed>]
 type InvalidMagicException (actual: ImmutableArray<byte>) =
     inherit Exception("Not a WebAssembly module")
@@ -132,6 +143,10 @@ let parseFromStream (stream: Stream): Module =
                 let types = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
                 for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
                 sections.Add(Section.Type(Unsafe.Array.toImmutable types))
+            | SectionId.Memory ->
+                let mems = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()
+                sections.Add(Section.Memory(Unsafe.Array.toImmutable mems))
             | unknown ->
                 failwithf "unknown section id 0x%02X" (uint8 unknown)
 
