@@ -17,7 +17,7 @@ type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
 
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Instruction =
     | Unreachable
     | Nop
@@ -62,7 +62,7 @@ type VecType = V128
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type RefType = FuncRef | ExternRef
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 
 type ResultType = ImmutableArray<ValType>
@@ -85,13 +85,13 @@ type TableType = { ElementType: RefType; Limits: Limits }
 
 type MemType = Limits
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type Mutability = Const | Var
 
 [<NoComparison; StructuralEquality>]
 type GlobalType = { Type: ValType; Mutability: Mutability }
 
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ImportDesc =
     | Func of Index
     | Table of TableType
@@ -106,7 +106,7 @@ type Expression = ImmutableArray<Instruction>
 [<NoComparison; StructuralEquality>]
 type Global = { Type: GlobalType; Expression: Expression }
 
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ExportDesc =
     | Func of Index
     | Table of Index
@@ -116,7 +116,7 @@ type ExportDesc =
 [<NoComparison; StructuralEquality>]
 type Export = { Name: string; Description: ExportDesc }
 
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ElementMode =
     | Passive
     | Active of table: Index * offset: Expression
@@ -131,7 +131,7 @@ type Local = { Count: uint32; Type: ValType }
 [<NoComparison; StructuralEquality>]
 type Code = { Locals: ImmutableArray<Local>; Body: Expression }
 
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type DataMode =
     | Passive
     | Active of memory: Index * offset: Expression
@@ -139,7 +139,7 @@ type DataMode =
 [<NoComparison; StructuralEquality>]
 type Data  = { Bytes: ImmutableArray<byte>; Mode: DataMode }
 
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Section =
     | Custom of Custom
     | Type of ImmutableArray<FuncType>
