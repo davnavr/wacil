@@ -13,6 +13,15 @@ module Preamble =
     /// Indicates the version of the WebAssembly binary format.
     val version : ImmutableArray<byte>
 
+type Opcode =
+    | Unreachable = 0uy
+    | Nop = 1uy
+
+[<NoComparison; StructuralEquality>]
+type Instruction =
+    | Unreachable
+    | Nop
+
 type Name = string
 
 type Index = uint32
@@ -93,6 +102,9 @@ type ImportDesc =
 type Import = { Module: string; Name: string; Description: ImportDesc }
 
 [<NoComparison; StructuralEquality>]
+type Global = { Type: GlobalType; Expression: ImmutableArray<Instruction> }
+
+[<NoComparison; StructuralEquality>]
 type Section =
     | Custom of CustomSection
     | Type of ImmutableArray<FuncType>
@@ -100,5 +112,6 @@ type Section =
     | Function of types: ImmutableArray<Index>
     | Table of ImmutableArray<TableType>
     | Memory of ImmutableArray<Limits>
+    | Global of ImmutableArray<Global>
 
 type Module = ImmutableArray<Section>

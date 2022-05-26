@@ -8,6 +8,15 @@ module Preamble =
     let magic = Unsafe.Array.toImmutable [| 0uy; 0x61uy; 0x73uy; 0x6duy; |]
     let version = Unsafe.Array.toImmutable [| 1uy; 0uy; 0uy; 0uy; |]
 
+type Opcode =
+    | Unreachable = 0uy
+    | Nop = 1uy
+
+[<NoComparison; StructuralEquality>]
+type Instruction =
+    | Unreachable
+    | Nop
+
 type Name = string
 
 type Index = uint32
@@ -92,5 +101,6 @@ type Section =
     | Function of types: ImmutableArray<Index>
     | Table of ImmutableArray<TableType>
     | Memory of ImmutableArray<Limits>
+    | Global of ImmutableArray<Global>
 
 type Module = ImmutableArray<Section>
