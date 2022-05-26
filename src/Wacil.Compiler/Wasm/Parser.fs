@@ -41,6 +41,8 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
 
     member _.Magic = actual
 
+
+
 let parseFromStream (stream: Stream): Format.Module =
     if isNull stream then nullArg (nameof stream)
     try
@@ -48,15 +50,17 @@ let parseFromStream (stream: Stream): Format.Module =
 
         let reader = Reader(stream)
         let magicNumberBuffer = Span.stackalloc 4
-        reader.ReadAll(magicNumberBuffer)
 
+        reader.ReadAll(magicNumberBuffer)
         if not(Span.equals (Span.readonly magicNumberBuffer) (Format.Preamble.magic.AsSpan())) then
             magicNumberBuffer.ToArray()
             |> Unsafe.Array.toImmutable
             |> InvalidMagicException
             |> raise
 
-        // TODO: Read version
+        reader.ReadAll(magicNumberBuffer)
+        if not(Span.equals (Span.readonly magicNumberBuffer) (Format.Preamble.version.AsSpan())) then
+            failwithf "Invalid WebAssembly format version"
 
         let sections = ArrayBuilder<Format.Section>.Create()
 
