@@ -124,5 +124,6 @@ type Section =
     | Memory of ImmutableArray<Limits>
     | Global of ImmutableArray<Global>
     | Export of ImmutableArray<Export>
+    | Start of Index
 
 type Module = ImmutableArray<Section>
