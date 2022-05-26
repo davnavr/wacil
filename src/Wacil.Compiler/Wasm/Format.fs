@@ -137,5 +137,6 @@ type Section =
     | Element of ImmutableArray<Element>
     | Code of ImmutableArray<Code>
     | Data of ImmutableArray<Data>
+    | DataCount of count: uint32
 
 type Module = ImmutableArray<Section>
