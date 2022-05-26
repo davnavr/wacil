@@ -42,7 +42,7 @@ type SectionId =
     | DataCount = 12uy
 
 [<NoComparison; StructuralEquality>]
-type CustomSection = { Name: Name; Contents: ImmutableArray<byte> }
+type Custom = { Name: Name; Contents: ImmutableArray<byte> }
 
 type Type =
     | ExternRef = 0x6Fuy
@@ -141,7 +141,7 @@ type Data  = { Bytes: ImmutableArray<byte>; Mode: DataMode }
 
 [<NoComparison; StructuralEquality>]
 type Section =
-    | Custom of CustomSection
+    | Custom of Custom
     | Type of ImmutableArray<FuncType>
     | Import of ImmutableArray<Import>
     | Function of types: ImmutableArray<Index>
