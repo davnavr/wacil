@@ -5,7 +5,7 @@
   <Target Name="CoreCompile" AfterTargets="Clean" Inputs="$(WastFile)" Outputs="$(ModuleFile)">
     <PropertyGroup>
       <WastFile Condition="'$(WastFile)'==''">missing.wat</WastFile>
-      <WabtCompilerFlags>&quot;$(WastFile)&quot; -o &quot;$(ModuleFile)&quot;</WabtCompilerFlags>
+      <WabtCompilerFlags>-o &quot;$(ModuleFile)&quot; &quot;$(WastFile)&quot;</WabtCompilerFlags>
     </PropertyGroup>
     
     <MakeDir Directories="$(OutDir)" />
