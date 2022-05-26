@@ -151,6 +151,7 @@ let parseFromStream (stream: Stream): Module =
                 failwithf "unknown section id 0x%02X" (uint8 unknown)
 
             let actualSectionSize = reader.Offset - sectionStartOffset
+            assert (int64 actualSectionSize = sectionContentBuffer.Length)
             if actualSectionSize <> size then
                 failwithf "expected section to contain 0x%02X bytes, but got 0x%02X bytes" size actualSectionSize
 
