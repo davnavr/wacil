@@ -2,17 +2,14 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(RootDirectory)\src\Wasm\Wasm.fsproj" />
+    <ProjectReference Include="$(RootDirectory)\src\Wacil.Compiler\Wacil.Compiler.fsproj" />
 
     <PackageReference Include="Argu" Version="6.1.1" />
 
-    <Compile Include="Generator.fsi" />
-    
-    <Compile Include="Generator.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

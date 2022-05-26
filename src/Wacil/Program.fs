@@ -1,14 +1,9 @@
-module wacil.Program
+module Wacil.Program
 
 open System
 open System.IO
 
 open Argu
-
-open Wasm
-open Wasm.Format
-
-open wacil.Generator
 
 type Options =
     //| [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
@@ -17,7 +12,7 @@ type Options =
     | [<Unique>] Namespace of string
     | No_Address_Space_Layout_Randomization
     | [<Unique; AltCommandLine("-o")>] Out of file: string
-    | [<Unique>] Type of FileType
+    //| [<Unique>] Type of FileType
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -31,7 +26,7 @@ type Options =
                 "the name of the namespace that will contain the class generated from the WebAssembly module"
             | No_Address_Space_Layout_Randomization -> "Disables ASLR, the C# and F# compilers enable ASLR by default"
             | Out _ -> "the path to the generated CIL file"
-            | Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
+            //| Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
 
 let parser = ArgumentParser.Create<Options>(programName = "wacil")
 
@@ -47,7 +42,7 @@ let main argv =
 
         if args.Contains <@ Launch_Debugger @> then System.Diagnostics.Debugger.Launch() |> ignore
 
-        let ttype = args.TryGetResult <@ Type @> |> Option.defaultValue Assembly
+        //let ttype = args.TryGetResult <@ Type @> |> Option.defaultValue Assembly
 
         let input =
             getFileArgument args <@ Module @> <| fun() -> 
@@ -62,24 +57,27 @@ let main argv =
 
         let input' =
             use reader = input.OpenRead()
-            ReadModule.fromStream reader
+            Wacil.Compiler.Wasm.Parser.parseFromStream reader
 
-        let output =
-            getFileArgument args <@ Out @> <| fun() ->
-                FileInfo(Path.ChangeExtension(input.FullName, FileType.extension ttype))
+        //let output =
+        //    getFileArgument args <@ Out @> <| fun() ->
+        //        FileInfo(Path.ChangeExtension(input.FullName, FileType.extension ttype))
 
-        let oname = Path.GetFileNameWithoutExtension output.Name
+        //let oname = Path.GetFileNameWithoutExtension output.Name
 
-        use writer = output.OpenWrite()
+        //use writer = output.OpenWrite()
 
-        Generate.toPE
-            input'
-            { ModuleFileName = oname
-              FileType = ttype
-              HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
-              TargetFramework = ".NETStandard,Version=v2.0" // TODO: Make option to allow setting of target framework
-              MainClassName = oname }
-        |> FSharpIL.Writing.WritePE.toStream writer
+        // Generate.toPE
+        //     input'
+        //     { ModuleFileName = oname
+        //       FileType = ttype
+        //       HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
+        //       TargetFramework = ".NETStandard,Version=v2.0" // TODO: Make option to allow setting of target framework
+        //       MainClassName = oname }
+        // |> FSharpIL.Writing.WritePE.toStream writer
+
+        printfn "%A" input'
+
         0
     with
     | :? ArguException as ex ->
