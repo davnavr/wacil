@@ -66,6 +66,26 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         if not(isNull bufferArray) then byteArrayPool.Return bufferArray
         name
 
+    member this.ReadValType() =
+        match LanguagePrimitives.EnumOfValue(this.ReadByte()) with
+        | Type.I32 -> ValType.Num I32
+        | Type.I64 -> ValType.Num I64
+        | Type.F32 -> ValType.Num F32
+        | Type.F64 -> ValType.Num F64
+        | Type.V128 -> ValType.Vec V128
+        | Type.ExternRef -> ValType.Ref ExternRef
+        | Type.FuncRef -> ValType.Ref FuncRef
+        | bad -> failwithf "bad val type 0x%02X" (uint8 bad)
+
+    member this.ReadResultType(): ResultType =
+        let types = Array.zeroCreate(this.ReadUInt64() |> Checked.int32)
+        for i = 0 to types.Length - 1 do types[i] <- this.ReadValType()
+        Unsafe.Array.toImmutable types
+
+    member this.ReadFuncType() =
+        { FuncType.Parameters = this.ReadResultType()
+          FuncType.Results = this.ReadResultType() }
+
 [<Sealed>]
 type InvalidMagicException (actual: ImmutableArray<byte>) =
     inherit Exception("Not a WebAssembly module")
@@ -108,7 +128,10 @@ let parseFromStream (stream: Stream): Module =
                 let contents = reader.ReadUInt64() |> Checked.int32 |> Array.zeroCreate
                 reader.ReadAll(Span(contents))
                 sections.Add(Section.Custom { Custom.Name = name; Custom.Contents = Unsafe.Array.toImmutable contents })
-            
+            | SectionId.Type ->
+                let types = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
+                sections.Add(Section.Type(Unsafe.Array.toImmutable types))
             | unknown ->
                 failwithf "unknown section id 0x%02X" (uint8 unknown)
 
