@@ -1,17 +1,16 @@
 module Wacil.Compiler.Wasm.Parser
 
 open System
+open System.Collections.Immutable
 open System.IO
 
 open Wacil.Compiler.Helpers
 open Wacil.Compiler.Helpers.Collections
 
-let [<Literal>] private IntegerContinueMask = 0b1000_0000uy
-
 [<Sealed>]
 type Reader (source: Stream) =
     let [<Literal>] ContinueMask = 0b1000_0000uy
-    
+
     let mutable offset = 0
 
     member _.ReadAll(buffer: Span<byte>) =
@@ -36,6 +35,12 @@ type Reader (source: Stream) =
                 raise(OverflowException "Exceeded maximum value for this LEB128 integer parser")
         n
 
+[<Sealed>]
+type InvalidMagicException (actual: ImmutableArray<byte>) =
+    inherit Exception("Not a WebAssembly module")
+
+    member _.Magic = actual
+
 let parseFromStream (stream: Stream): Format.Module =
     if isNull stream then nullArg (nameof stream)
     try
@@ -44,7 +49,14 @@ let parseFromStream (stream: Stream): Format.Module =
         let reader = Reader(stream)
         let magicNumberBuffer = Span.stackalloc 4
         reader.ReadAll(magicNumberBuffer)
-        // TODO: Read magic and version
+
+        if not(Span.equals (Span.readonly magicNumberBuffer) (Format.Preamble.magic.AsSpan())) then
+            magicNumberBuffer.ToArray()
+            |> Unsafe.Array.toImmutable
+            |> InvalidMagicException
+            |> raise
+
+        // TODO: Read version
 
         let sections = ArrayBuilder<Format.Section>.Create()
 

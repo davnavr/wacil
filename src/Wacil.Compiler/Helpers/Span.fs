@@ -13,3 +13,7 @@ let inline stackalloc length =
 
 let inline ofByRef<'a> (reference: byref<'a>) =
     System.Runtime.InteropServices.MemoryMarshal.CreateSpan<'a>(&reference, 1)
+
+let inline readonly span: System.ReadOnlySpan<'a> = System.Span.op_Implicit span
+
+let inline equals (a: System.ReadOnlySpan<'a>) b = System.MemoryExtensions.SequenceEqual(a, b)

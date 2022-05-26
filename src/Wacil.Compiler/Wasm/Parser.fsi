@@ -3,6 +3,14 @@
 [<RequireQualifiedAccess>]
 module Wacil.Compiler.Wasm.Parser
 
+open System.Collections.Immutable
+
+[<Sealed; Class>]
+type InvalidMagicException =
+    inherit System.Exception
+
+    member Magic : ImmutableArray<byte>
+
 /// <summary>Parses a WebAssembly module from a <see cref="T:System.IO.Stream"/>.</summary>
 /// <exception cref="T:System.ArgumentException">Thrown when the <paramref name="stream"/> does not support reading.</exception>
 val parseFromStream: stream: System.IO.Stream -> Format.Module
