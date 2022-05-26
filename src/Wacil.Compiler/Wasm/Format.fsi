@@ -132,6 +132,14 @@ type Local = { Count: uint32; Type: ValType }
 type Code = { Locals: ImmutableArray<Local>; Body: Expression }
 
 [<NoComparison; StructuralEquality>]
+type DataMode =
+    | Passive
+    | Active of memory: Index * offset: Expression
+
+[<NoComparison; StructuralEquality>]
+type Data  = { Bytes: ImmutableArray<byte>; Mode: DataMode }
+
+[<NoComparison; StructuralEquality>]
 type Section =
     | Custom of CustomSection
     | Type of ImmutableArray<FuncType>
@@ -144,5 +152,6 @@ type Section =
     | Start of Index
     | Element of ImmutableArray<Element>
     | Code of ImmutableArray<Code>
+    | Data of ImmutableArray<Data>
 
 type Module = ImmutableArray<Section>
