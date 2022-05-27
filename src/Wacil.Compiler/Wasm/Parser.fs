@@ -86,6 +86,9 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         else ImmutableArray.Empty
 
     member this.ReadFuncType() =
+        let b = this.ReadByte()
+        if b <> 0x60uy then
+            failwithf "0x%02X does not mark the start of a function type" b
         { FuncType.Parameters = this.ReadResultType()
           FuncType.Results = this.ReadResultType() }
 
