@@ -14,7 +14,6 @@ let compileToStream options (stream: System.IO.Stream) =
         if not stream.CanWrite then invalidArg (nameof stream) "Destination stream must support writing"
         let builder = BlobBuilder()
         compileToBlobBuilder options builder
-        for blob in builder.GetBlobs() do
-            stream.Write(Span.readonly(System.MemoryExtensions.AsSpan(blob.GetBytes())))
+        builder.WriteContentTo(stream)
     finally
         stream.Close()
