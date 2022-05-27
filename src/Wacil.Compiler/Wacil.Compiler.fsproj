@@ -15,6 +15,7 @@
     <Compile Include="Wasm\Parser.fsi" />
     <Compile Include="Wasm\Parser.fs" />
 
+    <Compile Include="Emit\Options.fs" />
     <Compile Include="Emit\Module.fsi" />
     <Compile Include="Emit\Module.fs" />
   </ItemGroup>
