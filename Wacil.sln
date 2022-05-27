@@ -9,6 +9,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Wacil.Compiler", "src\Wacil
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Wacil", "src\Wacil\Wacil.fsproj", "{3253F243-0D83-4D4C-9B7B-25A179187F0F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wacil.Runtime", "src\Wacil.Runtime\Wacil.Runtime.csproj", "{C7392EB1-40B9-4E9B-AF23-62CFC8969714}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,9 +28,14 @@ Global
 		{3253F243-0D83-4D4C-9B7B-25A179187F0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3253F243-0D83-4D4C-9B7B-25A179187F0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3253F243-0D83-4D4C-9B7B-25A179187F0F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7392EB1-40B9-4E9B-AF23-62CFC8969714}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7392EB1-40B9-4E9B-AF23-62CFC8969714}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7392EB1-40B9-4E9B-AF23-62CFC8969714}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7392EB1-40B9-4E9B-AF23-62CFC8969714}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{6DBD5DE5-2C13-4842-9AF4-BBC6EA3D08FA} = {640FC328-91A4-4B05-B80A-9ADC9C0144FE}
 		{3253F243-0D83-4D4C-9B7B-25A179187F0F} = {640FC328-91A4-4B05-B80A-9ADC9C0144FE}
+		{C7392EB1-40B9-4E9B-AF23-62CFC8969714} = {640FC328-91A4-4B05-B80A-9ADC9C0144FE}
 	EndGlobalSection
 EndGlobal
