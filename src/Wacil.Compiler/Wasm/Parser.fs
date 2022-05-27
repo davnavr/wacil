@@ -150,6 +150,10 @@ let parseFromStream (stream: Stream): Module =
                 let types = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
                 for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
                 sections.Add(Section.Type(Unsafe.Array.toImmutable types))
+            | SectionId.Function ->
+                let indices = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadUInt64() |> Checked.uint32
+                sections.Add(Section.Function(Unsafe.Array.toImmutable indices))
             | SectionId.Memory ->
                 let mems = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
                 for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()
