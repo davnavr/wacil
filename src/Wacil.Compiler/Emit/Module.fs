@@ -51,6 +51,13 @@ let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuil
         MethodDefinitionHandle()
     )
 
+let deterministicIdProvider (content: seq<Blob>): BlobContentId =
+    // let builder = BlobBuilder()
+    // for blob in content do
+    //     for b in blob.GetBytes() do printfn "0x%02X" b
+    // Unchecked.defaultof<_>
+    BlobContentId(System.Guid.Empty, 0u)
+
 let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (builder: BlobBuilder) =
     let metadata = MetadataBuilder()
     let methodBodyBuilder = BlobBuilder()
@@ -102,13 +109,7 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
         ),
         metadataRootBuilder,
         methodBodyBuilder,
-        BlobBuilder(),
-        BlobBuilder(),
-        null,
-        DebugDirectoryBuilder(),
-        0,
-        MethodDefinitionHandle(),
-        CorFlags.ILOnly
+        deterministicIdProvider = System.Func<_, _>(deterministicIdProvider)
     )
 
     portableExecutableBuilder.Serialize(builder)
