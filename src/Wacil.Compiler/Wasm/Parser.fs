@@ -122,8 +122,8 @@ let parseFromStream (stream: Stream): Module =
         if not(Span.equals (Span.readonly magicNumberBuffer) (Preamble.version.AsSpan())) then
             failwithf "Invalid WebAssembly format version"
 
-        let sections = ArrayBuilder<Section>.Create()
-        let sectionTagBuffer = magicNumberBuffer.Slice(0, 1);
+        let mutable sections = ArrayBuilder<Section>.Create()
+        let sectionTagBuffer = magicNumberBuffer.Slice(0, 1)
         //use sectionContentBuffer = new MemoryStream();
         //let sectionContentReader = Reader(sectionContentBuffer, ArrayPool.Shared)
 
@@ -156,6 +156,7 @@ let parseFromStream (stream: Stream): Module =
             if actualSectionSize <> size then
                 failwithf "expected section to contain 0x%02X bytes, but got 0x%02X bytes" size actualSectionSize
 
+        printfn "1 Capacity = %i, Length = %i" sections.Capacity sections.Length
         sections.ToImmutableArray()
     finally
         stream.Close()

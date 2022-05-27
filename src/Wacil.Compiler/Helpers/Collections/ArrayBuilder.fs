@@ -23,8 +23,8 @@ type internal ArrayBuilder<'a> =
     member private this.EnsureCapacity() =
         if this.length > this.buffer.Length then
             let newBufferCapacity =
-                if this.buffer.Length < 4 then
-                    4
+                if this.buffer.Length <= 2 then
+                    2
                 else
                     Checked.uint32 this.length
                     |> System.Numerics.BitOperations.RoundUpToPowerOf2
@@ -46,7 +46,7 @@ type internal ArrayBuilder<'a> =
             array
         else
             let array = Array.zeroCreate this.length
-            System.Span(this.buffer).CopyTo(System.Span(array))
+            System.Span(this.buffer, 0, this.length).CopyTo(System.Span(array))
             array
 
     member this.ToImmutableArray() =
