@@ -57,6 +57,15 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
     let coreLibraryReference = generateCoreLibraryReference metadata
     let coreLibraryTypes = generateCoreLibraryTypes coreLibraryReference metadata
 
+    metadata.AddModule(
+        0,
+        metadata.GetOrAddString(options.Name),
+        metadata.GetOrAddGuid(System.Guid.NewGuid()), // TODO: Generate a GUID deterministically.
+        GuidHandle(),
+        GuidHandle()
+    )
+    |> ignore
+
     metadata.AddTypeDefinition(
         TypeAttributes.NotPublic,
         StringHandle(),
