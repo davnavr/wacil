@@ -5,6 +5,8 @@ open System.IO
 
 open Argu
 
+open Wacil.Compiler.Emit
+
 type Options =
     //| [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
     | Launch_Debugger
@@ -57,26 +59,21 @@ let main argv =
 
         let input' =
             use reader = input.OpenRead()
-            Wacil.Compiler.Wasm.Parser.parseFromStream reader
+            Compiler.Wasm.Parser.parseFromStream reader
 
-        //let output =
-        //    getFileArgument args <@ Out @> <| fun() ->
-        //        FileInfo(Path.ChangeExtension(input.FullName, FileType.extension ttype))
+        let output =
+            getFileArgument args <@ Out @> <| fun() ->
+                FileInfo(Path.ChangeExtension(input.FullName, ".dll"))
 
-        //let oname = Path.GetFileNameWithoutExtension output.Name
+        let oname = Path.GetFileNameWithoutExtension output.Name
 
-        //use writer = output.OpenWrite()
+        use writer = output.OpenWrite()
 
-        // Generate.toPE
-        //     input'
-        //     { ModuleFileName = oname
-        //       FileType = ttype
-        //       HighEntropyVA = not(args.Contains <@ No_Address_Space_Layout_Randomization @>)
-        //       TargetFramework = ".NETStandard,Version=v2.0" // TODO: Make option to allow setting of target framework
-        //       MainClassName = oname }
-        // |> FSharpIL.Writing.WritePE.toStream writer
-
-        printfn "%A" input'
+        Module.compileToStream
+            { Name = oname
+              Namespace = "" }
+            input'
+            writer
 
         0
     with
