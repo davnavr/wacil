@@ -118,7 +118,7 @@ type Error =
 module Validate =
     let fromModuleSections (sections: ImmutableArray<Section>) =
         let mutable builder =
-            { CustomSections = ArrayBuilder()
+            { CustomSections = ArrayBuilder<Custom>.Create()
               Types = ValueNone
               Imports = ValueNone
               Functions = ValueNone
@@ -254,10 +254,10 @@ module Validate =
 
             if not(isNull moduleImportLookup) then
                 let actualModuleImports = Dictionary(capacity = moduleImportLookup.Count)
-                let mutable functions = ArrayBuilder()
-                let mutable tables = ArrayBuilder()
-                let mutable memories = ArrayBuilder()
-                let mutable globals = ArrayBuilder()
+                let mutable functions = ArrayBuilder<FunctionImport>.Create()
+                let mutable tables = ArrayBuilder<TableImport>.Create()
+                let mutable memories = ArrayBuilder<MemoryImport>.Create()
+                let mutable globals = ArrayBuilder<GlobalImport>.Create()
 
                 for KeyValue(importModuleName, moduleImports) in moduleImportLookup do
                     functions.Clear()
