@@ -61,21 +61,26 @@ let main argv =
             use reader = input.OpenRead()
             Compiler.Wasm.Parser.parseFromStream reader
 
-        let output =
-            getFileArgument args <@ Out @> <| fun() ->
-                FileInfo(Path.ChangeExtension(input.FullName, ".dll"))
+        match Compiler.Wasm.Validation.Validate.fromModuleSections input' with
+        | Ok input'' ->
+            let output =
+                getFileArgument args <@ Out @> <| fun() ->
+                    FileInfo(Path.ChangeExtension(input.FullName, ".dll"))
 
-        let oname = Path.GetFileNameWithoutExtension output.Name
+            let oname = Path.GetFileNameWithoutExtension output.Name
 
-        use writer = output.OpenWrite()
+            use writer = output.OpenWrite()
 
-        Module.compileToStream
-            { Name = oname
-              Namespace = "" }
-            input'
-            writer
+            Module.compileToStream
+                { Name = oname
+                  Namespace = "" }
+                input''
+                writer
 
-        0
+            0
+        | Error e ->
+            eprintfn "%O" e
+            -1
     with
     | :? ArguException as ex ->
         stderr.WriteLine ex.Message

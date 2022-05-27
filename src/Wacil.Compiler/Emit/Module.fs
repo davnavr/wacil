@@ -117,7 +117,7 @@ let generateMainClass
         constructor // MetadataTokens.MethodDefinitionHandle(1)
     )
 
-let generateModuleMemories runtimeLibraryTypes (wasm: Format.Module) (builder: MetadataBuilder) =
+let generateModuleMemories runtimeLibraryTypes (wasm: Validation.ValidModule) (builder: MetadataBuilder) =
     //for memory in wasm.
     ()
 
@@ -164,7 +164,7 @@ let deterministicIdProvider (content: seq<Blob>): BlobContentId =
     // Unchecked.defaultof<_>
     BlobContentId(System.Guid.Empty, 0u)
 
-let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (builder: BlobBuilder) =
+let compileToBlobBuilder (options: Options) (input: Validation.ValidModule) (builder: BlobBuilder) =
     let metadata = MetadataBuilder()
     let methodBodyBuilder = MethodBodyStreamEncoder(BlobBuilder())
 
@@ -208,7 +208,7 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
 
     let mainTypeDefinition = generateMainClass options coreLibraryTypes methodBodyBuilder metadata
     
-    generateModuleMemories runtimeLibraryTypes webAssemblyModule metadata // TODO: Add paraneter that takes builder for .ctor body
+    generateModuleMemories runtimeLibraryTypes input metadata // TODO: Add paraneter that takes builder for .ctor body
 
     let metadataRootBuilder = MetadataRootBuilder(metadata)
 
@@ -228,12 +228,12 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
     portableExecutableBuilder.Serialize(builder)
     |> ignore // TODO: Should the content ID be saved somewhere?
 
-let compileToStream options webAssemblyModule (stream: System.IO.Stream) =
+let compileToStream options input (stream: System.IO.Stream) =
     if isNull stream then nullArg (nameof stream)
     try
         if not stream.CanWrite then invalidArg (nameof stream) "Destination stream must support writing"
         let builder = BlobBuilder()
-        compileToBlobBuilder options webAssemblyModule builder
+        compileToBlobBuilder options input builder
         builder.WriteContentTo(stream)
     finally
         stream.Close()
