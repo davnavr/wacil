@@ -94,6 +94,7 @@ let generateMainClass
         body.OpCode(ILOpCode.Ret)
         methodBodyBuilder.AddMethodBody(body, 1, StandaloneSignatureHandle(), MethodBodyAttributes.InitLocals)
 
+    // TODO: Move this to a helper called generateMainClassConstructor
     let constructor = builder.AddMethodDefinition(
         MethodAttributes.Public ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName,
         MethodImplAttributes.IL,

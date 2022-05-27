@@ -78,9 +78,12 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         | bad -> failwithf "bad val type 0x%02X" (uint8 bad)
 
     member this.ReadResultType(): ResultType =
-        let types = Array.zeroCreate(this.ReadUInt64() |> Checked.int32)
-        for i = 0 to types.Length - 1 do types[i] <- this.ReadValType()
-        Unsafe.Array.toImmutable types
+        let count = this.ReadUInt64()
+        if count > 0UL then
+            let types = Array.zeroCreate(Checked.int32 count)
+            for i = 0 to types.Length - 1 do types[i] <- this.ReadValType()
+            Unsafe.Array.toImmutable types
+        else ImmutableArray.Empty
 
     member this.ReadFuncType() =
         { FuncType.Parameters = this.ReadResultType()
