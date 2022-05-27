@@ -3,8 +3,8 @@ module Wacil.Compiler.Emit.Module
 open System.Reflection
 open System.Reflection.Metadata
 open System.Reflection.Metadata.Ecma335
+open System.Reflection.PortableExecutable
 
-open Wacil.Compiler.Helpers
 open Wacil.Compiler.Wasm
 
 // TODO: Should the option to generate a module instead of an assembly be allowed? Why would someone want a module?
@@ -17,7 +17,7 @@ let generateCoreLibraryReference (builder: MetadataBuilder) =
     let publicKeyToken = BlobBuilder(8)
     publicKeyToken.WriteBytes coreLibraryPublicKeyToken
 
-    builder.AddAssemblyReference (
+    builder.AddAssemblyReference(
         builder.GetOrAddString "System.Runtime",
         System.Version(6, 0, 0, 0),
         StringHandle(),
@@ -53,10 +53,11 @@ let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuil
 
 let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (builder: BlobBuilder) =
     let metadata = MetadataBuilder()
+    let methodBodyBuilder = BlobBuilder()
     let coreLibraryReference = generateCoreLibraryReference metadata
     let coreLibraryTypes = generateCoreLibraryTypes coreLibraryReference metadata
 
-    metadata.AddTypeDefinition (
+    metadata.AddTypeDefinition(
         TypeAttributes.NotPublic,
         StringHandle(),
         metadata.GetOrAddString("<Module>"),
@@ -68,7 +69,25 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
 
     let mainTypeDefinition = generateMainClass options coreLibraryTypes metadata
     
-    ()
+    let metadataRootBuilder = MetadataRootBuilder(metadata)
+
+    let portableExecutableBuilder = new ManagedPEBuilder(
+        new PEHeaderBuilder (
+            machine = Machine.I386
+        ),
+        metadataRootBuilder,
+        methodBodyBuilder,
+        BlobBuilder(),
+        BlobBuilder(),
+        null,
+        DebugDirectoryBuilder(),
+        0,
+        MethodDefinitionHandle(),
+        CorFlags.ILOnly
+    )
+
+    portableExecutableBuilder.Serialize(builder)
+    |> ignore // TODO: Should the content ID be saved somewhere?
 
 let compileToStream options webAssemblyModule (stream: System.IO.Stream) =
     if isNull stream then nullArg (nameof stream)
