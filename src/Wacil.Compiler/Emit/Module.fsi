@@ -2,6 +2,8 @@
 [<RequireQualifiedAccess>]
 module Wacil.Compiler.Emit.Module
 
-val compileToBlobBuilder: options: Options -> builder: System.Reflection.Metadata.BlobBuilder -> unit
+open Wacil.Compiler.Wasm.Format
 
-val compileToStream: options: Options -> stream: System.IO.Stream -> unit
+val compileToBlobBuilder: options: Options -> webAssemblyModule: Module -> builder: System.Reflection.Metadata.BlobBuilder -> unit
+
+val compileToStream: options: Options -> webAssemblyModule: Module -> stream: System.IO.Stream -> unit
