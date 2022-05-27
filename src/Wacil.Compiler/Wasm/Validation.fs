@@ -131,6 +131,7 @@ module Validate =
             | Section.Memory memory ->
                 if order > SectionOrder.Memory then error <- ValueSome(InvalidSectionOrder(SectionId.Memory, order.Id))
                 else if builder.Memories.IsSome then error <- ValueSome(DuplicateSection SectionId.Memory)
+                else if memory.Length > 1 then error <- ValueSome MultiMemoryNotSupported
                 else
                     order <- SectionOrder.Global
                     builder.Memories <- ValueSome memory
