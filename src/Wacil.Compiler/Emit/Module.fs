@@ -26,7 +26,9 @@ let generateCoreLibraryReference (builder: MetadataBuilder) =
         BlobHandle()
     )
 
-type CoreLibraryTypes = { Object: TypeReferenceHandle }
+type CoreLibraryTypes =
+    { Object: TypeReferenceHandle
+      TargetFrameworkAttribute: TypeReferenceHandle }
 
 let generateCoreLibraryTypes (coreLibraryReference: AssemblyReferenceHandle) (builder: MetadataBuilder) =
     let coreLibraryHandle = toEntityHandle coreLibraryReference
@@ -34,7 +36,12 @@ let generateCoreLibraryTypes (coreLibraryReference: AssemblyReferenceHandle) (bu
 
     let addSystemType name = builder.AddTypeReference(coreLibraryHandle, systemNamespaceHandle, builder.GetOrAddString name)
 
-    { CoreLibraryTypes.Object = addSystemType "Object" }
+    { CoreLibraryTypes.Object = addSystemType "Object"
+      TargetFrameworkAttribute = builder.AddTypeReference(
+            coreLibraryHandle,
+            builder.GetOrAddString "System.Runtime.Versioning",
+            builder.GetOrAddString "TargetFrameworkAttribute "
+        ) }
 
 let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuilder) =
     let namespaceStringHandle =
@@ -50,6 +57,42 @@ let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuil
         FieldDefinitionHandle(), // TODO: Should these be set to something?
         MethodDefinitionHandle()
     )
+
+let generateTargetFrameworkAttribute assembly (coreLibraryTypes: CoreLibraryTypes) (builder: MetadataBuilder) =
+    let attributeConstructorSignature =
+        let blob = BlobEncoder(BlobBuilder(4))
+        blob.MethodSignature(isInstanceMethod = true).Parameters(
+            1,
+            (fun (encoder: ReturnTypeEncoder) -> encoder.Void()),
+            fun (encoder: ParametersEncoder) -> encoder.AddParameter().Type().String() |> ignore
+        )
+        builder.GetOrAddBlob(blob.Builder)
+
+    let targetFrameworkConstructor = builder.AddMemberReference(
+        toEntityHandle coreLibraryTypes.TargetFrameworkAttribute,
+        builder.GetOrAddString(".ctor"),
+        attributeConstructorSignature
+    )
+
+    let value =
+        let blob = BlobEncoder(BlobBuilder(64))
+        blob.CustomAttributeSignature(
+            (fun (encoder: FixedArgumentsEncoder) -> encoder.AddArgument().Scalar().Constant(box ".NETCoreApp,Version=v6.0")),
+            (fun (encoder: CustomAttributeNamedArgumentsEncoder) -> encoder.Count(1).AddArgument(
+                true,
+                (fun (encoder: NamedArgumentTypeEncoder) -> encoder.ScalarType().String()),
+                (fun (encoder: NameEncoder) -> encoder.Name("FrameworkDisplayName")),
+                fun (encoder: LiteralEncoder) -> encoder.Scalar().Constant(System.String.Empty)
+            ))
+        )
+        builder.GetOrAddBlob(blob.Builder)
+
+    builder.AddCustomAttribute(
+        toEntityHandle(assembly: AssemblyDefinitionHandle),
+        targetFrameworkConstructor,
+        value
+    )
+    |> ignore
 
 let deterministicIdProvider (content: seq<Blob>): BlobContentId =
     // let builder = BlobBuilder()
@@ -84,6 +127,8 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
         Unchecked.defaultof<AssemblyFlags>,
         AssemblyHashAlgorithm.Sha1
     )
+
+    generateTargetFrameworkAttribute assembly coreLibraryTypes metadata
 
     metadata.AddTypeDefinition(
         TypeAttributes.NotPublic,
