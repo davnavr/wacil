@@ -40,7 +40,7 @@ let generateCoreLibraryTypes (coreLibraryReference: AssemblyReferenceHandle) (bu
       TargetFrameworkAttribute = builder.AddTypeReference(
             coreLibraryHandle,
             builder.GetOrAddString "System.Runtime.Versioning",
-            builder.GetOrAddString "TargetFrameworkAttribute "
+            builder.GetOrAddString "TargetFrameworkAttribute"
         ) }
 
 let generateMainClass
@@ -173,8 +173,8 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
         StringHandle(),
         metadata.GetOrAddString("<Module>"),
         toEntityHandle coreLibraryTypes.Object,
-        FieldDefinitionHandle(),
-        MethodDefinitionHandle()
+        MetadataTokens.FieldDefinitionHandle(1),
+        MetadataTokens.MethodDefinitionHandle(1)
     )
     |> ignore
 
