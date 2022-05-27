@@ -139,4 +139,20 @@ type Section =
     | Data of ImmutableArray<Data>
     | DataCount of count: uint32
 
+    member this.Id =
+        match this with
+        | Custom _ -> SectionId.Custom
+        | Type _ -> SectionId.Type
+        | Import _ -> SectionId.Import
+        | Function _ -> SectionId.Function
+        | Table _ -> SectionId.Table
+        | Memory _ -> SectionId.Memory
+        | Global _ -> SectionId.Global
+        | Export _ -> SectionId.Export
+        | Start _ -> SectionId.Start
+        | Element _ -> SectionId.Element
+        | Code _ -> SectionId.Code
+        | Data _ -> SectionId.Data
+        | DataCount _ -> SectionId.DataCount
+
 type Module = ImmutableArray<Section>

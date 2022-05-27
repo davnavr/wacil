@@ -155,4 +155,6 @@ type Section =
     | Data of ImmutableArray<Data>
     | DataCount of count: uint32
 
+    member Id: SectionId
+
 type Module = ImmutableArray<Section>
