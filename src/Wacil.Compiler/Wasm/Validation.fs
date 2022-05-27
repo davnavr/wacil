@@ -2,12 +2,24 @@ namespace Wacil.Compiler.Wasm.Validation
 
 open System.Collections.Immutable
 
+open Wacil.Compiler.Helpers
+open Wacil.Compiler.Helpers.Collections
+
 open Wacil.Compiler.Wasm.Format
 
-type ValidModule =
-    { memories: ImmutableArray<Limits> }
-    
-    member this.Memories = this.memories
+type ValidModuleBuilder =
+    { CustomSections: ArrayBuilder<Custom>
+      Memories: ImmutableArray<Limits> voption }
+
+[<Sealed>]
+type ValidModule
+    (
+        custom: ImmutableArray<Custom>,
+        memories: ImmutableArray<Limits> voption
+    )
+    =
+    member _.CustomSections = custom
+    member val Memories = ValueOption.defaultValue ImmutableArray.Empty memories
 
 type Error =
     | MultiMemoryNotSupported
@@ -20,7 +32,19 @@ type Error =
 [<RequireQualifiedAccess>]
 module Validate =
     let fromModuleSections (sections: ImmutableArray<Section>) =
-        let validated =
-            { memories = ImmutableArray.Empty }
+        let builder =
+            { CustomSections = ArrayBuilder()
+              Memories = ValueNone }
 
-        failwith "A"
+        let error = ValueNone
+        let mutable moduleSectionEnumerator = sections.GetEnumerator()
+
+        while error.IsNone && moduleSectionEnumerator.MoveNext() do
+            ()
+            
+        match error with
+        | ValueSome error' -> Error(error')
+        | ValueNone -> Ok(ValidModule(
+            custom = builder.CustomSections.ToImmutableArray(),
+            memories = builder.Memories
+        ))

@@ -4,12 +4,9 @@ open System.Collections.Immutable
 
 open Wacil.Compiler.Wasm
 
-[<NoComparison; StructuralEquality>]
+[<Sealed>]
 type ValidModule =
-    internal
-        { memories: ImmutableArray<Format.Limits> }
-
-type ValidModule with
+    member CustomSections: ImmutableArray<Format.Custom>
     member Memories: ImmutableArray<Format.Limits>
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
