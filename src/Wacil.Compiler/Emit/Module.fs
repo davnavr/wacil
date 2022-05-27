@@ -54,17 +54,29 @@ let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuil
 let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (builder: BlobBuilder) =
     let metadata = MetadataBuilder()
     let methodBodyBuilder = BlobBuilder()
+
     let coreLibraryReference = generateCoreLibraryReference metadata
     let coreLibraryTypes = generateCoreLibraryTypes coreLibraryReference metadata
 
+    let outputModuleName = metadata.GetOrAddString(options.Name)
+
     metadata.AddModule(
         0,
-        metadata.GetOrAddString(options.Name),
+        outputModuleName,
         metadata.GetOrAddGuid(System.Guid.NewGuid()), // TODO: Generate a GUID deterministically.
         GuidHandle(),
         GuidHandle()
     )
     |> ignore
+
+    let assembly = metadata.AddAssembly(
+        outputModuleName,
+        System.Version(0, 0, 0, 0),
+        StringHandle(),
+        BlobHandle(),
+        Unchecked.defaultof<AssemblyFlags>,
+        AssemblyHashAlgorithm.Sha1
+    )
 
     metadata.AddTypeDefinition(
         TypeAttributes.NotPublic,
