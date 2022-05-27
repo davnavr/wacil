@@ -43,6 +43,27 @@ let generateCoreLibraryTypes (coreLibraryReference: AssemblyReferenceHandle) (bu
             builder.GetOrAddString "TargetFrameworkAttribute"
         ) }
 
+let generateRuntimeLibraryReference (builder: MetadataBuilder) =
+    builder.AddAssemblyReference(
+        builder.GetOrAddString "Wacil.Runtime",
+        System.Version(1, 0, 0, 0),
+        StringHandle(),
+        BlobHandle(),
+        Unchecked.defaultof<AssemblyFlags>,
+        BlobHandle()
+    )
+
+type RuntimeLibraryTypes =
+    { Memory: TypeReferenceHandle }
+
+let generateRuntimeLibraryTypes (runtimeLibraryReference: AssemblyReferenceHandle) (builder: MetadataBuilder) =
+    let runtimeLibraryHandle = toEntityHandle runtimeLibraryReference
+    let runtimeLibraryNamespace = builder.GetOrAddString "Wacil.Runtime"
+
+    let addBasicType name = builder.AddTypeReference(runtimeLibraryHandle, runtimeLibraryNamespace, builder.GetOrAddString name)
+
+    { RuntimeLibraryTypes.Memory = addBasicType "Memory" }
+
 let generateMainClass
     (options: Options)
     (coreLibraryTypes: CoreLibraryTypes)
@@ -93,8 +114,12 @@ let generateMainClass
         builder.GetOrAddString(options.Name),
         toEntityHandle coreLibraryTypes.Object,
         MetadataTokens.FieldDefinitionHandle(1),
-        constructor
+        constructor // MetadataTokens.MethodDefinitionHandle(1)
     )
+
+let generateModuleMemories runtimeLibraryTypes (wasm: Format.Module) (builder: MetadataBuilder) =
+    //for memory in wasm.
+    ()
 
 let generateTargetFrameworkAttribute assembly (coreLibraryTypes: CoreLibraryTypes) (builder: MetadataBuilder) =
     let attributeConstructorSignature =
@@ -146,6 +171,9 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
     let coreLibraryReference = generateCoreLibraryReference metadata
     let coreLibraryTypes = generateCoreLibraryTypes coreLibraryReference metadata
 
+    let runtimeLibraryReference = generateRuntimeLibraryReference metadata
+    let runtimeLibraryTypes = generateRuntimeLibraryTypes runtimeLibraryReference metadata
+
     let outputModuleName = metadata.GetOrAddString(options.Name)
 
     metadata.AddModule(
@@ -180,6 +208,8 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
 
     let mainTypeDefinition = generateMainClass options coreLibraryTypes methodBodyBuilder metadata
     
+    generateModuleMemories runtimeLibraryTypes webAssemblyModule metadata // TODO: Add paraneter that takes builder for .ctor body
+
     let metadataRootBuilder = MetadataRootBuilder(metadata)
 
     let portableExecutableBuilder = new ManagedPEBuilder(
