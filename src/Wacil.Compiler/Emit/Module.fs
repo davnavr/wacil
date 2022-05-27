@@ -71,7 +71,7 @@ let generateMainClass
         body.OpCode(ILOpCode.Ldarg_0)
         body.Call(systemObjectConstructor)
         body.OpCode(ILOpCode.Ret)
-        methodBodyBuilder.AddMethodBody(body, 0, StandaloneSignatureHandle(), MethodBodyAttributes.InitLocals)
+        methodBodyBuilder.AddMethodBody(body, 1, StandaloneSignatureHandle(), MethodBodyAttributes.InitLocals)
 
     let constructor = builder.AddMethodDefinition(
         MethodAttributes.Public ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName,
@@ -79,7 +79,7 @@ let generateMainClass
         constructorMethodName,
         mainConstructorSignature,
         mainConstructorBody,
-        ParameterHandle() // TODO: Set to 1?
+        MetadataTokens.ParameterHandle(1)
     )
 
     let namespaceStringHandle =
@@ -92,7 +92,7 @@ let generateMainClass
         namespaceStringHandle,
         builder.GetOrAddString(options.Name),
         toEntityHandle coreLibraryTypes.Object,
-        FieldDefinitionHandle(), // TODO: Should these be set to something? Set to 1?
+        MetadataTokens.FieldDefinitionHandle(1),
         constructor
     )
 
