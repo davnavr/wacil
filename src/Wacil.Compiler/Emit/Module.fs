@@ -82,7 +82,11 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
 
     let portableExecutableBuilder = new ManagedPEBuilder(
         new PEHeaderBuilder (
-            machine = Machine.I386
+            machine = Machine.I386,
+            imageCharacteristics = (Characteristics.ExecutableImage ||| Characteristics.Dll |||
+                Characteristics.RelocsStripped ||| Characteristics.LocalSymsStripped ||| Characteristics.Bit32Machine),
+            dllCharacteristics = (DllCharacteristics.HighEntropyVirtualAddressSpace ||| DllCharacteristics.DynamicBase |||
+                DllCharacteristics.NxCompatible ||| DllCharacteristics.NoSeh)
         ),
         metadataRootBuilder,
         methodBodyBuilder,
