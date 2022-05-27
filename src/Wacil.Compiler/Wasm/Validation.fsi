@@ -13,6 +13,7 @@ type ValidModule =
 type Error =
     | MultiMemoryNotSupported
     | DuplicateSection of id: Format.SectionId
+    | InvalidSectionOrder of section: Format.SectionId * next: Format.SectionId
 
     override ToString: unit -> string
 
