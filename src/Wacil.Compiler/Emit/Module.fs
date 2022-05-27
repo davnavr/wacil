@@ -11,12 +11,17 @@ open Wacil.Compiler.Wasm
 
 let inline toEntityHandle handle = (^H : (static member op_Implicit: 'H -> EntityHandle) (handle))
 
+let coreLibraryPublicKeyToken = [| 0xb0uy; 0x3fuy; 0x5fuy; 0x7fuy; 0x11uy; 0xd5uy; 0x0auy; 0x3auy |]
+
 let generateCoreLibraryReference (builder: MetadataBuilder) =
+    let publicKeyToken = BlobBuilder(8)
+    publicKeyToken.WriteBytes coreLibraryPublicKeyToken
+
     builder.AddAssemblyReference (
         builder.GetOrAddString "System.Runtime",
-        System.Version(6, 0, 0, 0), // TODO: Is this the right version?
-        StringHandle(), // TODO: Is culture value allowed to be empty?
-        failwith "pkeyh",
+        System.Version(6, 0, 0, 0),
+        StringHandle(),
+        builder.GetOrAddBlob(publicKeyToken),
         Unchecked.defaultof<AssemblyFlags>,
         BlobHandle()
     )
@@ -29,10 +34,9 @@ let generateCoreLibraryTypes (coreLibraryReference: AssemblyReferenceHandle) (bu
 
     let addSystemType name = builder.AddTypeReference(coreLibraryHandle, systemNamespaceHandle, builder.GetOrAddString name)
 
-    // TODO: I thought TypeSpec has special syntax for primitive types (int32, int64, etc.)
     { CoreLibraryTypes.Object = addSystemType "Object" }
 
-let generateMainClass (options: Options) (builder: MetadataBuilder) =
+let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuilder) =
     let namespaceStringHandle =
         if System.String.IsNullOrEmpty options.Namespace
         then StringHandle()
@@ -42,9 +46,9 @@ let generateMainClass (options: Options) (builder: MetadataBuilder) =
         TypeAttributes.Sealed ||| TypeAttributes.Public,
         namespaceStringHandle,
         builder.GetOrAddString(options.Name),
-        failwith "System.Object",
-        failwith "fields",
-        failwith "methods"
+        toEntityHandle coreLibraryTypes.Object,
+        FieldDefinitionHandle(), // TODO: Should these be set to something?
+        MethodDefinitionHandle()
     )
 
 let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (builder: BlobBuilder) =
@@ -52,7 +56,18 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
     let coreLibraryReference = generateCoreLibraryReference metadata
     let coreLibraryTypes = generateCoreLibraryTypes coreLibraryReference metadata
 
-    raise (System.NotImplementedException())
+    metadata.AddTypeDefinition (
+        TypeAttributes.NotPublic,
+        StringHandle(),
+        metadata.GetOrAddString("<Module>"),
+        toEntityHandle coreLibraryTypes.Object,
+        FieldDefinitionHandle(),
+        MethodDefinitionHandle()
+    )
+    |> ignore
+
+    let mainTypeDefinition = generateMainClass options coreLibraryTypes metadata
+    
     ()
 
 let compileToStream options webAssemblyModule (stream: System.IO.Stream) =
