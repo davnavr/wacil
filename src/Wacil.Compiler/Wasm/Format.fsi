@@ -93,7 +93,7 @@ type GlobalType = { Type: ValType; Mutability: Mutability }
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ImportDesc =
-    | Func of Index
+    | Func of ty: Index
     | Table of TableType
     | Mem of MemType
     | Global of GlobalType

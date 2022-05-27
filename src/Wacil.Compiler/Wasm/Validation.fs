@@ -1,5 +1,6 @@
 namespace Wacil.Compiler.Wasm.Validation
 
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
@@ -53,16 +54,50 @@ type ValidModuleBuilder =
       mutable DataCount: uint32 voption
       mutable Data: ImmutableArray<Data> voption }
 
+type FunctionImport = { Name: string; Type: FuncType }
+
+type TableImport = { Name: string; Type: TableType }
+
+type MemoryImport = { Name: string; Limits: Limits }
+
+type GlobalImport = { Name: string; Type: GlobalType }
+
+type ModuleImports =
+    { Functions: ImmutableArray<FunctionImport>
+      Tables: ImmutableArray<TableImport>
+      Memories: ImmutableArray<MemoryImport>
+      Globals: ImmutableArray<GlobalImport> }
+
+[<Sealed>]
+type ModuleImportLookup (lookup: Dictionary<string, ModuleImports>) =
+    member _.Item with get (moduleImportName: string) =
+        if isNull lookup then
+            raise(KeyNotFoundException "modules does not contain any imports")
+        lookup[moduleImportName]
+
+    interface IReadOnlyDictionary<string, ModuleImports> with
+        member this.Item with get key = this[key]
+        member _.Keys = lookup.Keys
+        member _.Values = lookup.Values
+        member _.Count = lookup.Count
+        member _.ContainsKey key = lookup.ContainsKey key
+        member _.TryGetValue(key: string, value: byref<ModuleImports>) = lookup.TryGetValue(key, &value)
+        member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
+        member _.GetEnumerator() = lookup.GetEnumerator() :> System.Collections.IEnumerator
+
 [<Sealed>]
 type ValidModule
     (
         custom: ImmutableArray<Custom>,
         types: ImmutableArray<FuncType>,
+        imports: ModuleImportLookup,
         memories: ImmutableArray<Limits>
     )
     =
     member _.CustomSections = custom
     member _.Types = types
+    member _.Imports = imports
+
     member _.Memories = memories
 
 type Error =
@@ -177,8 +212,80 @@ module Validate =
                     order <- SectionOrder.Export
                     builder.Data <- ValueSome data
 
+        let types = ValueOption.defaultValue ImmutableArray.Empty builder.Types
+
+        // let moduleImports = ValueOption.defaultValue ImmutableArray.Empty builder.Imports
+        // let moduleImportLookup = Dictionary(capacity = moduleImports.Length)
+        // for import in moduleImports do
+        //     let entries =
+        //         match moduleImportLookup.TryGetValue import.Module with
+        //         | true, entries' -> entries'
+        //         | false, _ ->
+        //             let entries' = Dictionary()
+        //             moduleImportLookup[import.Module] <- entries'
+        //             entries'
+
+        //     let duplicates =
+        //         match entries.TryGetValue import.Name with
+        //         | true, duplicates' -> duplicates'
+        //         | false, _ ->
+        //             let duplicates' = List()
+        //             entries[import.Name] <- duplicates'
+        //             duplicates'
+
+        //     ()
+        let imports =
+            // Group all imports by module name
+            let moduleImportLookup =
+                let imports = ValueOption.defaultValue ImmutableArray.Empty builder.Imports
+                let lookup = if imports.IsEmpty then null else Dictionary(capacity = imports.Length)
+                for import in imports do
+                    // Loop is skipped if lookup is null
+                    let entries =
+                        match lookup.TryGetValue import.Module with
+                        | true, entries' -> entries'
+                        | false, _ ->
+                            let entries' = List()
+                            lookup[import.Module] <- entries'
+                            entries'
+
+                    entries.Add(import)
+                lookup
+
+            if not(isNull moduleImportLookup) then
+                let actualModuleImports = Dictionary(capacity = moduleImportLookup.Count)
+                let mutable functions = ArrayBuilder()
+                let mutable tables = ArrayBuilder()
+                let mutable memories = ArrayBuilder()
+                let mutable globals = ArrayBuilder()
+
+                for KeyValue(importModuleName, moduleImports) in moduleImportLookup do
+                    functions.Clear()
+                    tables.Clear()
+                    memories.Clear()
+                    globals.Clear()
+
+                    for import in moduleImports do
+                        match import.Description with
+                        | ImportDesc.Func index ->
+                            functions.Add { FunctionImport.Name = import.Name; Type = types[Checked.int32 index] }
+                        | ImportDesc.Table ty -> tables.Add { TableImport.Name = import.Name; Type = ty }
+                        | ImportDesc.Mem limits -> memories.Add { MemoryImport.Name = import.Name; Limits = limits }
+                        | ImportDesc.Global ty -> globals.Add { GlobalImport.Name = import.Name; Type = ty }
+
+                    actualModuleImports[importModuleName] <- 
+                        { ModuleImports.Functions = functions.ToImmutableArray()
+                          Tables = tables.ToImmutableArray()
+                          Memories = memories.ToImmutableArray()
+                          Globals = globals.ToImmutableArray() }
+
+                ModuleImportLookup(actualModuleImports)
+            else
+                ModuleImportLookup(null)
+
         // TODO: Loop through each import and create a dictionary of dictionaries
         // TODO: Loop through each export similarly as the imports to create a dictionary
+        //let export = Dictionary<string, _>(capacity = )
 
         // TODO: In sections where only constant expressions are allowed, loop through them to check they are valid
 
@@ -188,6 +295,8 @@ module Validate =
         | ValueSome error' -> Error(error')
         | ValueNone -> Ok(ValidModule(
             custom = builder.CustomSections.ToImmutableArray(),
-            types = ValueOption.defaultValue ImmutableArray.Empty builder.Types,
+            types = types,
+            imports = imports,
+
             memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories
         ))

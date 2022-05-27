@@ -87,7 +87,7 @@ type Mutability = Const | Var
 type GlobalType = { Type: ValType; Mutability: Mutability }
 
 type ImportDesc =
-    | Func of Index
+    | Func of ty: Index
     | Table of TableType
     | Mem of MemType
     | Global of GlobalType

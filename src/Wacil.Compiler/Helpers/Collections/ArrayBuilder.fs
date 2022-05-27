@@ -32,6 +32,8 @@ type internal ArrayBuilder<'a> =
 
             System.Array.Resize(&this.buffer, newBufferCapacity)
 
+    member this.Clear() = this.length <- 0
+
     member this.Add(item: 'a) =
         let index = this.length
         this.length <- index + 1
