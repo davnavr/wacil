@@ -43,7 +43,35 @@ let generateCoreLibraryTypes (coreLibraryReference: AssemblyReferenceHandle) (bu
             builder.GetOrAddString "TargetFrameworkAttribute "
         ) }
 
-let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuilder) =
+let generateMainClass
+    (options: Options)
+    coreLibraryTypes
+    (methodBodyBuilder: MethodBodyStreamEncoder)
+    (builder: MetadataBuilder)
+    =
+    let mainConstructorSignature =
+        let blob = BlobEncoder(BlobBuilder(4))
+        blob.MethodSignature(isInstanceMethod = true).Parameters(
+            0, 
+            (fun (encoder: ReturnTypeEncoder) -> encoder.Void()),
+            ignore
+        )
+        builder.GetOrAddBlob(blob.Builder)
+
+    let mainConstructorBody =
+        let body = InstructionEncoder(BlobBuilder())
+        body.OpCode(ILOpCode.Ret)
+        methodBodyBuilder.AddMethodBody(body, 0, StandaloneSignatureHandle(), MethodBodyAttributes.InitLocals)
+
+    let constructor = builder.AddMethodDefinition(
+        MethodAttributes.Public ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName,
+        MethodImplAttributes.IL,
+        builder.GetOrAddString ".ctor",
+        mainConstructorSignature,
+        mainConstructorBody,
+        ParameterHandle() // TODO: Set to 1?
+    )
+
     let namespaceStringHandle =
         if System.String.IsNullOrEmpty options.Namespace
         then StringHandle()
@@ -54,8 +82,8 @@ let generateMainClass (options: Options) coreLibraryTypes (builder: MetadataBuil
         namespaceStringHandle,
         builder.GetOrAddString(options.Name),
         toEntityHandle coreLibraryTypes.Object,
-        FieldDefinitionHandle(), // TODO: Should these be set to something?
-        MethodDefinitionHandle()
+        FieldDefinitionHandle(), // TODO: Should these be set to something? Set to 1?
+        constructor
     )
 
 let generateTargetFrameworkAttribute assembly (coreLibraryTypes: CoreLibraryTypes) (builder: MetadataBuilder) =
@@ -103,7 +131,7 @@ let deterministicIdProvider (content: seq<Blob>): BlobContentId =
 
 let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (builder: BlobBuilder) =
     let metadata = MetadataBuilder()
-    let methodBodyBuilder = BlobBuilder()
+    let methodBodyBuilder = MethodBodyStreamEncoder(BlobBuilder())
 
     let coreLibraryReference = generateCoreLibraryReference metadata
     let coreLibraryTypes = generateCoreLibraryTypes coreLibraryReference metadata
@@ -140,7 +168,7 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
     )
     |> ignore
 
-    let mainTypeDefinition = generateMainClass options coreLibraryTypes metadata
+    let mainTypeDefinition = generateMainClass options coreLibraryTypes methodBodyBuilder metadata
     
     let metadataRootBuilder = MetadataRootBuilder(metadata)
 
@@ -153,7 +181,7 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
                 DllCharacteristics.NxCompatible ||| DllCharacteristics.NoSeh)
         ),
         metadataRootBuilder,
-        methodBodyBuilder,
+        methodBodyBuilder.Builder,
         deterministicIdProvider = System.Func<_, _>(deterministicIdProvider)
     )
 
