@@ -12,6 +12,7 @@ type ValidModule =
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Error =
     | MultiMemoryNotSupported
+    | DuplicateSection of id: Format.SectionId
 
     override ToString: unit -> string
 
