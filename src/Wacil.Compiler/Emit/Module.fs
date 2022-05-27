@@ -45,10 +45,12 @@ let generateCoreLibraryTypes (coreLibraryReference: AssemblyReferenceHandle) (bu
 
 let generateMainClass
     (options: Options)
-    coreLibraryTypes
+    (coreLibraryTypes: CoreLibraryTypes)
     (methodBodyBuilder: MethodBodyStreamEncoder)
     (builder: MetadataBuilder)
     =
+    let constructorMethodName = builder.GetOrAddString ".ctor"
+
     let mainConstructorSignature =
         let blob = BlobEncoder(BlobBuilder(4))
         blob.MethodSignature(isInstanceMethod = true).Parameters(
@@ -59,14 +61,22 @@ let generateMainClass
         builder.GetOrAddBlob(blob.Builder)
 
     let mainConstructorBody =
+        let systemObjectConstructor = builder.AddMemberReference(
+            toEntityHandle coreLibraryTypes.Object,
+            constructorMethodName,
+            mainConstructorSignature
+        )
+
         let body = InstructionEncoder(BlobBuilder())
+        body.OpCode(ILOpCode.Ldarg_0)
+        body.Call(systemObjectConstructor)
         body.OpCode(ILOpCode.Ret)
         methodBodyBuilder.AddMethodBody(body, 0, StandaloneSignatureHandle(), MethodBodyAttributes.InitLocals)
 
     let constructor = builder.AddMethodDefinition(
         MethodAttributes.Public ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName,
         MethodImplAttributes.IL,
-        builder.GetOrAddString ".ctor",
+        constructorMethodName,
         mainConstructorSignature,
         mainConstructorBody,
         ParameterHandle() // TODO: Set to 1?
