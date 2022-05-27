@@ -186,9 +186,9 @@ let compileToBlobBuilder (options: Options) (webAssemblyModule: Format.Module) (
         new PEHeaderBuilder (
             machine = Machine.I386,
             imageCharacteristics = (Characteristics.ExecutableImage ||| Characteristics.Dll |||
-                Characteristics.RelocsStripped ||| Characteristics.LocalSymsStripped ||| Characteristics.Bit32Machine),
+                Characteristics.LineNumsStripped ||| Characteristics.LocalSymsStripped ||| Characteristics.Bit32Machine),
             dllCharacteristics = (DllCharacteristics.HighEntropyVirtualAddressSpace ||| DllCharacteristics.DynamicBase |||
-                DllCharacteristics.NxCompatible ||| DllCharacteristics.NoSeh)
+                DllCharacteristics.NxCompatible ||| DllCharacteristics.NoSeh ||| DllCharacteristics.TerminalServerAware)
         ),
         metadataRootBuilder,
         methodBodyBuilder.Builder,
