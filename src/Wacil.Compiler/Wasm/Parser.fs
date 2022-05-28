@@ -207,7 +207,7 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         | Opcode.Unreachable -> block.Add(Instruction.Normal Unreachable)
         | Opcode.Nop -> block.Add(Instruction.Normal Nop)
         | Opcode.End ->
-            let mutable popped = Unchecked.defaultof<_>()
+            let mutable popped = Unchecked.defaultof<BlockBuilder>
             blockInstructionStack.Pop(&popped)
             let instructions = popped.Instructions.ToImmutableArray()
 
