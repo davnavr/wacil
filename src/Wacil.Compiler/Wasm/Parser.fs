@@ -129,14 +129,17 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
     member this.ReadValType() = this.ReadByte() |> getValType
 
     member this.ReadBlockType() =
-        let value = this.ReadSignedInteger()
-        if value > 0L then
-            BlockType.Index(Checked.uint32 value)
-        else
-            Checked.int8 value
-            |> uint8
-            |> getValType
-            |> BlockType.Val
+        match this.ReadByte() with
+        | 0x40uy ->
+            let value = this.ReadSignedInteger()
+            if value >= 0L then
+                BlockType.Index(Checked.uint32 value)
+            else
+                uint8 value
+                |> getValType
+                |> BlockType.Val
+        | bad ->
+            failwithf "0x%02X is not a known block type" bad
 
     member this.ReadResultType(): ResultType =
         let count = this.ReadUnsignedInteger()
@@ -191,8 +194,6 @@ type BlockBuilder =
     { mutable Instructions: ArrayBuilder<Instruction>
       State: BlockBuilderState }
 
-    static member WithState state = { Instructions = ArrayBuilder<Instruction>.Create(); State = state }
-
 [<Struct; NoComparison; NoEquality>]
 type InstructionBuilderCache =
     { mutable Builders: ArrayBuilder<ArrayBuilder<Instruction>> }
@@ -210,7 +211,10 @@ type InstructionBuilderCache =
 let parseExpression (reader: Reader) (instructionBuilderCache: byref<InstructionBuilderCache>): Expression =
     let mutable body = ImmutableArray.Empty
     let mutable blockInstructionStack = ArrayBuilder<BlockBuilder>.Create()
-    blockInstructionStack.Add(BlockBuilder.WithState BlockBuilderState.Finish)
+
+    blockInstructionStack.Add
+        { BlockBuilder.Instructions = instructionBuilderCache.Rent()
+          State = BlockBuilderState.Finish }
 
     while not blockInstructionStack.IsEmpty do
         let mutable block = &blockInstructionStack.LastRef().Instructions
@@ -218,6 +222,10 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
         | Opcode.Unreachable -> block.Add(Instruction.Normal Unreachable)
         | Opcode.Nop -> block.Add(Instruction.Normal Nop)
+        | Opcode.Loop ->
+            blockInstructionStack.Add
+                { BlockBuilder.Instructions = instructionBuilderCache.Rent()
+                  State = BlockBuilderState.Loop(reader.ReadBlockType()) }
         | Opcode.End ->
             let mutable popped = Unchecked.defaultof<BlockBuilder>
             blockInstructionStack.Pop(&popped)
