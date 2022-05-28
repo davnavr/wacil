@@ -64,10 +64,12 @@ let disassembleInstructionSequence (instructions: ImmutableArray<Instruction>) (
                     out.Write(sprintf "offset %i align %i" arg.Offset arg.Alignment.Power)
             | MemoryGrow -> out.Write "memory.grow"
             | I32Const value -> out.Write(sprintf "i32.const %i" value)
+            | _ -> failwith "todo"
         | Instruction.Structured structured ->
             match structured.Kind with
             | Block -> out.Write "block"
             | Loop -> out.Write "loop"
+            | _ -> failwith "todo"
 
         out.WriteLine()
 

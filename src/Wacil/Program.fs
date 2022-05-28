@@ -15,6 +15,7 @@ type Options =
     | [<Unique>] Namespace of string
     | [<Unique; AltCommandLine("-o")>] Out of file: string
     | [<Unique>] Type of OutputType
+    //| [<Unique>] Version of Version
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -75,6 +76,7 @@ let main argv =
                 { TargetFramework = args.GetResult(<@ Framework @>, defaultValue = TargetFramework.Net6)
                   OutputType = args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
                   Name = oname
+                  Version = Version(0, 0, 0, 0)
                   Namespace = "" }
                 input''
                 writer

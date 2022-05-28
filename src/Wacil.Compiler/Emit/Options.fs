@@ -17,11 +17,16 @@ type OutputType =
 type TargetFramework =
     | Net6
 
+    member this.FrameworkName =
+        match this with
+        | Net6 -> ".NETCoreApp,Version=v6.0"
+
 [<NoComparison; StructuralEquality>]
 type Options =
-    { Name: string
-      TargetFramework: TargetFramework
+    { TargetFramework: TargetFramework
       OutputType: OutputType
+      Name: string
+      Version: System.Version
       ///// <summary>If set, indicates that the module name should be obtained from the custom <c>name</c> section.</summary>
       //InferName: bool
       /// Indicates the name of the namespace containing the generated class.
