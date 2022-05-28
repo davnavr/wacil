@@ -2,9 +2,8 @@
 [<RequireQualifiedAccess>]
 module Wacil.Compiler.Emit.Module
 
-//val compileToModule
+open Wacil.Compiler.Wasm.Validation
 
-val compileToStream:
-    options: Options ->
-    input: Wacil.Compiler.Wasm.Validation.ValidModule ->
-    stream: System.IO.Stream -> unit
+val compileToModuleDefinition: options: Options -> input: ValidModule -> AsmResolver.DotNet.ModuleDefinition
+
+val compileToStream: options: Options -> input: ValidModule -> stream: System.IO.Stream -> unit
