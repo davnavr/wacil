@@ -90,6 +90,8 @@ type ValidExpression =
     internal
     | Expr of ImmutableArray<Instruction>
 
+    member this.Instructions = let (Expr instructions) = this in instructions
+
 type Function =
     { Type: FuncType
       Body: ValidExpression }

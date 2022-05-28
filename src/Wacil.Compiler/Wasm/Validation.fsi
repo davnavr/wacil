@@ -32,7 +32,11 @@ type ModuleImportLookup =
     interface IReadOnlyDictionary<string, ModuleImports>
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type ValidExpression = internal Expr of ImmutableArray<Format.Instruction>
+type ValidExpression =
+    internal
+    | Expr of ImmutableArray<Format.Instruction>
+
+    member Instructions: ImmutableArray<Format.Instruction>
 
 [<NoComparison; StructuralEquality>]
 type Function =
