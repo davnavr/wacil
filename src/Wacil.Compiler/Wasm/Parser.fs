@@ -110,7 +110,9 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
     member _.Magic = actual
 
 let parseExpression (reader: Reader): Expression =
-    ()
+    let mutable body = ArrayBuilder<Instruction>.Create()
+    failwith "TODO"
+    body.ToImmutableArray() |> Expr
 
 let parseCodeEntry (reader: Reader) =
     let expectedFunctionSize = reader.ReadUInt64() |> Checked.int32
@@ -126,7 +128,7 @@ let parseCodeEntry (reader: Reader) =
 
     let actualFunctionSize = reader.Offset - functionStartOffset
     if actualFunctionSize <> expectedFunctionSize then
-        failwith "TODO: Expected code function to haze a size of %i bytes, but got %i" expectedFunctionSize actualFunctionSize
+        failwithf "TODO: Expected code function to haze a size of %i bytes, but got %i" expectedFunctionSize actualFunctionSize
 
     code
 

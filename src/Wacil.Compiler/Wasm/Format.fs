@@ -76,7 +76,6 @@ module Limits =
         | ValueSome max' when max' < min -> ValueNone
         | _ -> ValueSome(Limits(min, max))
 
-
 type TableType = { ElementType: RefType; Limits: Limits }
 
 type MemType = Limits
@@ -94,9 +93,12 @@ type ImportDesc =
 
 type Import = { Module: string; Name: string; Description: ImportDesc }
 
-type Expression = ImmutableArray<Instruction>
+[<Struct>]
+type Expression = internal Expr of ImmutableArray<Instruction>
 
-type Global = { Type: GlobalType; Expression: ImmutableArray<Instruction> }
+let (|Expression|) (Expr expression) = expression
+
+type Global = { Type: GlobalType; Expression: Expression }
 
 type ExportDesc =
     | Func of Index
