@@ -27,6 +27,7 @@ type Options =
       OutputType: OutputType
       Name: string
       Version: System.Version
+      RuntimeVersion: System.Version
       ///// <summary>If set, indicates that the module name should be obtained from the custom <c>name</c> section.</summary>
       //InferName: bool
       /// Indicates the name of the namespace containing the generated class.

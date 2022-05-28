@@ -77,6 +77,7 @@ let main argv =
                   OutputType = args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
                   Name = oname
                   Version = Version(0, 0, 0, 0)
+                  RuntimeVersion = Version(1, 0, 0, 0)
                   Namespace = "" }
                 input''
                 writer

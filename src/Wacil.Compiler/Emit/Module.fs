@@ -1,12 +1,19 @@
 module Wacil.Compiler.Emit.Module
 
 open AsmResolver
+open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
+
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 
 open Wacil.Compiler.Helpers
 
 open Wacil.Compiler.Wasm.Validation
+
+/// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
+[<NoComparison; NoEquality>]
+type RuntimeLibraryReference =
+    { Memory: ITypeDefOrRef }
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
@@ -15,6 +22,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let outputName = String.defaultValue "module" options.Name
     let moduleDefinition = new ModuleDefinition(outputName + ".dll", coreLibraryReference)
+
+    let coreSystemObject =
+        coreLibraryReference.CreateTypeReference("System", "Object")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
     let assemblyDefinition =
         match options.OutputType with
@@ -62,7 +73,27 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | OutputType.Module ->
             ValueNone
 
+    let runtimeLibraryReference =
+        let runtimeLibraryName = "Wacil.Runtime"
+        let assembly = AssemblyReference(runtimeLibraryName, options.RuntimeVersion)
+        moduleDefinition.AssemblyReferences.Add assembly
 
+        let runtimeMemoryClass =
+            assembly.CreateTypeReference(runtimeLibraryName, "Memory") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+        { Memory = runtimeMemoryClass }
+
+    moduleDefinition.GetOrCreateModuleType().BaseType <- coreSystemObject
+
+    let classDefinition =
+        TypeDefinition(
+            String.orEmpty options.Namespace,
+            outputName,
+            TypeAttributes.Sealed ||| TypeAttributes.Public ||| TypeAttributes.SequentialLayout
+        )
+
+    classDefinition.BaseType <- coreSystemObject
+    moduleDefinition.TopLevelTypes.Add classDefinition
 
     moduleDefinition
 
