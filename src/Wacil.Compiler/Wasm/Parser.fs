@@ -313,6 +313,19 @@ let parseFromStream (stream: Stream) =
                 let mems = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()
                 sections.Add(Section.Memory(Unsafe.Array.toImmutable mems))
+            | SectionId.Global ->
+                let glbls = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                for i = 0 to glbls.Length - 1 do
+                    glbls[i] <-
+                        { Global.Type =
+                            { GlobalType.Type = reader.ReadValType()
+                              Mutability =
+                                match reader.ReadByte() with
+                                | 0uy -> Mutability.Const
+                                | 1uy -> Mutability.Var
+                                | bad -> failwithf "0x%02X is not a valid global mutability value" bad }
+                          Global.Expression = parseExpression reader &instructionBuilderCache }
+                sections.Add(Section.Global(Unsafe.Array.toImmutable glbls))
             | SectionId.Export ->
                 let exports = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to exports.Length - 1 do
