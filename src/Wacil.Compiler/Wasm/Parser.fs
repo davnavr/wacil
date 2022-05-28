@@ -2,6 +2,7 @@ module Wacil.Compiler.Wasm.Parser
 
 open System
 open System.Buffers
+open System.Buffers.Binary
 open System.Collections.Immutable
 open System.IO
 open System.Text
@@ -79,6 +80,24 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
                 n <- -1L <<< shifted
         n
 
+    /// Reads a 32-bit floating-point number in little-endian order.
+    member this.ReadFloat32(): single =
+        let buffer = Span.stackalloc 4
+        this.ReadAll(buffer)
+        let mutable value = 0.0f
+        let success = BinaryPrimitives.TryReadSingleLittleEndian(Span.readonly buffer, &value)
+        assert success
+        value
+
+    /// Reads a 32-bit floating-point number in little-endian order.
+    member this.ReadFloat64(): double =
+        let buffer = Span.stackalloc 8
+        this.ReadAll(buffer)
+        let mutable value = 0.0
+        let success = BinaryPrimitives.TryReadDoubleLittleEndian(Span.readonly buffer, &value)
+        assert success
+        value
+
     member this.ReadName(): Name =
         let length = this.ReadUnsignedInteger() |> Checked.int32
         let mutable bufferArray = null
@@ -147,6 +166,10 @@ let parseExpression (reader: Reader): Expression =
         | Opcode.Nop -> body.Add Instruction.Nop
         | Opcode.Unreachable -> body.Add Instruction.Unreachable
         | Opcode.End -> expectedBlockEnds <- Checked.(-) expectedBlockEnds 1u
+        | Opcode.I32Const -> body.Add(reader.ReadSignedInteger() |> Checked.int32 |> Instruction.I32Const)
+        | Opcode.I64Const -> body.Add(reader.ReadSignedInteger() |> Instruction.I64Const)
+        | Opcode.F32Const -> body.Add(reader.ReadFloat32()|> Instruction.F32Const)
+        | Opcode.F64Const -> body.Add(reader.ReadFloat64() |> Instruction.F64Const)
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
     body.ToImmutableArray() |> Expr
 

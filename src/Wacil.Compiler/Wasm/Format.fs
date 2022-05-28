@@ -12,11 +12,19 @@ type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
     | End = 0x40uy
+    | I32Const = 0x41uy
+    | I64Const = 0x42uy
+    | F32Const = 0x43uy
+    | F64Const = 0x44uy
 
 [<NoComparison; StructuralEquality>]
 type Instruction =
     | Unreachable
     | Nop
+    | I32Const of int32
+    | I64Const of int64
+    | F32Const of single
+    | F64Const of double
 
 type Name = string
 
