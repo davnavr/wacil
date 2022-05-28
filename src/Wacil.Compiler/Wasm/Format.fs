@@ -12,6 +12,7 @@ type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
     | End = 0xBuy
+    | Drop = 0x1Auy
     | I32Load = 0x28uy
     | I64Load = 0x29uy
     | F32Load = 0x2Auy
@@ -37,6 +38,7 @@ type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 type Instruction =
     | Unreachable
     | Nop
+    | Drop
     | I32Load of MemArg
     | I64Load of MemArg
     | F32Load of MemArg

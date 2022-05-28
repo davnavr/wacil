@@ -171,8 +171,9 @@ let parseExpression (reader: Reader): Expression =
     //let mutable nestedBlockInstructions = Stack<ArrayBuilder>
     while expectedBlockEnds > 0u do
         match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
-        | Opcode.Nop -> body.Add Instruction.Nop
         | Opcode.Unreachable -> body.Add Instruction.Unreachable
+        | Opcode.Nop -> body.Add Instruction.Nop
+        | Opcode.Drop -> body.Add Instruction.Drop
         | Opcode.I32Load -> body.Add(parseMemArg reader |> Instruction.I32Load)
         | Opcode.I64Load -> body.Add(parseMemArg reader |> Instruction.I64Load)
         | Opcode.F32Load -> body.Add(parseMemArg reader |> Instruction.F32Load)
