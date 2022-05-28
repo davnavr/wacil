@@ -111,7 +111,14 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
 
 let parseExpression (reader: Reader): Expression =
     let mutable body = ArrayBuilder<Instruction>.Create()
-    failwith "TODO"
+    let mutable expectedBlockEnds = 1u
+    //let mutable nestedBlockInstructions = Stack<ArrayBuilder>
+    while expectedBlockEnds > 0u do
+        match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
+        | Opcode.Nop -> body.Add Instruction.Nop
+        | Opcode.Unreachable -> body.Add Instruction.Unreachable
+        | Opcode.End -> expectedBlockEnds <- Checked.(-) expectedBlockEnds 1u
+        | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
     body.ToImmutableArray() |> Expr
 
 let parseCodeEntry (reader: Reader) =

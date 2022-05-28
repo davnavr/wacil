@@ -11,6 +11,7 @@ module Preamble =
 type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
+    | End = 0x40uy
 
 [<NoComparison; StructuralEquality>]
 type Instruction =
