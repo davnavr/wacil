@@ -173,8 +173,8 @@ let parseFromStream (stream: Stream): Module =
                             | 3uy -> ExportDesc.Global index
                             | _ -> failwithf "0x%02X is not a valid export kind" kind }
                 sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
-            | unknown ->
-                failwithf "unknown section id 0x%02X" (uint8 unknown)
+            | SectionId.Start -> sections.Add(Section.Start(reader.ReadUInt64() |> Checked.uint32))
+            | unknown -> failwithf "unknown section id 0x%02X" (uint8 unknown)
 
             let actualSectionSize = reader.Offset - sectionStartOffset
             //assert (int64 actualSectionSize = sectionContentBuffer.Length)
