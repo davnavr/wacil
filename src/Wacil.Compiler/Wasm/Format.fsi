@@ -73,6 +73,17 @@ type Opcode =
     | I32LeU = 0x4Duy
     | I32GeS = 0x4Euy
     | I32GeU = 0x4Fuy
+    | I64Eqz = 0x50uy
+    | I64Eq = 0x51uy
+    | I64Ne = 0x52uy
+    | I64LtS = 0x53uy
+    | I64LtU = 0x54uy
+    | I64GtS = 0x55uy
+    | I64GtU = 0x56uy
+    | I64LeS = 0x57uy
+    | I64LeU = 0x58uy
+    | I64GeS = 0x59uy
+    | I64GeU = 0x5Auy
 
 [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type MemArgAlignment =
@@ -126,6 +137,17 @@ type NormalInstruction =
     | I32LeU
     | I32GeS
     | I32GeU
+    | I64Eqz
+    | I64Eq
+    | I64Ne
+    | I64LtS
+    | I64LtU
+    | I64GtS
+    | I64GtU
+    | I64LeS
+    | I64LeU
+    | I64GeS
+    | I64GeU
 
 type [<NoComparison; StructuralEquality>] StructuredInstructionKind =
     | Block
