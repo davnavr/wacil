@@ -226,6 +226,10 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
             blockInstructionStack.Add
                 { BlockBuilder.Instructions = instructionBuilderCache.Rent()
                   State = BlockBuilderState.Loop(reader.ReadBlockType()) }
+        | Opcode.If ->
+            blockInstructionStack.Add
+                { BlockBuilder.Instructions = instructionBuilderCache.Rent()
+                  State = BlockBuilderState.If(reader.ReadBlockType()) }
         | Opcode.End ->
             let mutable popped = Unchecked.defaultof<BlockBuilder>
             blockInstructionStack.Pop(&popped)
