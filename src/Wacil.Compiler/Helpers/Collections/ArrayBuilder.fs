@@ -2,8 +2,8 @@ namespace Wacil.Compiler.Helpers.Collections
 
 open System.Runtime.CompilerServices
 
-/// Helper class to create collections based on arrays.
-[<IsByRefLike; Struct; NoComparison; NoEquality>]
+/// A mutable array that can be resized and converted into other collection types.
+[<Struct; NoComparison; NoEquality>]
 type internal ArrayBuilder<'a> =
     val mutable buffer: 'a[]
     val mutable length: int
@@ -19,6 +19,8 @@ type internal ArrayBuilder<'a> =
     member this.Capacity = this.buffer.Length
 
     member this.Length = this.length
+
+    member this.IsEmpty = this.length = 0
 
     member private this.EnsureCapacity() =
         if this.length > this.buffer.Length then
@@ -39,6 +41,20 @@ type internal ArrayBuilder<'a> =
         this.length <- index + 1
         this.EnsureCapacity()
         this.buffer[index] <- item
+
+    member this.TryPop(value: outref<'a>) =
+        if this.length > 0 then
+            this.length <- this.length - 1
+            value <- this.buffer[this.length]
+            true
+        else
+            false
+
+    member this.Pop(value: outref<'a>) =
+        if not(this.TryPop(&value)) then invalidOp "Cannot remove item when array is empty"
+
+    /// Returns a mutable reference to the last element of the array.
+    member this.LastRef() = &this.buffer[this.length - 1]
 
     member this.ToArray() =
         if this.Capacity = this.length then

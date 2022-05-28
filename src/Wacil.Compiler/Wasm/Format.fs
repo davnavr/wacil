@@ -8,6 +8,33 @@ module Preamble =
     let magic = Unsafe.Array.toImmutable [| 0uy; 0x61uy; 0x73uy; 0x6duy; |]
     let version = Unsafe.Array.toImmutable [| 1uy; 0uy; 0uy; 0uy; |]
 
+type Index = uint32
+
+type Type =
+    | ExternRef = 0x6Fuy
+    | FuncRef = 0x70uy
+    | V128 = 0x7Buy
+    | I32 = 0x7Fuy
+    | I64 = 0x7Euy
+    | F32 = 0x7Duy
+    | F64 = 0x7Cuy
+
+[<Struct>]
+type NumType = I32 | I64 | F32 | F64
+
+[<Struct>]
+type VecType = V128
+
+[<Struct>]
+type RefType = FuncRef | ExternRef
+
+[<Struct>]
+type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
+
+type ResultType = ImmutableArray<ValType>
+
+type FuncType = { Parameters: ResultType; Results: ResultType }
+
 type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
@@ -38,8 +65,14 @@ type MemArgAlignment =
 [<Struct>]
 type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 
-[<NoComparison; StructuralEquality>]
-type Instruction =
+// TODO: Or should this be FuncType? It seems multi-value proposal might have been merged?
+[<Struct>]
+type BlockType =
+    | Index of index: Index
+    | Val of ValType
+    //| Func of FuncType
+
+type NormalInstruction =
     | Unreachable
     | Nop
     | Drop
@@ -57,9 +90,21 @@ type Instruction =
     | F32Const of single
     | F64Const of double
 
-type Name = string
+type StructuredInstructionKind =
+    | Block
+    | Loop
+    | IfElse of elseBlock: ImmutableArray<Instruction>
 
-type Index = uint32
+and StructuredInstruction =
+    { Kind: StructuredInstructionKind
+      Type: BlockType
+      Instructions: ImmutableArray<Instruction> }
+
+and Instruction =
+    | Normal of NormalInstruction
+    | Structured of StructuredInstruction
+
+type Name = string
 
 type SectionId =
     | Custom = 0uy
@@ -77,31 +122,6 @@ type SectionId =
     | DataCount = 12uy
 
 type Custom = { Name: Name; Contents: ImmutableArray<byte> }
-
-type Type =
-    | ExternRef = 0x6Fuy
-    | FuncRef = 0x70uy
-    | V128 = 0x7Buy
-    | I32 = 0x7Fuy
-    | I64 = 0x7Euy
-    | F32 = 0x7Duy
-    | F64 = 0x7Cuy
-
-[<Struct>]
-type NumType = I32 | I64 | F32 | F64
-
-[<Struct>]
-type VecType = V128
-
-[<Struct>]
-type RefType = FuncRef | ExternRef
-
-[<Struct>]
-type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
-
-type ResultType = ImmutableArray<ValType>
-
-type FuncType = { Parameters: ResultType; Results: ResultType }
 
 [<Struct>]
 type Limits (minimum: uint32, maximum: uint32 voption) =

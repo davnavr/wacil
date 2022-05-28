@@ -13,6 +13,34 @@ module Preamble =
     /// Indicates the version of the WebAssembly binary format.
     val version : ImmutableArray<byte>
 
+type Type =
+    | ExternRef = 0x6Fuy
+    | FuncRef = 0x70uy
+    | V128 = 0x7Buy
+    | I32 = 0x7Fuy
+    | I64 = 0x7Euy
+    | F32 = 0x7Duy
+    | F64 = 0x7Cuy
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type NumType = I32 | I64 | F32 | F64
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type VecType = V128
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type RefType = FuncRef | ExternRef
+
+[<RequireQualifiedAccess; IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
+
+type ResultType = ImmutableArray<ValType>
+
+[<NoComparison; StructuralEquality>]
+type FuncType = { Parameters: ResultType; Results: ResultType }
+
+type Index = uint32
+
 type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
@@ -45,8 +73,15 @@ type MemArgAlignment =
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 
-[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
-type Instruction =
+// TODO: Or should this be FuncType? It seems multi-value proposal might have been merged?
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type BlockType =
+    | Index of index: Index
+    | Val of ValType
+    //| Func of FuncType
+
+[<NoComparison; StructuralEquality>]
+type NormalInstruction =
     | Unreachable
     | Nop
     | Drop
@@ -64,9 +99,21 @@ type Instruction =
     | F32Const of single
     | F64Const of double
 
-type Name = string
+type [<NoComparison; StructuralEquality>] StructuredInstructionKind =
+    | Block
+    | Loop
+    | IfElse of elseBlock: ImmutableArray<Instruction>
 
-type Index = uint32
+and [<NoComparison; StructuralEquality>] StructuredInstruction =
+    { Kind: StructuredInstructionKind
+      Type: BlockType
+      Instructions: ImmutableArray<Instruction> }
+
+and [<RequireQualifiedAccess; NoComparison; StructuralEquality>] Instruction =
+    | Normal of NormalInstruction
+    | Structured of StructuredInstruction
+
+type Name = string
 
 type SectionId =
     | Custom = 0uy
@@ -85,32 +132,6 @@ type SectionId =
 
 [<NoComparison; StructuralEquality>]
 type Custom = { Name: Name; Contents: ImmutableArray<byte> }
-
-type Type =
-    | ExternRef = 0x6Fuy
-    | FuncRef = 0x70uy
-    | V128 = 0x7Buy
-    | I32 = 0x7Fuy
-    | I64 = 0x7Euy
-    | F32 = 0x7Duy
-    | F64 = 0x7Cuy
-
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type NumType = I32 | I64 | F32 | F64
-
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type VecType = V128
-
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type RefType = FuncRef | ExternRef
-
-[<RequireQualifiedAccess; IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
-
-type ResultType = ImmutableArray<ValType>
-
-[<NoComparison; StructuralEquality>]
-type FuncType = { Parameters: ResultType; Results: ResultType }
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type Limits =
@@ -145,7 +166,7 @@ type Import = { Module: string; Name: string; Description: ImportDesc }
 
 /// <summary>An expression is a sequence of instructions terminated with an <c>end</c> isntruction.</summary>
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type Expression = internal Expr of ImmutableArray<Instruction>
+type Expression = internal Expr of ImmutableArray<Instruction> // TODO: Make this an alias again
 
 val (|Expression|): expression: Expression -> ImmutableArray<Instruction>
 

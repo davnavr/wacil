@@ -5,6 +5,7 @@ open System.Buffers
 open System.Buffers.Binary
 open System.Collections.Immutable
 open System.IO
+open System.Runtime.CompilerServices
 open System.Text
 
 open Wacil.Compiler.Helpers
@@ -165,35 +166,84 @@ let parseMemoryIndex (reader: Reader) =
     if reader.ReadByte() <> 0uy then
         failwithf "TODO: Expected 0 byte after memory instruction"
 
-let parseExpression (reader: Reader): Expression =
-    let mutable body = ArrayBuilder<Instruction>.Create()
-    let mutable expectedBlockEnds = 1u
-    //let mutable nestedBlockInstructions = Stack<ArrayBuilder>
-    while expectedBlockEnds > 0u do
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type BlockBuilderState =
+    | Finish
+    | Block of BlockType
+    | Loop of BlockType
+    | If of BlockType
+    | IfElse of BlockType * ImmutableArray<Instruction>
+
+[<Struct; NoComparison; NoEquality>]
+type BlockBuilder =
+    { mutable Instructions: ArrayBuilder<Instruction>
+      State: BlockBuilderState }
+
+    static member WithState state = { Instructions = ArrayBuilder<Instruction>.Create(); State = state }
+
+[<Struct; NoComparison; NoEquality>]
+type InstructionBuilderCache =
+    { mutable Builders: ArrayBuilder<ArrayBuilder<Instruction>> }
+
+    member this.Rent() =
+        let mutable buffer = Unchecked.defaultof<ArrayBuilder<Instruction>>
+        if this.Builders.TryPop(&buffer) then
+            buffer.Clear()
+        else
+            buffer <- ArrayBuilder<Instruction>.Create()
+        buffer
+
+    member this.Return buffer = this.Builders.Add buffer
+
+let parseExpression (reader: Reader) (instructionBuilderCache: byref<InstructionBuilderCache>): Expression =
+    let mutable body = ImmutableArray.Empty
+    let mutable blockInstructionStack = ArrayBuilder<BlockBuilder>.Create()
+    blockInstructionStack.Add(BlockBuilder.WithState BlockBuilderState.Finish)
+
+    while not blockInstructionStack.IsEmpty do
+        let mutable block = &blockInstructionStack.LastRef().Instructions
+
         match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
-        | Opcode.Unreachable -> body.Add Instruction.Unreachable
-        | Opcode.Nop -> body.Add Instruction.Nop
-        | Opcode.End -> expectedBlockEnds <- Checked.(-) expectedBlockEnds 1u
-        | Opcode.Drop -> body.Add Instruction.Drop
-        | Opcode.I32Load -> body.Add(parseMemArg reader |> Instruction.I32Load)
-        | Opcode.I64Load -> body.Add(parseMemArg reader |> Instruction.I64Load)
-        | Opcode.F32Load -> body.Add(parseMemArg reader |> Instruction.F32Load)
-        | Opcode.F64Load -> body.Add(parseMemArg reader |> Instruction.F64Load)
-        | Opcode.I32Store -> body.Add(parseMemArg reader |> Instruction.I32Store)
-        | Opcode.I64Store -> body.Add(parseMemArg reader |> Instruction.I64Store)
-        | Opcode.F32Store -> body.Add(parseMemArg reader |> Instruction.F32Store)
-        | Opcode.F64Store -> body.Add(parseMemArg reader |> Instruction.F64Store)
+        | Opcode.Unreachable -> block.Add(Instruction.Normal Unreachable)
+        | Opcode.Nop -> block.Add(Instruction.Normal Nop)
+        | Opcode.End ->
+            let mutable popped = Unchecked.defaultof<_>()
+            blockInstructionStack.Pop(&popped)
+            let instructions = popped.Instructions.ToImmutableArray()
+
+            match popped.State with
+            | BlockBuilderState.Finish -> body <- instructions
+            | BlockBuilderState.Block ty ->
+                block.Add(Instruction.Structured { StructuredInstruction.Kind = Block; Type = ty; Instructions = instructions })
+            | BlockBuilderState.Loop ty ->
+                block.Add(Instruction.Structured { StructuredInstruction.Kind = Loop; Type = ty; Instructions = instructions })
+            | BlockBuilderState.If ty ->
+                block.Add(Instruction.Structured { Kind = IfElse ImmutableArray.Empty; Type = ty; Instructions = instructions })
+            | BlockBuilderState.IfElse(ty, branch) ->
+                block.Add(Instruction.Structured { Kind = IfElse instructions; Type = ty; Instructions = branch })
+
+            instructionBuilderCache.Return popped.Instructions
+        | Opcode.Drop -> block.Add(Instruction.Normal Drop)
+        | Opcode.I32Load -> block.Add(parseMemArg reader |> I32Load |> Instruction.Normal)
+        | Opcode.I64Load -> block.Add(parseMemArg reader |> I64Load |> Instruction.Normal)
+        | Opcode.F32Load -> block.Add(parseMemArg reader |> F32Load |> Instruction.Normal)
+        | Opcode.F64Load -> block.Add(parseMemArg reader |> F64Load |> Instruction.Normal)
+        | Opcode.I32Store -> block.Add(parseMemArg reader |> I32Store |> Instruction.Normal)
+        | Opcode.I64Store -> block.Add(parseMemArg reader |> I64Store |> Instruction.Normal)
+        | Opcode.F32Store -> block.Add(parseMemArg reader |> F32Store |> Instruction.Normal)
+        | Opcode.F64Store -> block.Add(parseMemArg reader |> F64Store |> Instruction.Normal)
         | Opcode.MemoryGrow ->
             parseMemoryIndex reader
-            body.Add Instruction.MemoryGrow
-        | Opcode.I32Const -> body.Add(reader.ReadSignedInteger() |> Checked.int32 |> Instruction.I32Const)
-        | Opcode.I64Const -> body.Add(reader.ReadSignedInteger() |> Instruction.I64Const)
-        | Opcode.F32Const -> body.Add(reader.ReadFloat32()|> Instruction.F32Const)
-        | Opcode.F64Const -> body.Add(reader.ReadFloat64() |> Instruction.F64Const)
+            block.Add(Instruction.Normal MemoryGrow)
+        | Opcode.I32Const -> block.Add(reader.ReadSignedInteger() |> Checked.int32 |> I32Const |> Instruction.Normal)
+        | Opcode.I64Const -> block.Add(reader.ReadSignedInteger() |> I64Const |> Instruction.Normal)
+        | Opcode.F32Const -> block.Add(reader.ReadFloat32() |> F32Const |> Instruction.Normal)
+        | Opcode.F64Const -> block.Add(reader.ReadFloat64() |> F64Const |> Instruction.Normal)
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
-    body.ToImmutableArray() |> Expr
 
-let parseCodeEntry (reader: Reader) =
+    Expr body
+
+let parseCodeEntry (reader: Reader) (instructionBuilderCache: byref<InstructionBuilderCache>) =
     let expectedFunctionSize = reader.ReadUnsignedInteger() |> Checked.int32
     let functionStartOffset = reader.Offset
 
@@ -203,7 +253,9 @@ let parseCodeEntry (reader: Reader) =
             { Local.Count = reader.ReadUnsignedInteger() |> Checked.uint32
               Local.Type = reader.ReadValType() }
 
-    let code = { Code.Locals = Unsafe.Array.toImmutable locals; Body = parseExpression reader }
+    let code =
+        { Code.Locals = Unsafe.Array.toImmutable locals
+          Body = parseExpression reader &instructionBuilderCache }
 
     let actualFunctionSize = reader.Offset - functionStartOffset
     if actualFunctionSize <> expectedFunctionSize then
@@ -231,6 +283,7 @@ let parseFromStream (stream: Stream) =
             failwithf "Invalid WebAssembly format version"
 
         let mutable sections = ArrayBuilder<Section>.Create()
+        let mutable instructionBuilderCache = { InstructionBuilderCache.Builders = ArrayBuilder<_>.Create() }
         let sectionTagBuffer = magicNumberBuffer.Slice(0, 1)
         //use sectionContentBuffer = new MemoryStream();
         //let sectionContentReader = Reader(sectionContentBuffer, ArrayPool.Shared)
@@ -278,7 +331,7 @@ let parseFromStream (stream: Stream) =
             | SectionId.Start -> sections.Add(Section.Start(reader.ReadUnsignedInteger() |> Checked.uint32))
             | SectionId.Code ->
                 let code = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader
+                for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionBuilderCache
                 sections.Add(Section.Code(Unsafe.Array.toImmutable code))
             | unknown -> failwithf "unknown section id 0x%02X" (uint8 unknown)
 
