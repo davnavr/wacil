@@ -290,6 +290,7 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         | Opcode.I64LeU -> block.Add(Instruction.Normal I64LeU)
         | Opcode.I64GeS -> block.Add(Instruction.Normal I64GeS)
         | Opcode.I64GeU -> block.Add(Instruction.Normal I64GeU)
+        | Opcode.I32And -> block.Add(Instruction.Normal I32And)
         | Opcode.I64Sub -> block.Add(Instruction.Normal I64Sub)
         | Opcode.I64Mul -> block.Add(Instruction.Normal I64Mul)
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
