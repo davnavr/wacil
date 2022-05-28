@@ -109,7 +109,28 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
 
     member _.Magic = actual
 
-let parseFromStream (stream: Stream): Module =
+let parseExpression (reader: Reader): Expression =
+    ()
+
+let parseCodeEntry (reader: Reader) =
+    let expectedFunctionSize = reader.ReadUInt64() |> Checked.int32
+    let functionStartOffset = reader.Offset
+
+    let locals = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+    for i = 0 to locals.Length - 1 do
+        locals[i] <-
+            { Local.Count = reader.ReadUInt64() |> Checked.uint32
+              Local.Type = reader.ReadValType() }
+
+    let code = { Code.Locals = Unsafe.Array.toImmutable locals; Body = parseExpression reader }
+
+    let actualFunctionSize = reader.Offset - functionStartOffset
+    if actualFunctionSize <> expectedFunctionSize then
+        failwith "TODO: Expected code function to haze a size of %i bytes, but got %i" expectedFunctionSize actualFunctionSize
+
+    code
+
+let parseFromStream (stream: Stream) =
     if isNull stream then nullArg (nameof stream)
     try
         if not stream.CanRead then invalidArg (nameof stream) "The stream must support reading"
@@ -174,6 +195,10 @@ let parseFromStream (stream: Stream): Module =
                             | _ -> failwithf "0x%02X is not a valid export kind" kind }
                 sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
             | SectionId.Start -> sections.Add(Section.Start(reader.ReadUInt64() |> Checked.uint32))
+            | SectionId.Code ->
+                let code = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader
+                sections.Add(Section.Code(Unsafe.Array.toImmutable code))
             | unknown -> failwithf "unknown section id 0x%02X" (uint8 unknown)
 
             let actualSectionSize = reader.Offset - sectionStartOffset
