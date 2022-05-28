@@ -230,6 +230,7 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
             blockInstructionStack.Add
                 { BlockBuilder.Instructions = instructionBuilderCache.Rent()
                   State = BlockBuilderState.If(reader.ReadBlockType()) }
+        //| Opcode.Else ->
         | Opcode.End ->
             let mutable popped = Unchecked.defaultof<BlockBuilder>
             blockInstructionStack.Pop(&popped)
@@ -247,6 +248,7 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
                 block.Add(Instruction.Structured { Kind = IfElse instructions; Type = ty; Instructions = branch })
 
             instructionBuilderCache.Return popped.Instructions
+        | Opcode.Br -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Br |> Instruction.Normal)
         | Opcode.Drop -> block.Add(Instruction.Normal Drop)
         | Opcode.LocalGet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet |> Instruction.Normal)
         | Opcode.LocalSet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet |> Instruction.Normal)

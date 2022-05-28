@@ -117,10 +117,12 @@ type BlockType =
     | Val of ValType
     //| Func of FuncType
 
+/// Contains instructions that don't mark the start of nested blocks.
 [<NoComparison; StructuralEquality>]
 type NormalInstruction =
     | Unreachable
     | Nop
+    | Br of label: Index
     | Drop
     | LocalGet of Index
     | LocalSet of Index

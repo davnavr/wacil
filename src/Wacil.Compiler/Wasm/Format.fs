@@ -112,6 +112,7 @@ type BlockType =
 type NormalInstruction =
     | Unreachable
     | Nop
+    | Br of label: Index
     | Drop
     | LocalGet of Index
     | LocalSet of Index
