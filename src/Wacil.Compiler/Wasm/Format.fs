@@ -88,6 +88,7 @@ type Opcode =
     | I64LeU = 0x58uy
     | I64GeS = 0x59uy
     | I64GeU = 0x5Auy
+    | I64Sub = 0x7Duy
     | I64Mul = 0x7Euy
 
 [<Struct>]
@@ -150,6 +151,7 @@ type NormalInstruction =
     | I64LeU
     | I64GeS
     | I64GeU
+    | I64Sub
     | I64Mul
 
 type StructuredInstructionKind =
