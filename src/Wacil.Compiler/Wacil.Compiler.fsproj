@@ -5,11 +5,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AsmResolver.DotNet" Version="4.11.1" />
+
     <Compile Include="Helpers\Span.fs" />
+    <Compile Include="Helpers\String.fs" />
     <Compile Include="Helpers\Unsafe.fsi" />
     <Compile Include="Helpers\Unsafe.fs" />
     <Compile Include="Helpers\Collections\ArrayBuilder.fs" />
-    
+
     <Compile Include="Wasm\Format.fsi" />
     <Compile Include="Wasm\Format.fs" />
     <Compile Include="Wasm\Parser.fsi" />

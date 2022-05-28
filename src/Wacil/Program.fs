@@ -8,19 +8,18 @@ open Argu
 open Wacil.Compiler.Emit
 
 type Options =
-    //| [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
+    | [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
     | Launch_Debugger
-    | Debug_Disassemble
-    | [<Unique>] Module of ``module.wasm``: string
+    | [<Hidden>] Debug_Disassemble
+    | [<Unique; AltCommandLine("-i")>] Module of ``module.wasm``: string
     | [<Unique>] Namespace of string
-    | No_Address_Space_Layout_Randomization
     | [<Unique; AltCommandLine("-o")>] Out of file: string
-    //| [<Unique>] Type of FileType
+    | [<Unique>] Type of OutputType
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            //| Framework _ -> "specifies the target framework of the assembly, defaults to .NET Standard 2.0"
+            | Framework _ -> "specifies the target framework of the assembly"
             | Launch_Debugger -> "launches the debugger used to debug the compiler"
             | Debug_Disassemble -> "disassembles the input WebAssembly file into the WebAssembly Text Format"
             | Module _ ->
@@ -28,9 +27,8 @@ type Options =
                 working directory if omitted"
             | Namespace _ ->
                 "the name of the namespace that will contain the class generated from the WebAssembly module"
-            | No_Address_Space_Layout_Randomization -> "Disables ASLR, the C# and F# compilers enable ASLR by default"
             | Out _ -> "the path to the generated CIL file"
-            //| Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
+            | Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
 
 let parser = ArgumentParser.Create<Options>(programName = "wacil")
 
@@ -45,8 +43,6 @@ let main argv =
         let args = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
 
         if args.Contains <@ Launch_Debugger @> then System.Diagnostics.Debugger.Launch() |> ignore
-
-        //let ttype = args.TryGetResult <@ Type @> |> Option.defaultValue Assembly
 
         let input =
             getFileArgument args <@ Module @> <| fun() -> 
@@ -66,18 +62,19 @@ let main argv =
         match Compiler.Wasm.Validation.Validate.fromModuleSections input' with
         | Ok input'' ->
             if args.Contains <@ Debug_Disassemble @> then
-                Compiler.Wasm.Disassemble.disassembleToWriter input'' System.Console.Out
+                Compiler.Wasm.Disassemble.disassembleToWriter input'' Console.Out
 
             let output =
-                getFileArgument args <@ Out @> <| fun() ->
-                    FileInfo(Path.ChangeExtension(input.FullName, ".dll"))
+                getFileArgument args <@ Out @> <| fun() -> FileInfo(Path.ChangeExtension(input.FullName, ".dll"))
 
             let oname = Path.GetFileNameWithoutExtension output.Name
 
             use writer = output.OpenWrite()
 
             Module.compileToStream
-                { Name = oname
+                { TargetFramework = args.GetResult(<@ Framework @>, defaultValue = TargetFramework.Net6)
+                  OutputType = args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
+                  Name = oname
                   Namespace = "" }
                 input''
                 writer

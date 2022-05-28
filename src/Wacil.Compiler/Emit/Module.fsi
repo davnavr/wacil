@@ -2,8 +2,9 @@
 [<RequireQualifiedAccess>]
 module Wacil.Compiler.Emit.Module
 
-open Wacil.Compiler.Wasm.Validation
+//val compileToModule
 
-val compileToBlobBuilder: options: Options -> input: ValidModule -> builder: System.Reflection.Metadata.BlobBuilder -> unit
-
-val compileToStream: options: Options -> input: ValidModule -> stream: System.IO.Stream -> unit
+val compileToStream:
+    options: Options ->
+    input: Wacil.Compiler.Wasm.Validation.ValidModule ->
+    stream: System.IO.Stream -> unit
