@@ -311,12 +311,12 @@ module Validate =
             let moduleFunctionBodies = ValueOption.defaultValue ImmutableArray.Empty builder.Code
             let expectedFunctionCount = moduleFunctionTypes.Length
 
-            if moduleFunctionTypes.Length <> moduleFunctionBodies.Length then
+            if expectedFunctionCount <> moduleFunctionBodies.Length then
                 error <-
                     ValueSome(FunctionSectionCountMismatch(SectionId.Code, expectedFunctionCount, moduleFunctionBodies.Length))
                 ImmutableArray.Empty
             else
-                let moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
+                let mutable moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
 
                 for i = 0 to expectedFunctionCount - 1 do
                     // TODO: Analyze each expression to check they are valid
@@ -326,7 +326,7 @@ module Validate =
                           Body = Expr moduleFunctionBodies[i].Body }
 
                 moduleFunctionDefinitions.ToImmutableArray()
-
+                
         // TODO: Analyze each expression to check they are valid
         
         match error with
