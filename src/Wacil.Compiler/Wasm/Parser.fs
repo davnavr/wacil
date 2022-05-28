@@ -235,6 +235,17 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         | Opcode.I64Store -> block.Add(parseMemArg reader |> I64Store |> Instruction.Normal)
         | Opcode.F32Store -> block.Add(parseMemArg reader |> F32Store |> Instruction.Normal)
         | Opcode.F64Store -> block.Add(parseMemArg reader |> F64Store |> Instruction.Normal)
+        | Opcode.I32Eqz -> block.Add(Instruction.Normal I32Eqz)
+        | Opcode.I32Eq -> block.Add(Instruction.Normal I32Eq)
+        | Opcode.I32Ne -> block.Add(Instruction.Normal I32Ne)
+        | Opcode.I32LtS -> block.Add(Instruction.Normal I32LtS)
+        | Opcode.I32LtU -> block.Add(Instruction.Normal I32LtU)
+        | Opcode.I32GtS -> block.Add(Instruction.Normal I32GtS)
+        | Opcode.I32GtU -> block.Add(Instruction.Normal I32GtU)
+        | Opcode.I32LeS -> block.Add(Instruction.Normal I32LeS)
+        | Opcode.I32LeU -> block.Add(Instruction.Normal I32LeU)
+        | Opcode.I32GeS -> block.Add(Instruction.Normal I32GeS)
+        | Opcode.I32GeU -> block.Add(Instruction.Normal I32GeU)
         | Opcode.MemoryGrow ->
             parseMemoryIndex reader
             block.Add(Instruction.Normal MemoryGrow)
