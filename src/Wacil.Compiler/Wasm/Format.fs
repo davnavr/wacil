@@ -11,11 +11,26 @@ module Preamble =
 type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
+    | I32Load = 0x28uy
+    | I64Load = 0x29uy
+    | F32Load = 0x2Auy
+    | F64Load = 0x2Buy
     | End = 0x40uy
     | I32Const = 0x41uy
     | I64Const = 0x42uy
     | F32Const = 0x43uy
     | F64Const = 0x44uy
+
+[<Struct>]
+type MemArgAlignment =
+    | MemArgAlignment of power: uint32
+
+    member this.Power = let (MemArgAlignment power) = this in power
+
+    member this.Alignment = pown 2UL (int32 this.Power)
+
+[<Struct>]
+type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 
 [<NoComparison; StructuralEquality>]
 type Instruction =
@@ -25,6 +40,10 @@ type Instruction =
     | I64Const of int64
     | F32Const of single
     | F64Const of double
+    | I32Load of MemArg
+    | I64Load of MemArg
+    | F32Load of MemArg
+    | F64Load of MemArg
 
 type Name = string
 

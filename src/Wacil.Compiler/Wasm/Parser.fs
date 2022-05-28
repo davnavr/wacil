@@ -157,6 +157,10 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
 
     member _.Magic = actual
 
+let parseMemArg (reader: Reader) =
+    { MemArg.Alignment = reader.ReadUnsignedInteger() |> Checked.uint32 |> MemArgAlignment
+      MemArg.Offset = reader.ReadUnsignedInteger() |> Checked.uint32 }
+
 let parseExpression (reader: Reader): Expression =
     let mutable body = ArrayBuilder<Instruction>.Create()
     let mutable expectedBlockEnds = 1u
@@ -165,6 +169,10 @@ let parseExpression (reader: Reader): Expression =
         match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
         | Opcode.Nop -> body.Add Instruction.Nop
         | Opcode.Unreachable -> body.Add Instruction.Unreachable
+        | Opcode.I32Load -> body.Add(parseMemArg reader |> Instruction.I32Load)
+        | Opcode.I64Load -> body.Add(parseMemArg reader |> Instruction.I64Load)
+        | Opcode.F32Load -> body.Add(parseMemArg reader |> Instruction.F32Load)
+        | Opcode.F64Load -> body.Add(parseMemArg reader |> Instruction.F64Load)
         | Opcode.End -> expectedBlockEnds <- Checked.(-) expectedBlockEnds 1u
         | Opcode.I32Const -> body.Add(reader.ReadSignedInteger() |> Checked.int32 |> Instruction.I32Const)
         | Opcode.I64Const -> body.Add(reader.ReadSignedInteger() |> Instruction.I64Const)
