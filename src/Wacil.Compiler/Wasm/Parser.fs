@@ -37,7 +37,8 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         this.ReadAll(Span.ofByRef(&value))
         value
 
-    member this.ReadUInt64() =
+    /// Reads an unsigned variable-length integer in LEB-128 encoding.
+    member this.ReadVarInt() =
         let mutable cont, n, shifted = true, LanguagePrimitives.GenericZero, 0
         while cont do
             let b = this.ReadByte()
@@ -51,7 +52,7 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         n
 
     member this.ReadName(): Name =
-        let length = this.ReadUInt64() |> Checked.int32
+        let length = this.ReadVarInt() |> Checked.int32
         let mutable bufferArray = null
         let buffer =
             if length < 512 then
@@ -78,7 +79,7 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         | bad -> failwithf "bad val type 0x%02X" (uint8 bad)
 
     member this.ReadResultType(): ResultType =
-        let count = this.ReadUInt64()
+        let count = this.ReadVarInt()
         if count > 0UL then
             let types = Array.zeroCreate(Checked.int32 count)
             for i = 0 to types.Length - 1 do types[i] <- this.ReadValType()
@@ -94,10 +95,10 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
 
     member this.ReadLimits() =
         match this.ReadByte() with
-        | 0uy -> Limits.ofMin(this.ReadUInt64() |> Checked.uint32)
+        | 0uy -> Limits.ofMin(this.ReadVarInt() |> Checked.uint32)
         | 1uy ->
-            let minimum = this.ReadUInt64() |> Checked.uint32
-            let maximum = this.ReadUInt64() |> Checked.uint32
+            let minimum = this.ReadVarInt() |> Checked.uint32
+            let maximum = this.ReadVarInt() |> Checked.uint32
             match Limits.tryWithMax minimum (ValueSome maximum) with
             | ValueSome(limits) -> limits
             | ValueNone -> failwith "maximum of limit must be less than minimum"
@@ -122,13 +123,13 @@ let parseExpression (reader: Reader): Expression =
     body.ToImmutableArray() |> Expr
 
 let parseCodeEntry (reader: Reader) =
-    let expectedFunctionSize = reader.ReadUInt64() |> Checked.int32
+    let expectedFunctionSize = reader.ReadVarInt() |> Checked.int32
     let functionStartOffset = reader.Offset
 
-    let locals = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+    let locals = Array.zeroCreate(reader.ReadVarInt() |> Checked.int32)
     for i = 0 to locals.Length - 1 do
         locals[i] <-
-            { Local.Count = reader.ReadUInt64() |> Checked.uint32
+            { Local.Count = reader.ReadVarInt() |> Checked.uint32
               Local.Type = reader.ReadValType() }
 
     let code = { Code.Locals = Unsafe.Array.toImmutable locals; Body = parseExpression reader }
@@ -164,7 +165,7 @@ let parseFromStream (stream: Stream) =
         //let sectionContentReader = Reader(sectionContentBuffer, ArrayPool.Shared)
 
         while reader.Read sectionTagBuffer > 0 do
-            let size = reader.ReadUInt64() |> Checked.int32
+            let size = reader.ReadVarInt() |> Checked.int32
             let sectionStartOffset = reader.Offset
 
             //sectionContentBuffer.Capacity <- size
@@ -173,29 +174,29 @@ let parseFromStream (stream: Stream) =
             match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
             | SectionId.Custom ->
                 let name = reader.ReadName()
-                let contents = reader.ReadUInt64() |> Checked.int32 |> Array.zeroCreate
+                let contents = reader.ReadVarInt() |> Checked.int32 |> Array.zeroCreate
                 reader.ReadAll(Span(contents))
                 sections.Add(Section.Custom { Custom.Name = name; Custom.Contents = Unsafe.Array.toImmutable contents })
             | SectionId.Type ->
-                let types = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                let types = Array.zeroCreate(reader.ReadVarInt() |> Checked.int32)
                 for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
                 sections.Add(Section.Type(Unsafe.Array.toImmutable types))
             | SectionId.Function ->
-                let indices = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
-                for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadUInt64() |> Checked.uint32
+                let indices = Array.zeroCreate(reader.ReadVarInt() |> Checked.int32)
+                for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadVarInt() |> Checked.uint32
                 sections.Add(Section.Function(Unsafe.Array.toImmutable indices))
             | SectionId.Memory ->
-                let mems = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                let mems = Array.zeroCreate(reader.ReadVarInt() |> Checked.int32)
                 for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()
                 sections.Add(Section.Memory(Unsafe.Array.toImmutable mems))
             | SectionId.Export ->
-                let exports = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                let exports = Array.zeroCreate(reader.ReadVarInt() |> Checked.int32)
                 for i = 0 to exports.Length - 1 do
                     exports[i] <-
                         { Export.Name = reader.ReadName()
                           Description =
                             let kind = reader.ReadByte()
-                            let index: Index = reader.ReadUInt64() |> Checked.uint32
+                            let index: Index = reader.ReadVarInt() |> Checked.uint32
                             match kind with
                             | 0uy -> ExportDesc.Func index
                             | 1uy -> ExportDesc.Table index
@@ -203,9 +204,9 @@ let parseFromStream (stream: Stream) =
                             | 3uy -> ExportDesc.Global index
                             | _ -> failwithf "0x%02X is not a valid export kind" kind }
                 sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
-            | SectionId.Start -> sections.Add(Section.Start(reader.ReadUInt64() |> Checked.uint32))
+            | SectionId.Start -> sections.Add(Section.Start(reader.ReadVarInt() |> Checked.uint32))
             | SectionId.Code ->
-                let code = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                let code = Array.zeroCreate(reader.ReadVarInt() |> Checked.int32)
                 for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader
                 sections.Add(Section.Code(Unsafe.Array.toImmutable code))
             | unknown -> failwithf "unknown section id 0x%02X" (uint8 unknown)
