@@ -13,6 +13,17 @@ open Wacil.Compiler.Helpers.Collections
 
 open Wacil.Compiler.Wasm.Format
 
+let getValType (value: byte) =
+    match LanguagePrimitives.EnumOfValue value with
+    | Type.I32 -> ValType.Num I32
+    | Type.I64 -> ValType.Num I64
+    | Type.F32 -> ValType.Num F32
+    | Type.F64 -> ValType.Num F64
+    | Type.V128 -> ValType.Vec V128
+    | Type.ExternRef -> ValType.Ref ExternRef
+    | Type.FuncRef -> ValType.Ref FuncRef
+    | _ -> failwithf "bad val type 0x%02X" value
+
 [<Sealed>]
 type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
     let [<Literal>] ContinueMask = 0b1000_0000uy
@@ -115,16 +126,17 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         if not(isNull bufferArray) then byteArrayPool.Return bufferArray
         name
 
-    member this.ReadValType() =
-        match LanguagePrimitives.EnumOfValue(this.ReadByte()) with
-        | Type.I32 -> ValType.Num I32
-        | Type.I64 -> ValType.Num I64
-        | Type.F32 -> ValType.Num F32
-        | Type.F64 -> ValType.Num F64
-        | Type.V128 -> ValType.Vec V128
-        | Type.ExternRef -> ValType.Ref ExternRef
-        | Type.FuncRef -> ValType.Ref FuncRef
-        | bad -> failwithf "bad val type 0x%02X" (uint8 bad)
+    member this.ReadValType() = this.ReadByte() |> getValType
+
+    member this.ReadBlockType() =
+        let value = this.ReadSignedInteger()
+        if value > 0L then
+            BlockType.Index(Checked.uint32 value)
+        else
+            Checked.int8 value
+            |> uint8
+            |> getValType
+            |> BlockType.Val
 
     member this.ReadResultType(): ResultType =
         let count = this.ReadUnsignedInteger()
