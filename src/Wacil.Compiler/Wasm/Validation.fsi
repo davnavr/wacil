@@ -31,12 +31,20 @@ type ModuleImportLookup =
 
     interface IReadOnlyDictionary<string, ModuleImports>
 
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type ValidExpression = internal Expr of ImmutableArray<Format.Instruction>
+
+[<NoComparison; StructuralEquality>]
+type Function =
+    { Type: Format.FuncType
+      Body: ValidExpression }
+
 [<Sealed>]
 type ValidModule =
     member CustomSections: ImmutableArray<Format.Custom>
     member Types: ImmutableArray<Format.FuncType>
     member Imports: ModuleImportLookup
-    
+    member Functions: ImmutableArray<Function>
     member Memories: ImmutableArray<Format.Limits>
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
@@ -44,6 +52,7 @@ type Error =
     | MultiMemoryNotSupported
     | DuplicateSection of id: Format.SectionId
     | InvalidSectionOrder of section: Format.SectionId * next: Format.SectionId
+    | FunctionSectionCountMismatch of section: Format.SectionId * expectedCount: int * actualCount: int
 
     override ToString: unit -> string
 

@@ -85,11 +85,21 @@ type ModuleImportLookup (lookup: Dictionary<string, ModuleImports>) =
         member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = lookup.GetEnumerator() :> System.Collections.IEnumerator
 
+[<Struct>]
+type ValidExpression =
+    internal
+    | Expr of ImmutableArray<Instruction>
+
+type Function =
+    { Type: FuncType
+      Body: ValidExpression }
+
 [<Sealed>]
 type ValidModule
     (
         custom: ImmutableArray<Custom>,
         types: ImmutableArray<FuncType>,
+        functions: ImmutableArray<Function>,
         imports: ModuleImportLookup,
         memories: ImmutableArray<Limits>
     )
@@ -97,13 +107,14 @@ type ValidModule
     member _.CustomSections = custom
     member _.Types = types
     member _.Imports = imports
-
+    member _.Functions = functions
     member _.Memories = memories
 
 type Error =
     | MultiMemoryNotSupported
     | DuplicateSection of id: SectionId
     | InvalidSectionOrder of section: SectionId * next: SectionId
+    | FunctionSectionCountMismatch of section: SectionId * expectedCount: int * actualCount: int
 
     override this.ToString() =
         match this with
@@ -113,6 +124,12 @@ type Error =
             sprintf "A %O section already exists" id
         | InvalidSectionOrder(section, next) ->
             sprintf "The %O section must be placed before the %O section" section next
+        | FunctionSectionCountMismatch(section, expected, actual) ->
+            sprintf
+                "The %O section used for functions was expected to contain %i items, but got %i items"
+                section
+                expected
+                actual
 
 [<RequireQualifiedAccess>]
 module Validate =
@@ -289,7 +306,28 @@ module Validate =
 
         // TODO: In sections where only constant expressions are allowed, loop through them to check they are valid
 
-        // TODO: Loop through functions to check that they are valid
+        let functions =
+            let moduleFunctionTypes = ValueOption.defaultValue ImmutableArray.Empty builder.Functions
+            let moduleFunctionBodies = ValueOption.defaultValue ImmutableArray.Empty builder.Code
+            let expectedFunctionCount = moduleFunctionTypes.Length
+
+            if moduleFunctionTypes.Length <> moduleFunctionBodies.Length then
+                error <-
+                    ValueSome(FunctionSectionCountMismatch(SectionId.Code, expectedFunctionCount, moduleFunctionBodies.Length))
+                ImmutableArray.Empty
+            else
+                let moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
+
+                for i = 0 to expectedFunctionCount - 1 do
+                    // TODO: Analyze each expression to check they are valid
+                    // TODO: Do a lookup of local types
+                    moduleFunctionDefinitions.Add
+                        { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
+                          Body = Expr moduleFunctionBodies[i].Body }
+
+                moduleFunctionDefinitions.ToImmutableArray()
+
+        // TODO: Analyze each expression to check they are valid
         
         match error with
         | ValueSome error' -> Error(error')
@@ -297,6 +335,6 @@ module Validate =
             custom = builder.CustomSections.ToImmutableArray(),
             types = types,
             imports = imports,
-
+            functions = functions,
             memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories
         ))
