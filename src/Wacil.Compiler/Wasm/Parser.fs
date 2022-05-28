@@ -158,6 +158,21 @@ let parseFromStream (stream: Stream): Module =
                 let mems = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
                 for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()
                 sections.Add(Section.Memory(Unsafe.Array.toImmutable mems))
+            | SectionId.Export ->
+                let exports = Array.zeroCreate(reader.ReadUInt64() |> Checked.int32)
+                for i = 0 to exports.Length - 1 do
+                    exports[i] <-
+                        { Export.Name = reader.ReadName()
+                          Description =
+                            let kind = reader.ReadByte()
+                            let index: Index = reader.ReadUInt64() |> Checked.uint32
+                            match kind with
+                            | 0uy -> ExportDesc.Func index
+                            | 1uy -> ExportDesc.Table index
+                            | 2uy -> ExportDesc.Mem index
+                            | 3uy -> ExportDesc.Global index
+                            | _ -> failwithf "0x%02X is not a valid export kind" kind }
+                sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
             | unknown ->
                 failwithf "unknown section id 0x%02X" (uint8 unknown)
 
