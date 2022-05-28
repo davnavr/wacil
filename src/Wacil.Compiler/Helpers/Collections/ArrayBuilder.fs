@@ -23,7 +23,7 @@ type internal ArrayBuilder<'a> =
     member private this.EnsureCapacity() =
         if this.length > this.buffer.Length then
             let newBufferCapacity =
-                if this.buffer.Length <= 2 then
+                if this.length <= 2 then
                     2
                 else
                     Checked.uint32 this.length
