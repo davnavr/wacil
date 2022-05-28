@@ -239,12 +239,16 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
             match popped.State with
             | BlockBuilderState.Finish -> body <- instructions
             | BlockBuilderState.Block ty ->
+                let mutable block = &blockInstructionStack.LastRef().Instructions
                 block.Add(Instruction.Structured { StructuredInstruction.Kind = Block; Type = ty; Instructions = instructions })
             | BlockBuilderState.Loop ty ->
+                let mutable block = &blockInstructionStack.LastRef().Instructions
                 block.Add(Instruction.Structured { StructuredInstruction.Kind = Loop; Type = ty; Instructions = instructions })
             | BlockBuilderState.If ty ->
+                let mutable block = &blockInstructionStack.LastRef().Instructions
                 block.Add(Instruction.Structured { Kind = IfElse ImmutableArray.Empty; Type = ty; Instructions = instructions })
             | BlockBuilderState.IfElse(ty, branch) ->
+                let mutable block = &blockInstructionStack.LastRef().Instructions
                 block.Add(Instruction.Structured { Kind = IfElse instructions; Type = ty; Instructions = branch })
 
             instructionBuilderCache.Return popped.Instructions
