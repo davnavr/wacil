@@ -38,7 +38,17 @@ type FuncType = { Parameters: ResultType; Results: ResultType }
 type Opcode =
     | Unreachable = 0uy
     | Nop = 1uy
+    | Block = 2uy
+    | Loop = 3uy
+    | If = 4uy
+    | Else = 5uy
     | End = 0xBuy
+    | Br = 0xCuy
+    | BrIf = 0xDuy
+    | BrTable = 0xEuy
+    | Return = 0xFuy
+    | Call = 0x10uy
+    | CallIndirect = 0x11uy
     | Drop = 0x1Auy
     | LocalGet = 0x20uy
     | LocalSet = 0x21uy
@@ -67,6 +77,17 @@ type Opcode =
     | I32LeU = 0x4Duy
     | I32GeS = 0x4Euy
     | I32GeU = 0x4Fuy
+    | I64Eqz = 0x50uy
+    | I64Eq = 0x51uy
+    | I64Ne = 0x52uy
+    | I64LtS = 0x53uy
+    | I64LtU = 0x54uy
+    | I64GtS = 0x55uy
+    | I64GtU = 0x56uy
+    | I64LeS = 0x57uy
+    | I64LeU = 0x58uy
+    | I64GeS = 0x59uy
+    | I64GeU = 0x5Auy
 
 [<Struct>]
 type MemArgAlignment =
@@ -117,6 +138,17 @@ type NormalInstruction =
     | I32LeU
     | I32GeS
     | I32GeU
+    | I64Eqz
+    | I64Eq
+    | I64Ne
+    | I64LtS
+    | I64LtU
+    | I64GtS
+    | I64GtU
+    | I64LeS
+    | I64LeU
+    | I64GeS
+    | I64GeU
 
 type StructuredInstructionKind =
     | Block
