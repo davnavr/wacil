@@ -10,6 +10,7 @@ open Wacil.Compiler.Emit
 type Options =
     //| [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
     | Launch_Debugger
+    | Debug_Disassemble
     | [<Unique>] Module of ``module.wasm``: string
     | [<Unique>] Namespace of string
     | No_Address_Space_Layout_Randomization
@@ -21,6 +22,7 @@ type Options =
             match this with
             //| Framework _ -> "specifies the target framework of the assembly, defaults to .NET Standard 2.0"
             | Launch_Debugger -> "launches the debugger used to debug the compiler"
+            | Debug_Disassemble -> "disassembles the input WebAssembly file into the WebAssembly Text Format"
             | Module _ ->
                 "the WebAssembly file to convert into a CIL file, defaults to searching for a WebAssembly file in the current \
                 working directory if omitted"
@@ -63,6 +65,9 @@ let main argv =
 
         match Compiler.Wasm.Validation.Validate.fromModuleSections input' with
         | Ok input'' ->
+            if args.Contains <@ Debug_Disassemble @> then
+                Compiler.Wasm.Disassemble.disassembleToWriter input'' System.Console.Out
+
             let output =
                 getFileArgument args <@ Out @> <| fun() ->
                     FileInfo(Path.ChangeExtension(input.FullName, ".dll"))

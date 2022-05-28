@@ -16,6 +16,8 @@
     <Compile Include="Wasm\Parser.fs" />
     <Compile Include="Wasm\Validation.fsi" />
     <Compile Include="Wasm\Validation.fs" />
+    <Compile Include="Wasm\Disassemble.fsi" />
+    <Compile Include="Wasm\Disassemble.fs" />
 
     <Compile Include="Emit\Options.fs" />
     <Compile Include="Emit\Module.fsi" />
