@@ -1,10 +1,13 @@
 module Wacil.Compiler.Emit.Module
 
+open Microsoft.FSharp.Core.Printf
+
 open AsmResolver
 open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
 
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
+open AsmResolver.DotNet.Signatures.Types
 
 open Wacil.Compiler.Helpers
 
@@ -20,6 +23,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         match options.TargetFramework with
         | TargetFramework.Net6 -> KnownCorLibs.SystemRuntime_v6_0_0_0
 
+    let stringBuffer = System.Text.StringBuilder()
     let outputName = String.defaultValue "module" options.Name
     let moduleDefinition = new ModuleDefinition(outputName + ".dll", coreLibraryReference)
 
@@ -94,6 +98,31 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     classDefinition.BaseType <- coreSystemObject
     moduleDefinition.TopLevelTypes.Add classDefinition
+
+    let classDefinitionConstructor =
+        // TODO: Signature should accept exports
+        MethodDefinition(
+            ".ctor",
+            MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
+            MethodAttributes.HideBySig,
+            MethodSignature(CallingConventionAttributes.Default, moduleDefinition.CorLibTypeFactory.Void, [||])
+        )
+
+    for i = 0 to input.Memories.Length - 1 do
+        let memory = input.Memories[i]
+        let memoryField =
+            let name =
+                bprintf (stringBuffer.Clear()) "memory#%i" i
+                stringBuffer.ToString()
+
+            FieldDefinition(
+                name,
+                FieldAttributes.InitOnly,
+                FieldSignature(TypeDefOrRefSignature runtimeLibraryReference.Memory)
+            )
+
+        // TODO: Check exports to see if this memory is named
+        classDefinition.Fields.Add memoryField
 
     moduleDefinition
 
