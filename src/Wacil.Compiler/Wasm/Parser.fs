@@ -173,19 +173,23 @@ let parseExpression (reader: Reader): Expression =
         match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
         | Opcode.Unreachable -> body.Add Instruction.Unreachable
         | Opcode.Nop -> body.Add Instruction.Nop
+        | Opcode.End -> expectedBlockEnds <- Checked.(-) expectedBlockEnds 1u
         | Opcode.Drop -> body.Add Instruction.Drop
         | Opcode.I32Load -> body.Add(parseMemArg reader |> Instruction.I32Load)
         | Opcode.I64Load -> body.Add(parseMemArg reader |> Instruction.I64Load)
         | Opcode.F32Load -> body.Add(parseMemArg reader |> Instruction.F32Load)
         | Opcode.F64Load -> body.Add(parseMemArg reader |> Instruction.F64Load)
-        | Opcode.End -> expectedBlockEnds <- Checked.(-) expectedBlockEnds 1u
+        | Opcode.I32Store -> body.Add(parseMemArg reader |> Instruction.I32Store)
+        | Opcode.I64Store -> body.Add(parseMemArg reader |> Instruction.I64Store)
+        | Opcode.F32Store -> body.Add(parseMemArg reader |> Instruction.F32Store)
+        | Opcode.F64Store -> body.Add(parseMemArg reader |> Instruction.F64Store)
+        | Opcode.MemoryGrow ->
+            parseMemoryIndex reader
+            body.Add Instruction.MemoryGrow
         | Opcode.I32Const -> body.Add(reader.ReadSignedInteger() |> Checked.int32 |> Instruction.I32Const)
         | Opcode.I64Const -> body.Add(reader.ReadSignedInteger() |> Instruction.I64Const)
         | Opcode.F32Const -> body.Add(reader.ReadFloat32()|> Instruction.F32Const)
         | Opcode.F64Const -> body.Add(reader.ReadFloat64() |> Instruction.F64Const)
-        | Opcode.MemoryGrow ->
-            parseMemoryIndex reader
-            body.Add Instruction.MemoryGrow
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
     body.ToImmutableArray() |> Expr
 

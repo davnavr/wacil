@@ -17,6 +17,10 @@ type Opcode =
     | I64Load = 0x29uy
     | F32Load = 0x2Auy
     | F64Load = 0x2Buy
+    | I32Store = 0x36uy
+    | I64Store = 0x37uy
+    | F32Store = 0x38uy
+    | F64Store = 0x39uy
     | MemoryGrow = 0x40uy
     | I32Const = 0x41uy
     | I64Const = 0x42uy
@@ -43,6 +47,10 @@ type Instruction =
     | I64Load of MemArg
     | F32Load of MemArg
     | F64Load of MemArg
+    | I32Store of MemArg
+    | I64Store of MemArg
+    | F32Store of MemArg
+    | F64Store of MemArg
     | MemoryGrow
     | I32Const of int32
     | I64Const of int64
