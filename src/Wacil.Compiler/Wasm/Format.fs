@@ -153,10 +153,7 @@ type ImportDesc =
 
 type Import = { Module: string; Name: string; Description: ImportDesc }
 
-[<Struct>]
-type Expression = internal Expr of ImmutableArray<Instruction>
-
-let (|Expression|) (Expr expression) = expression
+type Expression = ImmutableArray<Instruction>
 
 type Global = { Type: GlobalType; Expression: Expression }
 

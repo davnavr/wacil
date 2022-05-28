@@ -241,7 +241,7 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         | Opcode.F64Const -> block.Add(reader.ReadFloat64() |> F64Const |> Instruction.Normal)
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
-    Expr body
+    body
 
 let parseCodeEntry (reader: Reader) (instructionBuilderCache: byref<InstructionBuilderCache>) =
     let expectedFunctionSize = reader.ReadUnsignedInteger() |> Checked.int32

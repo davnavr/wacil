@@ -164,11 +164,7 @@ type ImportDesc =
 [<NoComparison; StructuralEquality>]
 type Import = { Module: string; Name: string; Description: ImportDesc }
 
-/// <summary>An expression is a sequence of instructions terminated with an <c>end</c> isntruction.</summary>
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type Expression = internal Expr of ImmutableArray<Instruction> // TODO: Make this an alias again
-
-val (|Expression|): expression: Expression -> ImmutableArray<Instruction>
+type Expression = ImmutableArray<Instruction>
 
 [<NoComparison; StructuralEquality>]
 type Global = { Type: GlobalType; Expression: Expression }
