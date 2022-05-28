@@ -40,6 +40,9 @@ type Opcode =
     | Nop = 1uy
     | End = 0xBuy
     | Drop = 0x1Auy
+    | LocalGet = 0x20uy
+    | LocalSet = 0x21uy
+    | LocalTee = 0x22uy
     | I32Load = 0x28uy
     | I64Load = 0x29uy
     | F32Load = 0x2Auy
@@ -76,6 +79,9 @@ type NormalInstruction =
     | Unreachable
     | Nop
     | Drop
+    | LocalGet of Index
+    | LocalSet of Index
+    | LocalTee of Index
     | I32Load of MemArg
     | I64Load of MemArg
     | F32Load of MemArg

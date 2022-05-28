@@ -224,6 +224,9 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
 
             instructionBuilderCache.Return popped.Instructions
         | Opcode.Drop -> block.Add(Instruction.Normal Drop)
+        | Opcode.LocalGet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet |> Instruction.Normal)
+        | Opcode.LocalSet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet |> Instruction.Normal)
+        | Opcode.LocalTee -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalTee |> Instruction.Normal)
         | Opcode.I32Load -> block.Add(parseMemArg reader |> I32Load |> Instruction.Normal)
         | Opcode.I64Load -> block.Add(parseMemArg reader |> I64Load |> Instruction.Normal)
         | Opcode.F32Load -> block.Add(parseMemArg reader |> F32Load |> Instruction.Normal)
