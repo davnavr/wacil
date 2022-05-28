@@ -259,6 +259,13 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         | Opcode.I64Store -> block.Add(parseMemArg reader |> I64Store |> Instruction.Normal)
         | Opcode.F32Store -> block.Add(parseMemArg reader |> F32Store |> Instruction.Normal)
         | Opcode.F64Store -> block.Add(parseMemArg reader |> F64Store |> Instruction.Normal)
+        | Opcode.MemoryGrow ->
+            parseMemoryIndex reader
+            block.Add(Instruction.Normal MemoryGrow)
+        | Opcode.I32Const -> block.Add(reader.ReadSignedInteger() |> Checked.int32 |> I32Const |> Instruction.Normal)
+        | Opcode.I64Const -> block.Add(reader.ReadSignedInteger() |> I64Const |> Instruction.Normal)
+        | Opcode.F32Const -> block.Add(reader.ReadFloat32() |> F32Const |> Instruction.Normal)
+        | Opcode.F64Const -> block.Add(reader.ReadFloat64() |> F64Const |> Instruction.Normal)
         | Opcode.I32Eqz -> block.Add(Instruction.Normal I32Eqz)
         | Opcode.I32Eq -> block.Add(Instruction.Normal I32Eq)
         | Opcode.I32Ne -> block.Add(Instruction.Normal I32Ne)
@@ -281,13 +288,7 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         | Opcode.I64LeU -> block.Add(Instruction.Normal I64LeU)
         | Opcode.I64GeS -> block.Add(Instruction.Normal I64GeS)
         | Opcode.I64GeU -> block.Add(Instruction.Normal I64GeU)
-        | Opcode.MemoryGrow ->
-            parseMemoryIndex reader
-            block.Add(Instruction.Normal MemoryGrow)
-        | Opcode.I32Const -> block.Add(reader.ReadSignedInteger() |> Checked.int32 |> I32Const |> Instruction.Normal)
-        | Opcode.I64Const -> block.Add(reader.ReadSignedInteger() |> I64Const |> Instruction.Normal)
-        | Opcode.F32Const -> block.Add(reader.ReadFloat32() |> F32Const |> Instruction.Normal)
-        | Opcode.F64Const -> block.Add(reader.ReadFloat64() |> F64Const |> Instruction.Normal)
+        | Opcode.I64Mul -> block.Add(Instruction.Normal I64Mul)
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
     body

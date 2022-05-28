@@ -94,6 +94,7 @@ type Opcode =
     | I64LeU = 0x58uy
     | I64GeS = 0x59uy
     | I64GeU = 0x5Auy
+    | I64Mul = 0x7Euy
 
 [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type MemArgAlignment =
@@ -158,6 +159,7 @@ type NormalInstruction =
     | I64LeU
     | I64GeS
     | I64GeU
+    | I64Mul
 
 type [<NoComparison; StructuralEquality>] StructuredInstructionKind =
     | Block
