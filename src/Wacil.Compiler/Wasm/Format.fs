@@ -16,6 +16,7 @@ type Opcode =
     | I64Load = 0x29uy
     | F32Load = 0x2Auy
     | F64Load = 0x2Buy
+    | MemoryGrow = 0x40uy
     | I32Const = 0x41uy
     | I64Const = 0x42uy
     | F32Const = 0x43uy
@@ -36,14 +37,15 @@ type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 type Instruction =
     | Unreachable
     | Nop
-    | I32Const of int32
-    | I64Const of int64
-    | F32Const of single
-    | F64Const of double
     | I32Load of MemArg
     | I64Load of MemArg
     | F32Load of MemArg
     | F64Load of MemArg
+    | MemoryGrow
+    | I32Const of int32
+    | I64Const of int64
+    | F32Const of single
+    | F64Const of double
 
 type Name = string
 

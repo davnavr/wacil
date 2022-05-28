@@ -161,6 +161,10 @@ let parseMemArg (reader: Reader) =
     { MemArg.Alignment = reader.ReadUnsignedInteger() |> Checked.uint32 |> MemArgAlignment
       MemArg.Offset = reader.ReadUnsignedInteger() |> Checked.uint32 }
 
+let parseMemoryIndex (reader: Reader) =
+    if reader.ReadByte() <> 0uy then
+        failwithf "TODO: Expected 0 byte after memory instruction"
+
 let parseExpression (reader: Reader): Expression =
     let mutable body = ArrayBuilder<Instruction>.Create()
     let mutable expectedBlockEnds = 1u
@@ -178,6 +182,9 @@ let parseExpression (reader: Reader): Expression =
         | Opcode.I64Const -> body.Add(reader.ReadSignedInteger() |> Instruction.I64Const)
         | Opcode.F32Const -> body.Add(reader.ReadFloat32()|> Instruction.F32Const)
         | Opcode.F64Const -> body.Add(reader.ReadFloat64() |> Instruction.F64Const)
+        | Opcode.MemoryGrow ->
+            parseMemoryIndex reader
+            body.Add Instruction.MemoryGrow
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
     body.ToImmutableArray() |> Expr
 
