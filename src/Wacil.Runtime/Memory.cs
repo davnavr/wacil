@@ -30,21 +30,45 @@ namespace Wacil.Runtime {
             internal int RemainingBytes => PageSize - Offset;
 
             internal static Location FromAddress(uint address) {
-                // Lower bits of address contain the actual offset from the start of the page
-                return new((int)(address >> 16), unchecked((ushort)(address)));
+                unchecked {
+                    // Lower bits of address contain the actual offset from the start of the page
+                    return new((int)(address >> 16), (ushort)(address));
+                }
+            }
+
+            public static Location operator + (Location location, ushort offset) {
+                unchecked {
+                    uint nextOffset = (uint)offset + location.Offset;
+                    if (nextOffset < (uint)PageSize) {
+                        return new(location.Page, (ushort)nextOffset);
+                    } else {
+                        return new(location.Page, (ushort)(nextOffset - PageSize));
+                    }
+                }
             }
         }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static byte ReadByte(Memory memory, Location location) => memory.pages[location.Page][location.Offset];
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static byte ReadByte(Memory memory, uint address) => ReadByte(memory, Location.FromAddress(address));
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private int ReadInt32Slow(Location location) {
-
+            Span<byte> buffer = stackalloc byte[4];
+            buffer[0] = ReadByte(this, location);
+            buffer[1] = ReadByte(this, location + 1);
+            buffer[2] = ReadByte(this, location + 2);
+            buffer[3] = ReadByte(this, location + 3);
+            return BitConverter.ToInt32(buffer);
         }
 
         //public static void Grow(Memory memory, uint pages)
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadInt32(Memory memory, uint offset, uint alignment, uint address) {
-            var location = Location.FromAddress(offset + address);
+            var location = Location.FromAddress(unchecked(offset + address));
             // Is the alignment hint >= 4 bytes and is the location a multiple of 4?
             if (alignment >= 2 && (location.Offset & 0b11) != 0) {
                 // An aligned read can occur
