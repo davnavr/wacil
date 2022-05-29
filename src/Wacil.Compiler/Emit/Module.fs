@@ -297,10 +297,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let mutable hasExplicitReturn = false
 
         while not instructionBlockStack.IsEmpty do
-            let mutable block = instructionBlockStack.LastRef()
+            let mutable block = &instructionBlockStack.LastRef()
             if block.IsEmpty then
-                let mutable popped = Unchecked.defaultof<_>
-                instructionBlockStack.Pop(popped) |> ignore
+                let _ = instructionBlockStack.Pop()
+                ()
             else
                 match block.Span[0].Instruction with
                 | Instruction.Normal normal ->
