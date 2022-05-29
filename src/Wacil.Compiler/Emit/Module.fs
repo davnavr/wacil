@@ -154,17 +154,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     for i = 0 to input.Memories.Length - 1 do
         let memory = input.Memories[i]
         let memoryField =
-            let name =
-                bprintf (stringBuffer.Clear()) "memory#%i" i
-                stringBuffer.ToString()
-
             FieldDefinition(
-                name,
+                stringBuffer.Clear().Append("memory#").Append(i).ToString(),
                 FieldAttributes.InitOnly,
                 FieldSignature(TypeDefOrRefSignature runtimeLibraryReference.Memory)
             )
 
-        // TODO: Check exports to see if this memory is named
         classDefinition.Fields.Add memoryField
 
         let instructions = classConstructorBody.Instructions
@@ -174,9 +169,36 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         instructions.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.MemoryConstructor))
         instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
 
+        match input.Exports.GetMemoryName(Checked.uint32 i) with
+        | true, name ->
+            let accessor =
+                MethodDefinition(
+                    stringBuffer.Clear().Append("get_").Append(name).ToString(),
+                    MethodAttributes.Public ||| //MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
+                    MethodAttributes.HideBySig,
+                    MethodSignature(
+                        CallingConventionAttributes.HasThis,
+                        TypeDefOrRefSignature runtimeLibraryReference.Memory,
+                        Array.empty
+                    )
+                )
+            
+            classDefinition.Methods.Add accessor
+
+            let body = CilMethodBody accessor
+            let instructions = body.Instructions
+            instructions.Add(CilInstruction CilOpCodes.Ldarg_0)
+            instructions.Add(CilInstruction(CilOpCodes.Ldfld, memoryField))
+            instructions.Add(CilInstruction CilOpCodes.Ret)
+            accessor.CilMethodBody <- body
+
+            // TODO: Generate accessor
+            ()
+        | false, _ -> ()
+
     // Done generating code for constructor
     classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
-    classDefinitionConstructor.MethodBody <- classConstructorBody
+    classDefinitionConstructor.CilMethodBody <- classConstructorBody
 
     moduleDefinition
 

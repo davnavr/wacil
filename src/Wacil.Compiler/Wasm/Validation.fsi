@@ -52,7 +52,7 @@ type ModuleExport =
 
 [<Sealed>]
 type ModuleExportLookup =
-    member GetMemoryName: index: Format.Index -> string
+    member GetMemoryName: index: Format.Index * name: outref<string> -> bool
     member Item: name: string -> ModuleExport with get
 
 [<Sealed>]

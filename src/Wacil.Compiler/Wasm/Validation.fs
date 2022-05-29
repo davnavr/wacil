@@ -110,7 +110,7 @@ type ModuleExportLookup
         lookup: Dictionary<string, ModuleExport>
     )
     =
-    member _.GetMemoryName index = memories[index]
+    member _.GetMemoryName(index, name: outref<_>) = memories.TryGetValue(index, &name)
     member _.Item with get name = lookup[name]
 
 [<Sealed>]
