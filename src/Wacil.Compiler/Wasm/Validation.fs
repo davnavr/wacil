@@ -428,12 +428,19 @@ module Validate =
         let validateExpression
             (operandTypeStack: OperandTypeStack)
             (branchTargetBuilder: ArrayBuilder<int> ref)
-            (returnTypes: ImmutableArray<ValType>)
+            (functionType: FuncType)
             (localTypes: ImmutableArray<ValType>)
             (expression: Expression)
             =
             operandTypeStack.Stack.Clear()
             branchTargetBuilder.Value.Clear()
+
+            let actualLocalStartIndex = functionType.Parameters.Length
+            let getLocalType (index: Index) =
+                let i = Checked.int32 index
+                if i < actualLocalStartIndex
+                then functionType.Parameters[i]
+                else localTypes[i - actualLocalStartIndex]
 
             let mutable instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
             let mutable index = 0
@@ -473,7 +480,7 @@ module Validate =
                             let poppedType = operandTypeStack.PopAny()
                             emit Normal (ImmutableArray.Create(item = poppedType)) ImmutableArray.Empty
                         | LocalGet index ->
-                            let ty = localTypes[Checked.int32 index]
+                            let ty = getLocalType index
                             operandTypeStack.Push ty
                             emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = ty))
                         | I32Load _
@@ -506,7 +513,7 @@ module Validate =
         let operandTypeStack = { OperandTypeStack.Stack = ArrayBuilder<_>.Create() }
         let branchTargetIndices = ArrayBuilder<_>.Create() |> ref
         for func in functions do
-            let instructions, indices = validateExpression operandTypeStack branchTargetIndices func.Type.Results func.LocalTypes func.Body.Source
+            let instructions, indices = validateExpression operandTypeStack branchTargetIndices func.Type func.LocalTypes func.Body.Source
             func.Body.Expression <- instructions
             func.Body.BranchTargets <- indices
         
