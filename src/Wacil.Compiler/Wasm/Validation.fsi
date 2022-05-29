@@ -31,12 +31,26 @@ type ModuleImportLookup =
 
     interface IReadOnlyDictionary<string, ModuleImports>
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type ValidInstructionSequence = ImmutableArray<ValidInstruction>
+
+and [<NoComparison; StructuralEquality>] ValidInstructionKind =
+    | Normal
+    | Branching of indices: ImmutableArray<int32>
+    | Structured of ImmutableArray<ValidInstructionSequence>
+
+and [<NoComparison; StructuralEquality>] ValidInstruction =
+    { Index: int32
+      PoppedTypes: ImmutableArray<Format.ValType>
+      PushedTypes: ImmutableArray<Format.ValType>
+      Instruction: Format.Instruction
+      Kind: ValidInstructionKind }
+
+[<NoComparison; StructuralEquality>]
 type ValidExpression =
     internal
-    | Expr of ImmutableArray<Format.Instruction>
+        { mutable Expression: ValidInstructionSequence }
 
-    member Instructions: ImmutableArray<Format.Instruction>
+    member Instructions: ValidInstructionSequence
 
 [<NoComparison; StructuralEquality>]
 type Function =

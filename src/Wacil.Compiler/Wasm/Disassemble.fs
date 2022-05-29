@@ -49,27 +49,7 @@ type Writer (output: TextWriter) =
 
 let disassembleInstructionSequence (instructions: ImmutableArray<Instruction>) (out: Writer) =
     for instruction in instructions do
-        match instruction with
-        | Instruction.Normal normal ->
-            match normal with
-            | Nop -> out.Write "nop"
-            | Drop -> out.Write "drop"
-            | I32Load arg ->
-                out.Write "i32.load"
-                if arg.Offset <> 0u || arg.Alignment.Power <> 2u then
-                    out.Write(sprintf "offset %i align %i" arg.Offset arg.Alignment.Power)
-            | I32Store arg ->
-                out.Write "i32.store"
-                if arg.Offset <> 0u || arg.Alignment.Power <> 2u then
-                    out.Write(sprintf "offset %i align %i" arg.Offset arg.Alignment.Power)
-            | MemoryGrow -> out.Write "memory.grow"
-            | I32Const value -> out.Write(sprintf "i32.const %i" value)
-            | _ -> failwith "todo"
-        | Instruction.Structured structured ->
-            match structured.Kind with
-            | Block -> out.Write "block"
-            | Loop -> out.Write "loop"
-            | _ -> failwith "todo"
+        raise(System.NotImplementedException())
 
         out.WriteLine()
 

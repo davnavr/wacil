@@ -85,12 +85,32 @@ type ModuleImportLookup (lookup: Dictionary<string, ModuleImports>) =
         member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = lookup.GetEnumerator() :> System.Collections.IEnumerator
 
-[<Struct>]
+type ValidInstructionSequence = ImmutableArray<ValidInstruction>
+
+and ValidInstructionKind =
+    | Normal
+    | Branching of indices: ImmutableArray<int32>
+    | Structured of ImmutableArray<ValidInstructionSequence>
+
+and ValidInstruction =
+    { Index: int32
+      PoppedTypes: ImmutableArray<ValType>
+      PushedTypes: ImmutableArray<ValType>
+      Instruction: Instruction
+      Kind: ValidInstructionKind }
+
+[<NoComparison; NoEquality>]
+type ValidExpressionBuilder =
+    { Start: Instruction voption
+      mutable Source: System.ReadOnlyMemory<Instruction>
+      mutable Instructions: ArrayBuilder<ValidInstruction> }
+
 type ValidExpression =
     internal
-    | Expr of ImmutableArray<Instruction>
+        { Source: Expression
+          mutable Expression: ValidInstructionSequence }
 
-    member this.Instructions = let (Expr instructions) = this in instructions
+    member this.Instructions = this.Expression
 
 type Function =
     { Type: FuncType
@@ -340,11 +360,12 @@ module Validate =
                 let mutable moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
 
                 for i = 0 to expectedFunctionCount - 1 do
-                    // TODO: Analyze each expression to check they are valid
                     // TODO: Do a lookup of local types
                     moduleFunctionDefinitions.Add
                         { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
-                          Body = Expr moduleFunctionBodies[i].Body }
+                          Body =
+                            { ValidExpression.Source = moduleFunctionBodies[i].Body
+                              Expression = Unchecked.defaultof<_> } }
 
                 moduleFunctionDefinitions.ToImmutableArray()
                 
@@ -370,6 +391,47 @@ module Validate =
             ModuleExportLookup(memories, lookup)
 
         // TODO: Analyze each expression to check they are valid
+        let validateExpression (returnTypes: ImmutableArray<ValType>) (expression: Expression): ValidInstructionSequence =
+            let instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
+            let operandTypeStack = ArrayBuilder<ValType>.Create()
+            let mutable index = 0
+            let mutable instructions = Unchecked.defaultof<_>
+
+            instructionBuilderStack.Add
+                { Start = ValueNone
+                  Source = expression.AsMemory()
+                  Instructions = ArrayBuilder<_>.Create expression.Length }
+            
+            while not instructionBuilderStack.IsEmpty do
+                let top = instructionBuilderStack.LastRef()
+                if top.Source.IsEmpty then failwith "TODO: Block unexpectedly ended"
+
+                let instruction = top.Source.Span[0]
+                top.Source <- top.Source.Slice(1)
+
+                let inline emit kind poppedTypes pushedTypes =
+                    top.Instructions.Add
+                        { Index = index
+                          PoppedTypes = poppedTypes
+                          PushedTypes = pushedTypes
+                          Instruction = instruction
+                          Kind = kind }
+
+                match instruction with
+                | Instruction.Normal normal ->
+                    match normal with
+                    | Nop -> emit Normal ImmutableArray.Empty ImmutableArray.Empty
+                    | Drop ->
+                        let poppedType = operandTypeStack.Pop()
+                        emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = poppedType))
+                    | _ -> failwith "TODO: Add support for validating %A" normal
+
+                index <- Checked.(+) index 1
+
+            instructions
+
+        for func in functions do
+            func.Body.Expression <- validateExpression func.Type.Results func.Body.Source
         
         match error with
         | ValueSome error' -> Error(error')
