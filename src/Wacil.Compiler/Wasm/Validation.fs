@@ -108,9 +108,11 @@ type ValidExpressionBuilder =
 type ValidExpression =
     internal
         { Source: Expression
+          mutable BranchTargets: ImmutableArray<int>
           mutable Expression: ValidInstructionSequence }
 
     member this.Instructions = this.Expression
+    member this.BranchTargetIndices = this.BranchTargets
 
 type Function =
     { Type: FuncType
@@ -392,6 +394,7 @@ module Validate =
                           LocalTypes = localTypesBuilder.ToImmutableArray()
                           Body =
                             { ValidExpression.Source = body.Body
+                              BranchTargets = Unchecked.defaultof<_>
                               Expression = Unchecked.defaultof<_> } }
 
                 moduleFunctionDefinitions.ToImmutableArray()
@@ -420,11 +423,14 @@ module Validate =
         // TODO: Analyze each expression to check they are valid
         let validateExpression
             (operandTypeStack: OperandTypeStack)
+            (branchTargetBuilder: ArrayBuilder<int> ref)
             (returnTypes: ImmutableArray<ValType>)
             (localTypes: ImmutableArray<ValType>)
             (expression: Expression)
-            : ValidInstructionSequence
             =
+            operandTypeStack.Stack.Clear()
+            branchTargetBuilder.Value.Clear()
+
             let mutable instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
             let mutable index = 0
             let mutable instructions = Unchecked.defaultof<_>
@@ -484,11 +490,14 @@ module Validate =
 
             assert not instructions.IsDefault
 
-            instructions
+            instructions, branchTargetBuilder.Value.ToImmutableArray()
 
         let operandTypeStack = { OperandTypeStack.Stack = ArrayBuilder<_>.Create() }
+        let branchTargetIndices = ArrayBuilder<_>.Create() |> ref
         for func in functions do
-            func.Body.Expression <- validateExpression operandTypeStack func.Type.Results func.LocalTypes func.Body.Source
+            let instructions, indices = validateExpression operandTypeStack branchTargetIndices func.Type.Results func.LocalTypes func.Body.Source
+            func.Body.Expression <- instructions
+            func.Body.BranchTargets <- indices
         
         match error with
         | ValueSome error' -> Error(error')

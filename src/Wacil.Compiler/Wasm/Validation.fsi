@@ -49,9 +49,11 @@ and [<NoComparison; StructuralEquality>] ValidInstruction =
 type ValidExpression =
     internal
         { Source: Format.Expression
+          mutable BranchTargets: ImmutableArray<int>
           mutable Expression: ValidInstructionSequence }
 
     member Instructions: ValidInstructionSequence
+    member BranchTargetIndices: ImmutableArray<int>
 
 [<NoComparison; StructuralEquality>]
 type Function =
