@@ -442,38 +442,38 @@ module Validate =
                         // TODO: Remove code duplication with `return` instruction validator
                         instructionBuilderStack.Pop() |> ignore
                         instructions <- top.Instructions.ToImmutableArray()
+                else
+                    let instruction = top.Source.Span[0]
+                    top.Source <- top.Source.Slice(1)
 
-                let instruction = top.Source.Span[0]
-                top.Source <- top.Source.Slice(1)
+                    let inline emit kind poppedTypes pushedTypes =
+                        top.Instructions.Add
+                            { Index = index
+                              PoppedTypes = poppedTypes
+                              PushedTypes = pushedTypes
+                              Instruction = instruction
+                              Kind = kind }
 
-                let inline emit kind poppedTypes pushedTypes =
-                    top.Instructions.Add
-                        { Index = index
-                          PoppedTypes = poppedTypes
-                          PushedTypes = pushedTypes
-                          Instruction = instruction
-                          Kind = kind }
+                    match instruction with
+                    | Instruction.Normal normal ->
+                        match normal with
+                        | Nop -> emit Normal ImmutableArray.Empty ImmutableArray.Empty
+                        | Drop ->
+                            let poppedType = operandTypeStack.PopAny()
+                            emit Normal (ImmutableArray.Create(item = poppedType)) ImmutableArray.Empty
+                        | LocalGet index ->
+                            let ty = localTypes[Checked.int32 index]
+                            operandTypeStack.Push ty
+                            emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = ty))
+                        | I32Load _ ->
+                            operandTypeStack.PopExpecting(ValType.Num I32)
+                            emit Normal OperandTypes.oneI32 OperandTypes.oneI32
+                        | I32Const _ ->
+                            operandTypeStack.Push(ValType.Num I32)
+                            emit Normal ImmutableArray.Empty OperandTypes.oneI32
+                        | _ -> failwithf "TODO: Add support for validating %A" normal
 
-                match instruction with
-                | Instruction.Normal normal ->
-                    match normal with
-                    | Nop -> emit Normal ImmutableArray.Empty ImmutableArray.Empty
-                    | Drop ->
-                        let poppedType = operandTypeStack.PopAny()
-                        emit Normal (ImmutableArray.Create(item = poppedType)) ImmutableArray.Empty
-                    | LocalGet index ->
-                        let ty = localTypes[Checked.int32 index]
-                        operandTypeStack.Push ty
-                        emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = ty))
-                    | I32Load _ ->
-                        operandTypeStack.PopExpecting(ValType.Num I32)
-                        emit Normal OperandTypes.oneI32 OperandTypes.oneI32
-                    | I32Const _ ->
-                        operandTypeStack.Push(ValType.Num I32)
-                        emit Normal ImmutableArray.Empty OperandTypes.oneI32
-                    | _ -> failwithf "TODO: Add support for validating %A" normal
-
-                index <- Checked.(+) index 1
+                    index <- Checked.(+) index 1
 
             assert not instructions.IsDefault
 
