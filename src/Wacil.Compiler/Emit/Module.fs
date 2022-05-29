@@ -1,5 +1,7 @@
 module Wacil.Compiler.Emit.Module
 
+open System.Collections.Immutable
+
 open Microsoft.FSharp.Core.Printf
 
 open AsmResolver
@@ -13,7 +15,9 @@ open AsmResolver.PE.DotNet.Cil
 open AsmResolver.DotNet.Code.Cil
 
 open Wacil.Compiler.Helpers
+open Wacil.Compiler.Helpers.Collections
 
+open Wacil.Compiler.Wasm.Format
 open Wacil.Compiler.Wasm.Validation
 
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
@@ -32,8 +36,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let moduleDefinition = new ModuleDefinition(outputName + ".dll", coreLibraryReference)
 
     let coreSystemObject =
-        coreLibraryReference.CreateTypeReference("System", "Object")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+        coreLibraryReference.CreateTypeReference("System", "Object") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
     let assemblyDefinition =
         match options.OutputType with
@@ -105,6 +108,36 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         { Memory = runtimeMemoryClass
           MemoryConstructor = runtimeMemoryConstructor }
+
+    let coreSystemDelegate =
+        coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let getValTypeSignature (ty: ValType) =
+        match ty with
+        | ValType.Num I32 -> moduleDefinition.CorLibTypeFactory.Int32 :> TypeSignature
+        | ValType.Num I64 -> moduleDefinition.CorLibTypeFactory.Int64
+        | ValType.Num F32 -> moduleDefinition.CorLibTypeFactory.Single
+        | ValType.Num F64 -> moduleDefinition.CorLibTypeFactory.Double
+        | ValType.Ref ExternRef -> moduleDefinition.CorLibTypeFactory.Object
+        | ValType.Ref FuncRef -> TypeDefOrRefSignature coreSystemDelegate
+        // System.Runtime.Intrinsics.Vector128
+        | ValType.Vec _ -> raise(System.NotImplementedException "TODO: Compilation with vectors is not yet supported")
+
+    let getFuncTypeSignature cconv (ty: FuncType) =
+        // TODO: For multi-return, use out parameters
+        if ty.Results.Length > 1 then failwith "TODO: Compilation of functions with multiple return values is not yet supported"
+
+        let returnTypes =
+            if ty.Results.IsEmpty
+            then moduleDefinition.CorLibTypeFactory.Void :> TypeSignature
+            else getValTypeSignature ty.Results[0]
+
+        let parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
+
+        for parameter in ty.Parameters do
+            parameterTypes.Add(getValTypeSignature parameter)
+
+        MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
 
     moduleDefinition.GetOrCreateModuleType().BaseType <- coreSystemObject
 
@@ -209,6 +242,32 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     // Done generating code for constructor
     classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
     classDefinitionConstructor.CilMethodBody <- classConstructorBody
+
+    let emitExpressionCode (localVariableTypes: ImmutableArray<ValType>) (expression: ValidExpression) (body: CilMethodBody) =
+        for ty in localVariableTypes do
+            body.LocalVariables.Add(CilLocalVariable(getValTypeSignature ty))
+
+        ()
+
+    //let functionDefinitionMap = Dictionary(capacity = input.Functions.Length)
+    for i = 0 to input.Functions.Length - 1 do
+        let func = input.Functions[i]
+
+        let generatedFunctionName, generatedFunctionAccess =
+            match input.Exports.GetFunctionName(Checked.uint32 i) with
+            | true, existing -> existing, MethodAttributes.Public
+            | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
+
+        let generatedFunctionDefinition =
+            MethodDefinition(
+                generatedFunctionName,
+                generatedFunctionAccess ||| MethodAttributes.HideBySig,
+                getFuncTypeSignature CallingConventionAttributes.HasThis func.Type
+            )
+
+        classDefinition.Methods.Add generatedFunctionDefinition
+
+        // TODO: Generate method body
 
     moduleDefinition
 
