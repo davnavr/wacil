@@ -175,7 +175,7 @@ type Error =
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type OperandTypeStack =
-    { Stack: ArrayBuilder<ValType> }
+    { mutable Stack: ArrayBuilder<ValType> }
 
     member this.Push ty = this.Stack.Add ty
 
