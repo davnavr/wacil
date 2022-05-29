@@ -19,7 +19,8 @@ open Wacil.Compiler.Wasm.Validation
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type RuntimeLibraryReference =
-    { Memory: ITypeDefOrRef }
+    { Memory: ITypeDefOrRef
+      MemoryConstructor: IMethodDefOrRef }
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
@@ -88,7 +89,22 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let runtimeMemoryClass =
             assembly.CreateTypeReference(runtimeLibraryName, "Memory") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
-        { Memory = runtimeMemoryClass }
+        let runtimeMemoryConstructor =
+            runtimeMemoryClass.CreateMemberReference(
+                ".ctor",
+                new MethodSignature(
+                    CallingConventionAttributes.HasThis,
+                    moduleDefinition.CorLibTypeFactory.Void,
+                    [|
+                        moduleDefinition.CorLibTypeFactory.Int32
+                        moduleDefinition.CorLibTypeFactory.Int32
+                    |]
+                )
+            )
+            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
+
+        { Memory = runtimeMemoryClass
+          MemoryConstructor = runtimeMemoryConstructor }
 
     moduleDefinition.GetOrCreateModuleType().BaseType <- coreSystemObject
 
@@ -150,6 +166,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         // TODO: Check exports to see if this memory is named
         classDefinition.Fields.Add memoryField
+
+        let instructions = classConstructorBody.Instructions
+        instructions.Add(CilInstruction CilOpCodes.Ldarg_0)
+        instructions.Add(CilInstruction.CreateLdcI4(Checked.int32 memory.Minimum))
+        instructions.Add(CilInstruction.CreateLdcI4(ValueOption.map Checked.int32 memory.Maximum |> ValueOption.defaultValue -1))
+        instructions.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.MemoryConstructor))
+        instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
 
     // Done generating code for constructor
     classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)

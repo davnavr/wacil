@@ -8,7 +8,7 @@ namespace Wacil.Runtime {
 
         private readonly List<byte[]> pages; // TODO: Could have a readonly MemoryPage struct that eliminates bound checks in a page (A Uint16 index could be used)
 
-        public Memory(int minimumPageCount = 0, int? maximumPageCount = null) {
+        public Memory(int minimumPageCount = 0, int maximumPageCount = -1) {
             pages = new(minimumPageCount);
 
             for (int i = 0; i < minimumPageCount; i++) {
@@ -21,7 +21,8 @@ namespace Wacil.Runtime {
 
         public int MinimumPageCount { get; init; }
 
-        public int? MaximumPageCount { get; init; }
+        /// <summary>The maximum number of pages in this linear memory, or <c>-1</c> if there is no maximum number.</summary>
+        public int MaximumPageCount { get; init; }
 
         private readonly record struct Location(int page, ushort offset);
 
