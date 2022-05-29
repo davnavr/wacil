@@ -309,6 +309,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         match index with
                         | Arg i -> il.Add(CilInstruction.CreateLdarg(Checked.int32 i))
                         | Loc i -> il.Add(CilInstruction.CreateLdloc(Checked.int32 i))
+                    | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
+                    | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
                     | bad -> failwithf "Compilation of %A not yet supported" bad
                 | bad -> failwithf "Compilation of %A not yet supported" bad
 
