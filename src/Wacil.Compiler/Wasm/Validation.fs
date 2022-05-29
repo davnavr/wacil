@@ -189,6 +189,7 @@ type OperandTypeStack =
 [<RequireQualifiedAccess>]
 module OperandTypes =
     let oneI32 = ImmutableArray.Create(item = ValType.Num I32)
+    let twoI32 = ImmutableArray.Create(ValType.Num I32, ValType.Num I32)
 
 [<RequireQualifiedAccess>]
 module Validate =
@@ -470,6 +471,10 @@ module Validate =
                             operandTypeStack.PopExpecting(ValType.Num I32)
                             operandTypeStack.Push(ValType.Num I32)
                             emit Normal OperandTypes.oneI32 OperandTypes.oneI32
+                        | I32Store _ ->
+                            operandTypeStack.PopExpecting(ValType.Num I32)
+                            operandTypeStack.PopExpecting(ValType.Num I32)
+                            emit Normal OperandTypes.twoI32 ImmutableArray.Empty
                         | I32Const _ ->
                             operandTypeStack.Push(ValType.Num I32)
                             emit Normal ImmutableArray.Empty OperandTypes.oneI32
