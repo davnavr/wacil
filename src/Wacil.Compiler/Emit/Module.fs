@@ -171,11 +171,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         match input.Exports.GetMemoryName(Checked.uint32 i) with
         | true, name ->
-            let accessor =
+            let memoryFieldGetter =
                 MethodDefinition(
                     stringBuffer.Clear().Append("get_").Append(name).ToString(),
-                    MethodAttributes.Public ||| //MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
-                    MethodAttributes.HideBySig,
+                    MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.HideBySig,
                     MethodSignature(
                         CallingConventionAttributes.HasThis,
                         TypeDefOrRefSignature runtimeLibraryReference.Memory,
@@ -183,17 +182,28 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     )
                 )
             
-            classDefinition.Methods.Add accessor
+            classDefinition.Methods.Add memoryFieldGetter
 
-            let body = CilMethodBody accessor
+            let body = CilMethodBody memoryFieldGetter
             let instructions = body.Instructions
             instructions.Add(CilInstruction CilOpCodes.Ldarg_0)
             instructions.Add(CilInstruction(CilOpCodes.Ldfld, memoryField))
             instructions.Add(CilInstruction CilOpCodes.Ret)
-            accessor.CilMethodBody <- body
+            memoryFieldGetter.CilMethodBody <- body
 
-            // TODO: Generate accessor
-            ()
+            let memoryFieldProperty =
+                PropertyDefinition(
+                    name,
+                    PropertyAttributes.None,
+                    PropertySignature(
+                        CallingConventionAttributes.HasThis,
+                        TypeDefOrRefSignature runtimeLibraryReference.Memory,
+                        Array.empty
+                    )
+                )
+
+            memoryFieldProperty.SetSemanticMethods(memoryFieldGetter, null)
+            classDefinition.Properties.Add memoryFieldProperty
         | false, _ -> ()
 
     // Done generating code for constructor
