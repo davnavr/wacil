@@ -9,6 +9,9 @@ open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
 
+open AsmResolver.PE.DotNet.Cil
+open AsmResolver.DotNet.Code.Cil
+
 open Wacil.Compiler.Helpers
 
 open Wacil.Compiler.Wasm.Validation
@@ -48,7 +51,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 tfmAttributeClass.CreateMemberReference(
                     ".ctor",
                     new MethodSignature(
-                        CallingConventionAttributes.Default,
+                        CallingConventionAttributes.HasThis,
                         moduleDefinition.CorLibTypeFactory.Void,
                         [| moduleDefinition.CorLibTypeFactory.String |]
                     )
@@ -105,8 +108,32 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             ".ctor",
             MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
             MethodAttributes.HideBySig,
-            MethodSignature(CallingConventionAttributes.Default, moduleDefinition.CorLibTypeFactory.Void, [||])
+            MethodSignature(
+                CallingConventionAttributes.HasThis,
+                moduleDefinition.CorLibTypeFactory.Void,
+                [||]
+            )
         )
+
+    classDefinition.Methods.Add classDefinitionConstructor
+
+    let classConstructorBody =
+        let coreSystemObjectConstructor =
+            coreSystemObject.CreateMemberReference(
+                ".ctor",
+                new MethodSignature(
+                    CallingConventionAttributes.HasThis,
+                    moduleDefinition.CorLibTypeFactory.Void,
+                    Array.empty
+                )
+            )
+            |> moduleDefinition.DefaultImporter.ImportMethod
+
+        let body = CilMethodBody classDefinitionConstructor
+        let instructons = body.Instructions
+        instructons.Add(CilInstruction CilOpCodes.Ldarg_0)
+        instructons.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
+        body
 
     for i = 0 to input.Memories.Length - 1 do
         let memory = input.Memories[i]
@@ -123,6 +150,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         // TODO: Check exports to see if this memory is named
         classDefinition.Fields.Add memoryField
+
+    // Done generating code for constructor
+    classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
+    classDefinitionConstructor.MethodBody <- classConstructorBody
 
     moduleDefinition
 
