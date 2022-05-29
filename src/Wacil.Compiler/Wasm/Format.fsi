@@ -94,6 +94,9 @@ type Opcode =
     | I64LeU = 0x58uy
     | I64GeS = 0x59uy
     | I64GeU = 0x5Auy
+    | I32Add = 0x6Auy
+    | I32Sub = 0x6Buy
+    | I32Mul = 0x6Cuy
     | I32And = 0x71uy
     | I64Sub = 0x7Duy
     | I64Mul = 0x7Euy
@@ -163,6 +166,9 @@ type NormalInstruction =
     | I64LeU
     | I64GeS
     | I64GeU
+    | I32Add
+    | I32Sub
+    | I32Mul
     | I32And
     | I64Sub
     | I64Mul

@@ -488,6 +488,13 @@ module Validate =
                         | I32Const _ ->
                             operandTypeStack.Push(ValType.Num I32)
                             emit Normal ImmutableArray.Empty OperandTypes.oneI32
+                        | I32Add
+                        | I32Sub
+                        | I32Mul ->
+                            operandTypeStack.PopExpecting(ValType.Num I32)
+                            operandTypeStack.PopExpecting(ValType.Num I32)
+                            operandTypeStack.Push(ValType.Num I32)
+                            emit Normal OperandTypes.twoI32 OperandTypes.oneI32
                         | _ -> failwithf "TODO: Add support for validating %A" normal
 
                     index <- Checked.(+) index 1
