@@ -43,6 +43,18 @@ type Function =
     { Type: Format.FuncType
       Body: ValidExpression }
 
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type ModuleExport =
+    | Function of Function
+    | Table
+    | Memory of Format.Index
+    | Global
+
+[<Sealed>]
+type ModuleExportLookup =
+    member GetMemoryName: index: Format.Index -> string
+    member Item: name: string -> ModuleExport with get
+
 [<Sealed>]
 type ValidModule =
     member CustomSections: ImmutableArray<Format.Custom>
@@ -50,6 +62,7 @@ type ValidModule =
     member Imports: ModuleImportLookup
     member Functions: ImmutableArray<Function>
     member Memories: ImmutableArray<Format.Limits>
+    member Exports: ModuleExportLookup
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Error =

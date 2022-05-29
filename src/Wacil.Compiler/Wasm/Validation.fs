@@ -96,6 +96,23 @@ type Function =
     { Type: FuncType
       Body: ValidExpression }
 
+[<RequireQualifiedAccess>]
+type ModuleExport =
+    | Function of Function
+    | Table
+    | Memory of Index
+    | Global
+
+[<Sealed>]
+type ModuleExportLookup
+    (
+        memories: Dictionary<Index, string>,
+        lookup: Dictionary<string, ModuleExport>
+    )
+    =
+    member _.GetMemoryName index = memories[index]
+    member _.Item with get name = lookup[name]
+
 [<Sealed>]
 type ValidModule
     (
@@ -103,7 +120,8 @@ type ValidModule
         types: ImmutableArray<FuncType>,
         functions: ImmutableArray<Function>,
         imports: ModuleImportLookup,
-        memories: ImmutableArray<Limits>
+        memories: ImmutableArray<Limits>,
+        exports: ModuleExportLookup
     )
     =
     member _.CustomSections = custom
@@ -111,6 +129,7 @@ type ValidModule
     member _.Imports = imports
     member _.Functions = functions
     member _.Memories = memories
+    member _.Exports = exports
 
 type Error =
     | MultiMemoryNotSupported
@@ -329,6 +348,27 @@ module Validate =
 
                 moduleFunctionDefinitions.ToImmutableArray()
                 
+        let exports =
+            let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
+            let lookup = Dictionary(capacity = exports.Length)
+            let memories = Dictionary()
+            for e in exports do
+                match lookup.TryGetValue e.Name with
+                | true, _ -> failwithf "Duplicate export %s" e.Name
+                | false, _ ->
+                    lookup[e.Name] <-
+                        match e.Description with
+                        | ExportDesc.Func index ->
+                            ModuleExport.Function functions[Checked.int32 index]
+                        | ExportDesc.Table index ->
+                            ModuleExport.Table
+                        | ExportDesc.Mem index ->
+                            memories.Add(index, e.Name)
+                            ModuleExport.Memory index
+                        | ExportDesc.Global index ->
+                            ModuleExport.Global
+            ModuleExportLookup(memories, lookup)
+
         // TODO: Analyze each expression to check they are valid
         
         match error with
@@ -338,5 +378,6 @@ module Validate =
             types = types,
             imports = imports,
             functions = functions,
-            memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories
+            memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories,
+            exports = exports
         ))
