@@ -465,8 +465,10 @@ module Validate =
                             let ty = localTypes[Checked.int32 index]
                             operandTypeStack.Push ty
                             emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = ty))
-                        | I32Load _ ->
+                        | I32Load _
+                        | MemoryGrow ->
                             operandTypeStack.PopExpecting(ValType.Num I32)
+                            operandTypeStack.Push(ValType.Num I32)
                             emit Normal OperandTypes.oneI32 OperandTypes.oneI32
                         | I32Const _ ->
                             operandTypeStack.Push(ValType.Num I32)
