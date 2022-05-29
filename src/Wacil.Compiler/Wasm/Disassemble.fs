@@ -65,7 +65,7 @@ let disassembleToWriter (input: ValidModule) (output: TextWriter) =
         out.WriteLine()
         out.Indent()
         // TODO: Write locals
-        disassembleInstructionSequence func.Body.Instructions out
+        //disassembleInstructionSequence func.Body.Instructions out
         out.WriteLine ')'
         out.Dedent()
     out.WriteLine ')'

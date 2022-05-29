@@ -48,13 +48,15 @@ and [<NoComparison; StructuralEquality>] ValidInstruction =
 [<NoComparison; StructuralEquality>]
 type ValidExpression =
     internal
-        { mutable Expression: ValidInstructionSequence }
+        { Source: Format.Expression
+          mutable Expression: ValidInstructionSequence }
 
     member Instructions: ValidInstructionSequence
 
 [<NoComparison; StructuralEquality>]
 type Function =
     { Type: Format.FuncType
+      LocalTypes: ImmutableArray<Format.ValType>
       Body: ValidExpression }
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]

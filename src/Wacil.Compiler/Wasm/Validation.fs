@@ -114,6 +114,7 @@ type ValidExpression =
 
 type Function =
     { Type: FuncType
+      LocalTypes: ImmutableArray<ValType>
       Body: ValidExpression }
 
 [<RequireQualifiedAccess>]
@@ -171,6 +172,23 @@ type Error =
                 section
                 expected
                 actual
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type OperandTypeStack =
+    { Stack: ArrayBuilder<ValType> }
+
+    member this.Push ty = this.Stack.Add ty
+
+    member this.PopAny(ty: outref<ValType>) = this.Stack.Pop(&ty)
+
+    member this.PopExpecting(expected: ValType) =
+        let actual = this.PopAny()
+        if actual <> expected then
+            failwithf "Expected to pop %O off of the stack but got %O" expected actual
+
+[<RequireQualifiedAccess>]
+module OperandTypes =
+    let oneI32 = ImmutableArray.Create(item = ValType.Num I32)
 
 [<RequireQualifiedAccess>]
 module Validate =
@@ -351,6 +369,7 @@ module Validate =
             let moduleFunctionTypes = ValueOption.defaultValue ImmutableArray.Empty builder.Functions
             let moduleFunctionBodies = ValueOption.defaultValue ImmutableArray.Empty builder.Code
             let expectedFunctionCount = moduleFunctionTypes.Length
+            let mutable localTypesBuilder = ArrayBuilder<ValType>.Create()
 
             if expectedFunctionCount <> moduleFunctionBodies.Length then
                 error <-
@@ -360,11 +379,18 @@ module Validate =
                 let mutable moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
 
                 for i = 0 to expectedFunctionCount - 1 do
-                    // TODO: Do a lookup of local types
+                    let body = moduleFunctionBodies[i]
+                    
+                    localTypesBuilder.Clear()
+                    for local in body.Locals do
+                        for i = 0 to int local.Count - 1 do
+                            localTypesBuilder.Add local.Type
+                    
                     moduleFunctionDefinitions.Add
                         { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
+                          LocalTypes = localTypesBuilder.ToImmutableArray()
                           Body =
-                            { ValidExpression.Source = moduleFunctionBodies[i].Body
+                            { ValidExpression.Source = body.Body
                               Expression = Unchecked.defaultof<_> } }
 
                 moduleFunctionDefinitions.ToImmutableArray()
@@ -391,9 +417,14 @@ module Validate =
             ModuleExportLookup(memories, lookup)
 
         // TODO: Analyze each expression to check they are valid
-        let validateExpression (returnTypes: ImmutableArray<ValType>) (expression: Expression): ValidInstructionSequence =
+        let validateExpression
+            (operandTypeStack: OperandTypeStack)
+            (returnTypes: ImmutableArray<ValType>)
+            (localTypes: ImmutableArray<ValType>)
+            (expression: Expression)
+            : ValidInstructionSequence
+            =
             let instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
-            let operandTypeStack = ArrayBuilder<ValType>.Create()
             let mutable index = 0
             let mutable instructions = Unchecked.defaultof<_>
 
@@ -404,7 +435,13 @@ module Validate =
             
             while not instructionBuilderStack.IsEmpty do
                 let top = instructionBuilderStack.LastRef()
-                if top.Source.IsEmpty then failwith "TODO: Block unexpectedly ended"
+                if top.Source.IsEmpty then
+                    if instructionBuilderStack.Length > 1 then
+                        failwith "TODO: Block unexpectedly ended"
+                    else
+                        // TODO: Remove code duplication with `return` instruction validator
+                        instructionBuilderStack.Pop() |> ignore
+                        instructions <- top.Instructions.ToImmutableArray()
 
                 let instruction = top.Source.Span[0]
                 top.Source <- top.Source.Slice(1)
@@ -422,16 +459,29 @@ module Validate =
                     match normal with
                     | Nop -> emit Normal ImmutableArray.Empty ImmutableArray.Empty
                     | Drop ->
-                        let poppedType = operandTypeStack.Pop()
-                        emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = poppedType))
-                    | _ -> failwith "TODO: Add support for validating %A" normal
+                        let poppedType = operandTypeStack.PopAny()
+                        emit Normal (ImmutableArray.Create(item = poppedType)) ImmutableArray.Empty
+                    | LocalGet index ->
+                        let ty = localTypes[Checked.int32 index]
+                        operandTypeStack.Push ty
+                        emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = ty))
+                    | I32Load _ ->
+                        operandTypeStack.PopExpecting(ValType.Num I32)
+                        emit Normal OperandTypes.oneI32 OperandTypes.oneI32
+                    | I32Const _ ->
+                        operandTypeStack.Push(ValType.Num I32)
+                        emit Normal ImmutableArray.Empty OperandTypes.oneI32
+                    | _ -> failwithf "TODO: Add support for validating %A" normal
 
                 index <- Checked.(+) index 1
 
+            assert not instructions.IsDefault
+
             instructions
 
+        let operandTypeStack = { OperandTypeStack.Stack = ArrayBuilder<_>.Create() }
         for func in functions do
-            func.Body.Expression <- validateExpression func.Type.Results func.Body.Source
+            func.Body.Expression <- validateExpression operandTypeStack func.Type.Results func.LocalTypes func.Body.Source
         
         match error with
         | ValueSome error' -> Error(error')
