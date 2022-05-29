@@ -130,10 +130,12 @@ type ModuleExport =
 type ModuleExportLookup
     (
         memories: Dictionary<Index, string>,
+        functions: Dictionary<Index, string>,
         lookup: Dictionary<string, ModuleExport>
     )
     =
     member _.GetMemoryName(index, name: outref<_>) = memories.TryGetValue(index, &name)
+    member _.GetFunctionName(index, name: outref<_>) = functions.TryGetValue(index, &name)
     member _.Item with get name = lookup[name]
 
 [<Sealed>]
@@ -403,6 +405,7 @@ module Validate =
             let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
             let lookup = Dictionary(capacity = exports.Length)
             let memories = Dictionary()
+            let functionNames = Dictionary()
             for e in exports do
                 match lookup.TryGetValue e.Name with
                 | true, _ -> failwithf "Duplicate export %s" e.Name
@@ -410,6 +413,7 @@ module Validate =
                     lookup[e.Name] <-
                         match e.Description with
                         | ExportDesc.Func index ->
+                            functionNames.Add(index, e.Name)
                             ModuleExport.Function functions[Checked.int32 index]
                         | ExportDesc.Table index ->
                             ModuleExport.Table
@@ -418,7 +422,7 @@ module Validate =
                             ModuleExport.Memory index
                         | ExportDesc.Global index ->
                             ModuleExport.Global
-            ModuleExportLookup(memories, lookup)
+            ModuleExportLookup(memories, functionNames, lookup)
 
         // TODO: Analyze each expression to check they are valid
         let validateExpression
