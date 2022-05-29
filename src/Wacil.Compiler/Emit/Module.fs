@@ -279,11 +279,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         (expression: ValidExpression)
         (body: CilMethodBody)
         =
+        // Increment offsets by one, as local index 0 refers to `this`
         let (|LocalIndex|) (index: Index) =
             let i = Checked.int32 index
             if i < parameterCount
-            then Arg i
-            else Loc(i - parameterCount)
+            then Arg(i + 1)
+            else Loc(i + 1 - parameterCount)
 
         for ty in localVariableTypes do
             body.LocalVariables.Add(CilLocalVariable(getValTypeSignature ty))
