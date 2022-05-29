@@ -1,5 +1,6 @@
 namespace Wacil.Runtime {
     using System;
+    using System.Buffers.Binary;
     using System.Collections.Generic;
     using System.Runtime.CompilerServices;
 
@@ -61,7 +62,7 @@ namespace Wacil.Runtime {
             buffer[1] = ReadByte(this, location + 1);
             buffer[2] = ReadByte(this, location + 2);
             buffer[3] = ReadByte(this, location + 3);
-            return BitConverter.ToInt32(buffer);
+            return BinaryPrimitives.ReadInt32LittleEndian(buffer);
         }
 
         //public static void Grow(Memory memory, uint pages)
@@ -79,7 +80,7 @@ namespace Wacil.Runtime {
                 //    }
                 //}
                 // Temporary slower implementation
-                return BitConverter.ToInt32(memory.pages[location.Page]);
+                return BinaryPrimitives.ReadInt32LittleEndian(memory.pages[location.Page]);
             } else {
                 return memory.ReadInt32Slow(location);
             }
