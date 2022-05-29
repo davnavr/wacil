@@ -1,5 +1,6 @@
 module Wacil.Compiler.Emit.Module
 
+open System.Collections.Generic
 open System.Collections.Immutable
 
 open Microsoft.FSharp.Core.Printf
@@ -243,13 +244,40 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
     classDefinitionConstructor.CilMethodBody <- classConstructorBody
 
-    let emitExpressionCode (localVariableTypes: ImmutableArray<ValType>) (expression: ValidExpression) (body: CilMethodBody) =
+    let emitExpressionCode
+        (instructionBlockStack: ArrayBuilder<_> ref)
+        (localVariableTypes: ImmutableArray<ValType>)
+        (expression: ValidExpression)
+        (body: CilMethodBody)
+        =
+        // In both WASM and CIL, local variable indices begin with the function's arguments
         for ty in localVariableTypes do
             body.LocalVariables.Add(CilLocalVariable(getValTypeSignature ty))
 
-        ()
+        let mutable instructionBlockStack: byref<_> = &instructionBlockStack.contents
+        let il = body.Instructions
+
+        instructionBlockStack.Clear()
+        instructionBlockStack.Add(expression.Expression.AsMemory())
+
+        let mutable hasExplicitReturn = false
+
+        while not instructionBlockStack.IsEmpty do
+            let mutable block = instructionBlockStack.LastRef()
+            if block.IsEmpty then
+                let mutable popped = Unchecked.defaultof<_>
+                instructionBlockStack.Pop(popped) |> ignore
+            else
+                match block.Span[0].Instruction with
+                | bad -> failwithf "Compilation of %A not yet supported" bad
+
+                block <- block.Slice(1)
+
+        if not hasExplicitReturn then
+            il.Add(CilInstruction CilOpCodes.Ret)
 
     //let functionDefinitionMap = Dictionary(capacity = input.Functions.Length)
+    let instructionBlockStack = ArrayBuilder<_>.Create() |> ref
     for i = 0 to input.Functions.Length - 1 do
         let func = input.Functions[i]
 
@@ -267,7 +295,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         classDefinition.Methods.Add generatedFunctionDefinition
 
-        // TODO: Generate method body
+        let body = CilMethodBody generatedFunctionDefinition
+
+        emitExpressionCode instructionBlockStack func.LocalTypes func.Body body
+
+        generatedFunctionDefinition.CilMethodBody <- body
 
     moduleDefinition
 
