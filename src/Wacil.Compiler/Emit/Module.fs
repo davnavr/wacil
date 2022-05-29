@@ -2,6 +2,7 @@ module Wacil.Compiler.Emit.Module
 
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 open Microsoft.FSharp.Core.Printf
 
@@ -21,11 +22,38 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm.Format
 open Wacil.Compiler.Wasm.Validation
 
+[<AbstractClass; Sealed>]
+type CilInstruction =
+    static member CreateLdloc index =
+        match index with
+        | 0 -> CilOpCodes.Ldloc_0
+        | 1 -> CilOpCodes.Ldloc_1
+        | 2 -> CilOpCodes.Ldloc_2
+        | 3 -> CilOpCodes.Ldloc_3
+        | _ when index <= 255 -> CilOpCodes.Ldloc_S
+        | _ -> CilOpCodes.Ldloc
+        |> CilInstruction
+
+    static member CreateLdarg index =
+        match index with
+        | 0 -> CilOpCodes.Ldarg_0
+        | 1 -> CilOpCodes.Ldarg_1
+        | 2 -> CilOpCodes.Ldarg_2
+        | 3 -> CilOpCodes.Ldarg_3
+        | _ when index <= 255 -> CilOpCodes.Ldarg_S
+        | _ -> CilOpCodes.Ldarg
+        |> CilInstruction
+
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type RuntimeLibraryReference =
     { Memory: ITypeDefOrRef
       MemoryConstructor: IMethodDefOrRef }
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type LocalIndex =
+    | Arg of a: int32
+    | Loc of int32
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
@@ -246,11 +274,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
+        (parameterCount: int32)
         (localVariableTypes: ImmutableArray<ValType>)
         (expression: ValidExpression)
         (body: CilMethodBody)
         =
-        // In both WASM and CIL, local variable indices begin with the function's arguments
+        let (|LocalIndex|) (index: Index) =
+            let i = Checked.int32 index
+            if i < parameterCount
+            then Arg i
+            else Loc(i - parameterCount)
+
         for ty in localVariableTypes do
             body.LocalVariables.Add(CilLocalVariable(getValTypeSignature ty))
 
@@ -269,6 +303,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 instructionBlockStack.Pop(popped) |> ignore
             else
                 match block.Span[0].Instruction with
+                | Instruction.Normal normal ->
+                    match normal with
+                    | LocalGet(LocalIndex index) ->
+                        match index with
+                        | Arg i -> il.Add(CilInstruction.CreateLdarg(Checked.int32 i))
+                        | Loc i -> il.Add(CilInstruction.CreateLdloc(Checked.int32 i))
+                    | bad -> failwithf "Compilation of %A not yet supported" bad
                 | bad -> failwithf "Compilation of %A not yet supported" bad
 
                 block <- block.Slice(1)
@@ -297,7 +338,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         let body = CilMethodBody generatedFunctionDefinition
 
-        emitExpressionCode instructionBlockStack func.LocalTypes func.Body body
+        emitExpressionCode instructionBlockStack func.Type.Parameters.Length func.LocalTypes func.Body body
 
         generatedFunctionDefinition.CilMethodBody <- body
 
