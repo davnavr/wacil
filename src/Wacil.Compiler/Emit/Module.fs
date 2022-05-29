@@ -161,7 +161,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             then moduleDefinition.CorLibTypeFactory.Void :> TypeSignature
             else getValTypeSignature ty.Results[0]
 
-        let parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
+        let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
 
         for parameter in ty.Parameters do
             parameterTypes.Add(getValTypeSignature parameter)
