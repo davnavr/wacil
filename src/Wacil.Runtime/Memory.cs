@@ -80,9 +80,36 @@ namespace Wacil.Runtime {
                 //    }
                 //}
                 // Temporary slower implementation
-                return BinaryPrimitives.ReadInt32LittleEndian(memory.pages[location.Page]);
+                return BinaryPrimitives.ReadInt32LittleEndian(
+                    new ReadOnlySpan<byte>(memory.pages[location.Page], location.Offset, 4)
+                );
             } else {
                 return memory.ReadInt32Slow(location);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void WriteByte(Memory memory, Location location, byte value) =>
+            memory.pages[location.Page][location.Offset] = value;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteInt32Slow(Location location, int value) {
+            Span<byte> buffer = stackalloc byte[4];
+            BinaryPrimitives.WriteInt32LittleEndian(buffer, value);
+            WriteByte(this, location, buffer[0]);
+            WriteByte(this, location + 1, buffer[1]);
+            WriteByte(this, location + 2, buffer[2]);
+            WriteByte(this, location + 3, buffer[3]);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void WriteInt32(Memory memory, uint offset, uint alignment, uint address, int value) {
+            var location = Location.FromAddress(unchecked(offset + address));
+            if (alignment >= 2 && (location.Offset & 0b11) != 0) {
+                // Temporary slower implementation
+                BinaryPrimitives.WriteInt32LittleEndian(new Span<byte>(memory.pages[location.Page], location.Offset, 4), value);
+            } else {
+                memory.WriteInt32Slow(location, value);
             }
         }
     }
