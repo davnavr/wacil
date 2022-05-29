@@ -424,7 +424,7 @@ module Validate =
             (expression: Expression)
             : ValidInstructionSequence
             =
-            let instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
+            let mutable instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
             let mutable index = 0
             let mutable instructions = Unchecked.defaultof<_>
 
