@@ -146,7 +146,8 @@ type ValidModule
         functions: ImmutableArray<Function>,
         imports: ModuleImportLookup,
         memories: ImmutableArray<Limits>,
-        exports: ModuleExportLookup
+        exports: ModuleExportLookup,
+        start: int voption
     )
     =
     member _.CustomSections = custom
@@ -155,6 +156,7 @@ type ValidModule
     member _.Functions = functions
     member _.Memories = memories
     member _.Exports = exports
+    member _.Start = start
 
 type Error =
     | MultiMemoryNotSupported
@@ -525,5 +527,6 @@ module Validate =
             imports = imports,
             functions = functions,
             memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories,
-            exports = exports
+            exports = exports,
+            start = ValueOption.map Checked.int32 builder.Start
         ))

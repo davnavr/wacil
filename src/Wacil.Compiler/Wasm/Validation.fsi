@@ -82,6 +82,7 @@ type ValidModule =
     member Functions: ImmutableArray<Function>
     member Memories: ImmutableArray<Format.Limits>
     member Exports: ModuleExportLookup
+    member Start: int voption
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Error =

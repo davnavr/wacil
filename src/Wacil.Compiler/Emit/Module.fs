@@ -329,10 +329,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         fields.ToImmutableArray()
 
-    // Done generating code for constructor
-    classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
-    classDefinitionConstructor.CilMethodBody <- classConstructorBody
-
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
         (parameterCount: int32)
@@ -404,30 +400,46 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         if not hasExplicitReturn then
             il.Add(CilInstruction CilOpCodes.Ret)
 
-    //let functionDefinitionMap = Dictionary(capacity = input.Functions.Length)
-    let instructionBlockStack = ArrayBuilder<_>.Create() |> ref
-    for i = 0 to input.Functions.Length - 1 do
-        let func = input.Functions[i]
+    let generatedClassFunctions =
+        let instructionBlockStack = ArrayBuilder<_>.Create() |> ref
+        let mutable functions = ArrayBuilder<_>.Create(input.Functions.Length)
 
-        let generatedFunctionName, generatedFunctionAccess =
-            match input.Exports.GetFunctionName(Checked.uint32 i) with
-            | true, existing -> existing, MethodAttributes.Public
-            | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
+        for i = 0 to input.Functions.Length - 1 do
+            let func = input.Functions[i]
 
-        let generatedFunctionDefinition =
-            MethodDefinition(
-                generatedFunctionName,
-                generatedFunctionAccess ||| MethodAttributes.HideBySig,
-                getFuncTypeSignature CallingConventionAttributes.HasThis func.Type
-            )
+            let generatedFunctionName, generatedFunctionAccess =
+                match input.Exports.GetFunctionName(Checked.uint32 i) with
+                | true, existing -> existing, MethodAttributes.Public
+                | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
 
-        classDefinition.Methods.Add generatedFunctionDefinition
+            let generatedFunctionDefinition =
+                MethodDefinition(
+                    generatedFunctionName,
+                    generatedFunctionAccess ||| MethodAttributes.HideBySig,
+                    getFuncTypeSignature CallingConventionAttributes.HasThis func.Type
+                )
 
-        let body = CilMethodBody generatedFunctionDefinition
+            classDefinition.Methods.Add generatedFunctionDefinition
+            functions.Add generatedFunctionDefinition
 
-        emitExpressionCode instructionBlockStack func.Type.Parameters.Length func.LocalTypes func.Body body
+            let body = CilMethodBody generatedFunctionDefinition
 
-        generatedFunctionDefinition.CilMethodBody <- body
+            emitExpressionCode instructionBlockStack func.Type.Parameters.Length func.LocalTypes func.Body body
+
+            generatedFunctionDefinition.CilMethodBody <- body
+
+        functions.ToImmutableArray()
+
+    match input.Start with
+    | ValueSome index ->
+        let il = classConstructorBody.Instructions
+        il.Add(CilInstruction CilOpCodes.Ldarg_0) // TODO: Make all generated functions static, to avoid complex insertion of Ldarg_0 instructions
+        il.Add(CilInstruction(CilOpCodes.Call, generatedClassFunctions[index]))
+    | ValueNone -> ()
+
+    // Done generating code for constructor
+    classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
+    classDefinitionConstructor.CilMethodBody <- classConstructorBody
 
     moduleDefinition
 
