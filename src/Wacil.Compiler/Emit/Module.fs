@@ -50,7 +50,8 @@ type RuntimeLibraryReference =
     { Memory: ITypeDefOrRef
       MemorySignature: TypeSignature
       MemoryConstructor: IMethodDefOrRef
-      MemoryI32Load: IMethodDefOrRef }
+      MemoryI32Load: IMethodDefOrRef
+      MemoryI32Store: IMethodDefOrRef }
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type LocalIndex =
@@ -155,10 +156,28 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             )
             |> moduleDefinition.DefaultImporter.ImportMethodOrNull
 
+        let runtimeMemoryWriteInt32 =
+            runtimeMemoryClass.CreateMemberReference(
+                "WriteInt32",
+                new MethodSignature(
+                    CallingConventionAttributes.Default,
+                    moduleDefinition.CorLibTypeFactory.Void,
+                    [|
+                        moduleDefinition.CorLibTypeFactory.Int32
+                        moduleDefinition.CorLibTypeFactory.UInt32
+                        runtimeMemoryClassSignature
+                        moduleDefinition.CorLibTypeFactory.UInt32
+                        moduleDefinition.CorLibTypeFactory.Byte
+                    |]
+                )
+            )
+            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
+
         { Memory = runtimeMemoryClass
           MemorySignature = runtimeMemoryClassSignature
           MemoryConstructor = runtimeMemoryConstructor
-          MemoryI32Load = runtimeMemoryReadInt32 }
+          MemoryI32Load = runtimeMemoryReadInt32
+          MemoryI32Store = runtimeMemoryWriteInt32 }
 
     let coreSystemDelegate =
         coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
@@ -326,6 +345,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         let mutable hasExplicitReturn = false
 
+        let inline pushMemoryField i =
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction(CilOpCodes.Ldfld, classMemoryFields[i]))
+
+        let inline pushMemArg (arg: MemArg) =
+            il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
+            il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
+
         while not instructionBlockStack.IsEmpty do
             let mutable block = &instructionBlockStack.LastRef()
             if block.IsEmpty then
@@ -341,18 +368,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         | Loc i -> il.Add(CilInstruction.CreateLdloc(Checked.int32 i))
                     | I32Load arg ->
                         // Top of stack is address to load, which is first parameter
-
-                        // Second parameter, memory instance
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Ldfld, classMemoryFields[0]))
-
-                        // Third parameter, offset
-                        il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
-
-                        // Fourth parameter, alignment
-                        il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
-
+                        pushMemoryField 0
+                        pushMemArg arg
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
+                    | I32Store arg ->
+                        // Stack contains the value to store on top of the address
+                        pushMemoryField 0
+                        pushMemArg arg
+                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
                     // | MemoryGrow ->
                     //     // Top of stack is the size delta, so additional arguments are inserted
                     //     il.Add(CilInstruction CilOpCodes.Ldarg_0)
