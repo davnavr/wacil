@@ -70,6 +70,7 @@ namespace Wacil.Runtime {
         /// <summary>
         /// Attempts to increase the number of pages in the given <paramref name="memory"/> instance by the specified amount.
         /// </summary>
+        /// <remarks>This is the implementation for the <c>memory.grow</c> instruction.</remarks>
         /// <returns>
         /// The previous length, in number of pages, of the memory instance, or <c>-1</c> if the memory could not be resized.
         /// </returns>
@@ -87,7 +88,12 @@ namespace Wacil.Runtime {
             }
         }
 
-        // TODO: Maybe make alignment in bytes instead of power of 2? Could even make it a byte?
+        // TODO: Maybe make alignment be in bytes instead of power of 2?
+        // TODO: Make alignment be a byte
+        /// <summary>
+        /// Reads a 32-bit integer from the specified <paramref name="memory"/> at the specified <paramref name="address"/>.
+        /// </summary>
+        /// <remarks>This is the implementation for the <c>i32.load</c> instruction.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadInt32(uint address, Memory memory, uint offset, uint alignment) {
             var location = Location.FromAddress(unchecked(offset + address));
@@ -123,8 +129,12 @@ namespace Wacil.Runtime {
             WriteByte(this, location + 3, buffer[3]);
         }
 
+        /// <summary>
+        /// Writes a 32-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="address"/>.
+        /// </summary>
+        /// <remarks>This is the implementation for the <c>i32.store</c> instruction.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteInt32(Memory memory, uint offset, uint alignment, uint address, int value) {
+        public static void WriteInt32(int value, uint address, Memory memory, uint offset, uint alignment) {
             var location = Location.FromAddress(unchecked(offset + address));
             if (alignment >= 2 && (location.Offset & 0b11) != 0) {
                 // Temporary slower implementation
