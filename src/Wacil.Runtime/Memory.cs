@@ -21,6 +21,8 @@ namespace Wacil.Runtime {
             MaximumPageCount = maximumPageCount;
         }
 
+        public int PageCount => pages.Count;
+
         public int MinimumPageCount { get; init; }
 
         /// <summary>The maximum number of pages in this linear memory, or <c>-1</c> if there is no maximum number.</summary>
@@ -65,7 +67,25 @@ namespace Wacil.Runtime {
             return BinaryPrimitives.ReadInt32LittleEndian(buffer);
         }
 
-        //public static void Grow(Memory memory, uint pages)
+        /// <summary>
+        /// Attempts to increase the number of pages in the given <paramref name="memory"/> instance by the specified amount.
+        /// </summary>
+        /// <returns>
+        /// The previous length, in number of pages, of the memory instance, or <c>-1</c> if the memory could not be resized.
+        /// </returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int Grow(Memory memory, int delta) {
+            if (delta >= 0) {
+                int previousCount = memory.pages.Count;
+                memory.pages.Capacity += 4;
+                while (delta > 0) {
+                    memory.pages.Add(new byte[PageSize]);
+                }
+                return previousCount;
+            } else {
+                return -1;
+            }
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadInt32(Memory memory, uint offset, uint alignment, uint address) {
