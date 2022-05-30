@@ -75,7 +75,7 @@ namespace Wacil.Runtime {
         /// The previous length, in number of pages, of the memory instance, or <c>-1</c> if the memory could not be resized.
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int Grow(Memory memory, int delta) {
+        public static int Grow(int delta, Memory memory) {
             if (delta >= 0) {
                 int previousCount = memory.pages.Count;
                 memory.pages.Capacity += 4;

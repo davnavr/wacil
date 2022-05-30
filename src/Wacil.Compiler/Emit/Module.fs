@@ -51,7 +51,8 @@ type RuntimeLibraryReference =
       MemorySignature: TypeSignature
       MemoryConstructor: IMethodDefOrRef
       MemoryI32Load: IMethodDefOrRef
-      MemoryI32Store: IMethodDefOrRef }
+      MemoryI32Store: IMethodDefOrRef
+      MemoryGrow: IMethodDefOrRef }
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type LocalIndex =
@@ -173,11 +174,23 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             )
             |> moduleDefinition.DefaultImporter.ImportMethodOrNull
 
+        let runtimeMemoryGrow =
+            runtimeMemoryClass.CreateMemberReference(
+                "Grow",
+                new MethodSignature(
+                    CallingConventionAttributes.Default,
+                    moduleDefinition.CorLibTypeFactory.Int32,
+                    [| moduleDefinition.CorLibTypeFactory.Int32; runtimeMemoryClassSignature |]
+                )
+            )
+            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
+
         { Memory = runtimeMemoryClass
           MemorySignature = runtimeMemoryClassSignature
           MemoryConstructor = runtimeMemoryConstructor
           MemoryI32Load = runtimeMemoryReadInt32
-          MemoryI32Store = runtimeMemoryWriteInt32 }
+          MemoryI32Store = runtimeMemoryWriteInt32
+          MemoryGrow = runtimeMemoryGrow }
 
     let coreSystemDelegate =
         coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
@@ -376,11 +389,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         pushMemoryField 0
                         pushMemArg arg
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
-                    // | MemoryGrow ->
-                    //     // Top of stack is the size delta, so additional arguments are inserted
-                    //     il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                    //     il.Add(CilInstruction(CilOpCodes.Ldfld, classMemoryFields[0]))
-                    //     failwith "A"
+                    | MemoryGrow ->
+                        // Top of the stack is the size delta
+                        pushMemoryField 0
+                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
                     | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
                     | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
                     | bad -> failwithf "Compilation of %A not yet supported" bad
