@@ -81,6 +81,7 @@ namespace Wacil.Runtime {
                 memory.pages.Capacity += 4;
                 while (delta > 0) {
                     memory.pages.Add(new byte[PageSize]);
+                    delta--;
                 }
                 return previousCount;
             } else {
