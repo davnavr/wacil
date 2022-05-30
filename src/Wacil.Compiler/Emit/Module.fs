@@ -375,6 +375,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 match block.Span[0].Instruction with
                 | Instruction.Normal normal ->
                     match normal with
+                    | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
                     | LocalGet(LocalIndex index) ->
                         match index with
                         | Arg i -> il.Add(CilInstruction.CreateLdarg(Checked.int32 i))
