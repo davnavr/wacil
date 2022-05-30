@@ -87,8 +87,9 @@ namespace Wacil.Runtime {
             }
         }
 
+        // TODO: Maybe make alignment in bytes instead of power of 2? Could even make it a byte?
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadInt32(Memory memory, uint offset, uint alignment, uint address) {
+        public static int ReadInt32(uint address, Memory memory, uint offset, uint alignment) {
             var location = Location.FromAddress(unchecked(offset + address));
             // Is the alignment hint >= 4 bytes and is the location a multiple of 4?
             if (alignment >= 2 && (location.Offset & 0b11) != 0) {

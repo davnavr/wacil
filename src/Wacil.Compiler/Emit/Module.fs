@@ -48,7 +48,9 @@ type CilInstruction =
 [<NoComparison; NoEquality>]
 type RuntimeLibraryReference =
     { Memory: ITypeDefOrRef
-      MemoryConstructor: IMethodDefOrRef }
+      MemorySignature: TypeSignature
+      MemoryConstructor: IMethodDefOrRef
+      MemoryI32Load: IMethodDefOrRef }
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type LocalIndex =
@@ -121,6 +123,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let runtimeMemoryClass =
             assembly.CreateTypeReference(runtimeLibraryName, "Memory") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
+        let runtimeMemoryClassSignature = TypeDefOrRefSignature runtimeMemoryClass
+
         let runtimeMemoryConstructor =
             runtimeMemoryClass.CreateMemberReference(
                 ".ctor",
@@ -135,8 +139,26 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             )
             |> moduleDefinition.DefaultImporter.ImportMethodOrNull
 
+        let runtimeMemoryReadInt32 =
+            runtimeMemoryClass.CreateMemberReference(
+                "ReadInt32",
+                new MethodSignature(
+                    CallingConventionAttributes.Default,
+                    moduleDefinition.CorLibTypeFactory.Int32,
+                    [|
+                        moduleDefinition.CorLibTypeFactory.UInt32
+                        runtimeMemoryClassSignature
+                        moduleDefinition.CorLibTypeFactory.UInt32
+                        moduleDefinition.CorLibTypeFactory.UInt32
+                    |]
+                )
+            )
+            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
+
         { Memory = runtimeMemoryClass
-          MemoryConstructor = runtimeMemoryConstructor }
+          MemorySignature = runtimeMemoryClassSignature
+          MemoryConstructor = runtimeMemoryConstructor
+          MemoryI32Load = runtimeMemoryReadInt32 }
 
     let coreSystemDelegate =
         coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
@@ -213,60 +235,67 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         instructons.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
         body
 
-    for i = 0 to input.Memories.Length - 1 do
-        let memory = input.Memories[i]
-        let memoryField =
-            FieldDefinition(
-                stringBuffer.Clear().Append("memory#").Append(i).ToString(),
-                FieldAttributes.InitOnly,
-                FieldSignature(TypeDefOrRefSignature runtimeLibraryReference.Memory)
-            )
+    let classMemoryFields =
+        let mutable fields = ArrayBuilder<_>.Create(input.Memories.Length)
 
-        classDefinition.Fields.Add memoryField
-
-        let instructions = classConstructorBody.Instructions
-        instructions.Add(CilInstruction CilOpCodes.Ldarg_0)
-        instructions.Add(CilInstruction.CreateLdcI4(Checked.int32 memory.Minimum))
-        instructions.Add(CilInstruction.CreateLdcI4(ValueOption.map Checked.int32 memory.Maximum |> ValueOption.defaultValue -1))
-        instructions.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.MemoryConstructor))
-        instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
-
-        match input.Exports.GetMemoryName(Checked.uint32 i) with
-        | true, name ->
-            let memoryFieldGetter =
-                MethodDefinition(
-                    stringBuffer.Clear().Append("get_").Append(name).ToString(),
-                    MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.HideBySig,
-                    MethodSignature(
-                        CallingConventionAttributes.HasThis,
-                        TypeDefOrRefSignature runtimeLibraryReference.Memory,
-                        Array.empty
-                    )
+        for i = 0 to input.Memories.Length - 1 do
+            let memory = input.Memories[i]
+            let memoryField =
+                FieldDefinition(
+                    stringBuffer.Clear().Append("memory#").Append(i).ToString(),
+                    FieldAttributes.InitOnly,
+                    FieldSignature runtimeLibraryReference.MemorySignature
                 )
-            
-            classDefinition.Methods.Add memoryFieldGetter
 
-            let body = CilMethodBody memoryFieldGetter
-            let instructions = body.Instructions
+            classDefinition.Fields.Add memoryField
+
+            fields.Add memoryField
+
+            let instructions = classConstructorBody.Instructions
             instructions.Add(CilInstruction CilOpCodes.Ldarg_0)
-            instructions.Add(CilInstruction(CilOpCodes.Ldfld, memoryField))
-            instructions.Add(CilInstruction CilOpCodes.Ret)
-            memoryFieldGetter.CilMethodBody <- body
+            instructions.Add(CilInstruction.CreateLdcI4(Checked.int32 memory.Minimum))
+            instructions.Add(CilInstruction.CreateLdcI4(ValueOption.map Checked.int32 memory.Maximum |> ValueOption.defaultValue -1))
+            instructions.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.MemoryConstructor))
+            instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
 
-            let memoryFieldProperty =
-                PropertyDefinition(
-                    name,
-                    PropertyAttributes.None,
-                    PropertySignature(
-                        CallingConventionAttributes.HasThis,
-                        TypeDefOrRefSignature runtimeLibraryReference.Memory,
-                        Array.empty
+            match input.Exports.GetMemoryName(Checked.uint32 i) with
+            | true, name ->
+                let memoryFieldGetter =
+                    MethodDefinition(
+                        stringBuffer.Clear().Append("get_").Append(name).ToString(),
+                        MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.HideBySig,
+                        MethodSignature(
+                            CallingConventionAttributes.HasThis,
+                            runtimeLibraryReference.MemorySignature,
+                            Array.empty
+                        )
                     )
-                )
+                
+                classDefinition.Methods.Add memoryFieldGetter
 
-            memoryFieldProperty.SetSemanticMethods(memoryFieldGetter, null)
-            classDefinition.Properties.Add memoryFieldProperty
-        | false, _ -> ()
+                let body = CilMethodBody memoryFieldGetter
+                let instructions = body.Instructions
+                instructions.Add(CilInstruction CilOpCodes.Ldarg_0)
+                instructions.Add(CilInstruction(CilOpCodes.Ldfld, memoryField))
+                instructions.Add(CilInstruction CilOpCodes.Ret)
+                memoryFieldGetter.CilMethodBody <- body
+
+                let memoryFieldProperty =
+                    PropertyDefinition(
+                        name,
+                        PropertyAttributes.None,
+                        PropertySignature(
+                            CallingConventionAttributes.HasThis,
+                            runtimeLibraryReference.MemorySignature,
+                            Array.empty
+                        )
+                    )
+
+                memoryFieldProperty.SetSemanticMethods(memoryFieldGetter, null)
+                classDefinition.Properties.Add memoryFieldProperty
+            | false, _ -> ()
+
+        fields.ToImmutableArray()
 
     // Done generating code for constructor
     classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
@@ -310,6 +339,25 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         match index with
                         | Arg i -> il.Add(CilInstruction.CreateLdarg(Checked.int32 i))
                         | Loc i -> il.Add(CilInstruction.CreateLdloc(Checked.int32 i))
+                    | I32Load arg ->
+                        // Top of stack is address to load, which is first parameter
+
+                        // Second parameter, memory instance
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Ldfld, classMemoryFields[0]))
+
+                        // Third parameter, offset
+                        il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
+
+                        // Fourth parameter, alignment
+                        il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
+
+                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
+                    // | MemoryGrow ->
+                    //     // Top of stack is the size delta, so additional arguments are inserted
+                    //     il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                    //     il.Add(CilInstruction(CilOpCodes.Ldfld, classMemoryFields[0]))
+                    //     failwith "A"
                     | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
                     | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
                     | bad -> failwithf "Compilation of %A not yet supported" bad
