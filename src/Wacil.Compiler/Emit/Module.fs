@@ -149,7 +149,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         moduleDefinition.CorLibTypeFactory.UInt32
                         runtimeMemoryClassSignature
                         moduleDefinition.CorLibTypeFactory.UInt32
-                        moduleDefinition.CorLibTypeFactory.UInt32
+                        moduleDefinition.CorLibTypeFactory.Byte
                     |]
                 )
             )

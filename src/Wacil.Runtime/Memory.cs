@@ -89,16 +89,15 @@ namespace Wacil.Runtime {
         }
 
         // TODO: Maybe make alignment be in bytes instead of power of 2?
-        // TODO: Make alignment be a byte
         /// <summary>
         /// Reads a 32-bit integer from the specified <paramref name="memory"/> at the specified <paramref name="address"/>.
         /// </summary>
         /// <remarks>This is the implementation for the <c>i32.load</c> instruction.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadInt32(uint address, Memory memory, uint offset, uint alignment) {
+        public static int ReadInt32(uint address, Memory memory, uint offset, byte alignmentPower) {
             var location = Location.FromAddress(unchecked(offset + address));
             // Is the alignment hint >= 4 bytes and is the location a multiple of 4?
-            if (alignment >= 2 && (location.Offset & 0b11) != 0) {
+            if (alignmentPower >= 2 && (location.Offset & 0b11) != 0) {
                 // An aligned read can occur
                 // TODO: Could eleminate fixed boilerplate by using unmanaged buffers.
                 //unsafe {
@@ -134,9 +133,9 @@ namespace Wacil.Runtime {
         /// </summary>
         /// <remarks>This is the implementation for the <c>i32.store</c> instruction.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteInt32(int value, uint address, Memory memory, uint offset, uint alignment) {
+        public static void WriteInt32(int value, uint address, Memory memory, uint offset, byte alignmentPower) {
             var location = Location.FromAddress(unchecked(offset + address));
-            if (alignment >= 2 && (location.Offset & 0b11) != 0) {
+            if (alignmentPower >= 2 && (location.Offset & 0b11) != 0) {
                 // Temporary slower implementation
                 BinaryPrimitives.WriteInt32LittleEndian(new Span<byte>(memory.pages[location.Page], location.Offset, 4), value);
             } else {
