@@ -462,58 +462,41 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             else
                 let instruction = block.Instructions.Span[0]
 
-                let emitFirstInstruction (instr: AsmResolver.PE.DotNet.Cil.CilInstruction) =
-                    il.Add instr
-                    match labels.TryGetValue instruction.Index with
-                    | false, _ -> ()
-                    | true, label -> label.Instruction <- instr
-
-                let emitLabelTarget() =
-                    match labels.TryGetValue instruction.Index with
-                    | false, _ -> ()
-                    | true, label ->
-                        let nop = CilInstruction CilOpCodes.Nop
-                        il.Add nop
-                        label.Instruction <- nop
-
                 match instruction.Instruction with
                 | Instruction.Normal normal ->
                     match normal with
                     | Br label ->
-                        emitFirstInstruction(CilInstruction(CilOpCodes.Br, labels[block.Labels.GetLabel(label).Index]))
+                        il.Add(CilInstruction(CilOpCodes.Br, labels[block.Labels.GetLabel(label).Index]))
                     | Call callee ->
                         // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                        emitFirstInstruction(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
                         il.Add(CilInstruction(CilOpCodes.Call, getIndexedCallee callee))
                     | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
                     | LocalGet(LocalIndex index) ->
                         match index with
-                        | Arg i -> emitFirstInstruction(CilInstruction.CreateLdarg i)
-                        | Loc i -> emitFirstInstruction(CilInstruction.CreateLdloc i)
+                        | Arg i -> il.Add(CilInstruction.CreateLdarg i)
+                        | Loc i -> il.Add(CilInstruction.CreateLdloc i)
                     | LocalSet(LocalIndex index) ->
                         match index with
-                        | Arg i -> emitFirstInstruction(CilInstruction.CreateStarg i)
-                        | Loc i -> emitFirstInstruction(CilInstruction.CreateStloc i)
+                        | Arg i -> il.Add(CilInstruction.CreateStarg i)
+                        | Loc i -> il.Add(CilInstruction.CreateStloc i)
                     | I32Load arg ->
                         // Top of stack is address to load, which is first parameter
-                        emitLabelTarget()
                         pushMemoryField 0
                         pushMemArg arg
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
                     | I32Store arg ->
                         // Stack contains the value to store on top of the address
-                        emitLabelTarget()
                         pushMemoryField 0
                         pushMemArg arg
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
                     | MemoryGrow ->
                         // Top of the stack is the size delta
-                        emitLabelTarget()
                         pushMemoryField 0
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
-                    | I32Const value -> emitFirstInstruction(CilInstruction.CreateLdcI4 value)
-                    | I32Add -> emitFirstInstruction(CilInstruction CilOpCodes.Add)
-                    | I32Sub -> emitFirstInstruction(CilInstruction CilOpCodes.Sub)
+                    | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
+                    | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
+                    | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
                     | bad -> failwithf "Compilation of %A not yet supported" bad
                 | Instruction.Structured structured ->
                     match instruction.Kind with
@@ -525,10 +508,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         | bad -> failwithf "Unsupported structured kind compile fix later %A" bad
                     | Normal -> failwithf "%A should not be marked as a normal isntruction" instruction
 
+                match labels.TryGetValue instruction.Index with
+                | false, _ -> ()
+                | true, label ->
+                    let nop = CilInstruction CilOpCodes.Nop
+                    il.Add nop
+                    label.Instruction <- nop
+
                 block.Instructions <- block.Instructions.Slice(1)
 
         if not hasExplicitReturn then
-            // TODO: Implicit return could be a branch target, so check here.
+            // TODO: Implicit return could be a branch target, but does the above code already cover that case?
             il.Add(CilInstruction CilOpCodes.Ret)
 
     do
