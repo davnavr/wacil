@@ -4,6 +4,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
+open Wacil.Compiler.Helpers
 open Wacil.Compiler.Helpers.Collections
 
 open Wacil.Compiler.Wasm.Format
@@ -89,8 +90,8 @@ type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and ValidInstructionKind =
     | Normal
-    | Branching of indices: ImmutableArray<int32>
-    | Structured of ImmutableArray<ValidInstructionSequence>
+    | Branching of indices: ImmutableArray<int>
+    | Structured of labels: ImmutableArray<int> * ImmutableArray<ValidInstructionSequence>
 
 and ValidInstruction =
     { Index: int32
@@ -101,7 +102,7 @@ and ValidInstruction =
 
 [<NoComparison; NoEquality>]
 type ValidExpressionBuilder =
-    { Start: Instruction voption
+    { Start: struct(StructuredInstruction * int) voption
       mutable Source: System.ReadOnlyMemory<Instruction>
       mutable Instructions: ArrayBuilder<ValidInstruction> }
 
@@ -454,8 +455,9 @@ module Validate =
                 else localTypes[i - actualLocalStartIndex]
 
             let mutable instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
+            let mutable labelIndexStack = ImmutableArray.Empty
             let mutable index = 0
-            let mutable instructions = Unchecked.defaultof<_>
+            let mutable finalInstructions = Unchecked.defaultof<_>
 
             instructionBuilderStack.Add
                 { Start = ValueNone
@@ -463,14 +465,42 @@ module Validate =
                   Instructions = ArrayBuilder<_>.Create expression.Length }
             
             while not instructionBuilderStack.IsEmpty do
-                let top = instructionBuilderStack.LastRef()
+                let mutable top = instructionBuilderStack.LastRef()
                 if top.Source.IsEmpty then
+                    let mutable top = instructionBuilderStack.Pop()
+                    let instructions = top.Instructions.ToImmutableArray()
                     if instructionBuilderStack.Length > 1 then
-                        failwith "TODO: Block unexpectedly ended"
+                        // We are dealing with a structured instruction
+                        let struct(startInstruction, startIndex) = top.Start.Value
+
+                        let actualBlockType =
+                            match startInstruction.Type with
+                            | BlockType.Index i -> types[Checked.int32 i]
+                            | BlockType.Val v ->
+                                { FuncType.Results = ImmutableArray.Create(v)
+                                  Parameters = ImmutableArray.Empty }
+
+                        let mutable parent = instructionBuilderStack.LastRef()
+
+                        // TODO: Check that block types are correct
+                        //if actualBlockType = top.
+
+                        let targetIndex =
+                            match startInstruction.Kind with
+                            | Block -> startIndex + instructions.Length
+                            | _ -> failwithf "TODO: Add support for validating %A branch" startInstruction
+
+                        parent.Instructions.Add
+                            { Index = index
+                              PoppedTypes = actualBlockType.Parameters
+                              PushedTypes = actualBlockType.Results
+                              Instruction = Instruction.Structured startInstruction
+                              Kind =
+                                Structured(labelIndexStack.Insert(0, targetIndex), ImmutableArray.Create(item = instructions)) }
+
+                        index <- Checked.(+) index 1
                     else
-                        // TODO: Remove code duplication with `return` instruction validator
-                        instructionBuilderStack.Pop() |> ignore
-                        instructions <- top.Instructions.ToImmutableArray()
+                        finalInstructions <- instructions
                 else
                     let instruction = top.Source.Span[0]
                     top.Source <- top.Source.Slice(1)
@@ -518,12 +548,17 @@ module Validate =
                             operandTypeStack.Push(ValType.Num I32)
                             emit Normal OperandTypes.twoI32 OperandTypes.oneI32
                         | _ -> failwithf "TODO: Add support for validating %A" normal
+                    | Instruction.Structured structured ->
+                        instructionBuilderStack.Add
+                            { Start = ValueSome(structured, index)
+                              Source = structured.Instructions.AsMemory()
+                              Instructions = ArrayBuilder<_>.Create structured.Instructions.Length }
 
                     index <- Checked.(+) index 1
 
-            assert not instructions.IsDefault
+            assert not finalInstructions.IsDefault
 
-            instructions, branchTargetBuilder.Value.ToImmutableArray()
+            finalInstructions, branchTargetBuilder.Value.ToImmutableArray()
 
         let operandTypeStack = { OperandTypeStack.Stack = ArrayBuilder<_>.Create() }
         let branchTargetIndices = ArrayBuilder<_>.Create() |> ref
