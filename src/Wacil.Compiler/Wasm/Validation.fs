@@ -192,6 +192,10 @@ type OperandTypeStack =
         if actual <> expected then
             failwithf "Expected to pop %O off of the stack but got %O" expected actual
 
+    member this.PushAndPop(funcType: FuncType) =
+        for ty in funcType.Parameters do this.PopExpecting ty
+        for ty in funcType.Results do this.Push ty
+
 [<RequireQualifiedAccess>]
 module OperandTypes =
     let oneI32 = ImmutableArray.Create(item = ValType.Num I32)
@@ -426,6 +430,11 @@ module Validate =
                             ModuleExport.Global
             ModuleExportLookup(memories, functionNames, lookup)
 
+        let getFunctionIndexType (index: Index) =
+            let i = Checked.int32 index
+            //if i < imports.Functions.Length
+            functions[i].Type
+
         // TODO: Analyze each expression to check they are valid
         let validateExpression
             (operandTypeStack: OperandTypeStack)
@@ -478,6 +487,10 @@ module Validate =
                     | Instruction.Normal normal ->
                         match normal with
                         | Nop -> emit Normal ImmutableArray.Empty ImmutableArray.Empty
+                        | Call callee ->
+                            let funcType = getFunctionIndexType callee
+                            operandTypeStack.PushAndPop funcType
+                            emit Normal funcType.Parameters funcType.Results
                         | Drop ->
                             let poppedType = operandTypeStack.PopAny()
                             emit Normal (ImmutableArray.Create(item = poppedType)) ImmutableArray.Empty

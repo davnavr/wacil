@@ -128,6 +128,7 @@ type NormalInstruction =
     | Nop
     | Br of label: Index
     | Drop
+    | Call of callee: Index
     | LocalGet of Index
     | LocalSet of Index
     | LocalTee of Index
