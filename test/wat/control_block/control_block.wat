@@ -1,5 +1,5 @@
 (module
-  (func (export "test") (param i32) (result i32)
+  (func (export "test") (result i32)
     (local i32) ;; wat2wasm does not seem to support block result values
     block
       i32.const 16

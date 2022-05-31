@@ -396,6 +396,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
+        (instructionOffsetBuilder: ResizeArray<_>)
         (parameterCount: int32)
         (localVariableTypes: ImmutableArray<ValType>)
         (expression: ValidExpression)
@@ -417,6 +418,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         instructionBlockStack.Clear()
         instructionBlockStack.Add(expression.Expression.AsMemory())
 
+        instructionOffsetBuilder.Clear()
+
         let mutable hasExplicitReturn = false
 
         let inline pushMemoryField i =
@@ -433,9 +436,20 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 let _ = instructionBlockStack.Pop()
                 ()
             else
-                match block.Span[0].Instruction with
+                let instruction = block.Span[0]
+                //instructionOffsetBuilder.Add(body.Instructions.)
+
+                // TODO: Compile a list of all branch targets sometime, and check HERE to see if a CIL label needs to be generated
+
+                // TODO: Instead of a map, have a list mapping CIL byte offsets to WASM instruction indices, since a label index can already be easily turned into an instruction index
+                // Above might not work as no easy way to get current byte offset
+                // Could get away with generating a label for each WASM instruction, but it might be more efficient to compile a list of targets beforehand.
+
+                match instruction.Instruction with
                 | Instruction.Normal normal ->
                     match normal with
+                    | Br label ->
+                        failwith "BRANCH"
                     | Call callee ->
                         // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
                         il.Add(CilInstruction CilOpCodes.Ldarg_0)
@@ -463,7 +477,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
                     | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
                     | bad -> failwithf "Compilation of %A not yet supported" bad
-                | bad -> failwithf "Compilation of %A not yet supported" bad
+                | Instruction.Structured structured ->
+                    match instruction.Kind with
+                    | Structured(labels, body) ->
+                        match structured.Kind with
+                        | Block ->
+                            assert(body.Length = 1)
+                            instructionBlockStack.Add(body[0].AsMemory()) //, labels)
+                        | bad -> failwithf "Unsupported structured kind compile fix later %A" bad
+                    | Normal -> failwithf "%A should not be marked as a normal isntruction" instruction
 
                 block <- block.Slice(1)
 
@@ -472,11 +494,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     do
         let instructionBlockStack = ArrayBuilder<_>.Create() |> ref
+        let instructionOffsetBuilder = ResizeArray()
         for i = 0 to input.Functions.Length - 1 do
             let func = input.Functions[i]
             let definition = generatedClassFunctions[i]
             let body = CilMethodBody definition
-            emitExpressionCode instructionBlockStack func.Type.Parameters.Length func.LocalTypes func.Body body
+            emitExpressionCode instructionBlockStack instructionOffsetBuilder func.Type.Parameters.Length func.LocalTypes func.Body body
             definition.CilMethodBody <- body
 
     match input.Start with
