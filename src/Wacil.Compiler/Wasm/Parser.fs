@@ -172,6 +172,13 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             | ValueNone -> failwith "maximum of limit must be less than minimum"
         | bad -> failwithf "bad limit kind 0x%02X" bad
 
+    member this.ReadTableType() =
+        { TableType.ElementType =
+            match this.ReadValType() with
+            | ValType.Ref r -> r
+            | bad -> failwithf "%A is not a valid reference type" bad
+          TableType.Limits = this.ReadLimits() }
+
 [<Sealed>]
 type InvalidMagicException (actual: ImmutableArray<byte>) =
     inherit Exception("Not a WebAssembly module")
@@ -377,6 +384,20 @@ let parseFromStream (stream: Stream) =
                 let types = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
                 sections.Add(Section.Type(Unsafe.Array.toImmutable types))
+            | SectionId.Import ->
+                let imports = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                for i = 0 to imports.Length - 1 do
+                    imports[i] <-
+                        { Import.Module = reader.ReadName()
+                          Import.Name = reader.ReadName()
+                          Import.Description =
+                            match reader.ReadByte() with
+                            | 0uy -> reader.ReadUnsignedInteger() |> Checked.uint32 |> ImportDesc.Func
+                            | 1uy -> reader.ReadTableType() |> ImportDesc.Table
+                            | 2uy -> reader.ReadLimits() |> ImportDesc.Mem
+                            //| 3uy -> reader.Global
+                            | bad -> failwithf "0x%02X is not a valid import descriptor" bad}
+                sections.Add(Section.Import(Unsafe.Array.toImmutable imports))
             | SectionId.Function ->
                 let indices = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadUnsignedInteger() |> Checked.uint32
