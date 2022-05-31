@@ -26,23 +26,21 @@ open Wacil.Compiler.Wasm.Validation
 type CilInstruction =
     static member CreateLdloc index =
         match index with
-        | 0 -> CilOpCodes.Ldloc_0
-        | 1 -> CilOpCodes.Ldloc_1
-        | 2 -> CilOpCodes.Ldloc_2
-        | 3 -> CilOpCodes.Ldloc_3
-        | _ when index <= 255 -> CilOpCodes.Ldloc_S
-        | _ -> CilOpCodes.Ldloc
-        |> CilInstruction
+        | 0 -> CilInstruction CilOpCodes.Ldloc_0
+        | 1 -> CilInstruction CilOpCodes.Ldloc_1
+        | 2 -> CilInstruction CilOpCodes.Ldloc_2
+        | 3 -> CilInstruction CilOpCodes.Ldloc_3
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Ldloc_S, index)
+        | _ -> CilInstruction(CilOpCodes.Ldloc, index)
 
     static member CreateLdarg index =
         match index with
-        | 0 -> CilOpCodes.Ldarg_0
-        | 1 -> CilOpCodes.Ldarg_1
-        | 2 -> CilOpCodes.Ldarg_2
-        | 3 -> CilOpCodes.Ldarg_3
-        | _ when index <= 255 -> CilOpCodes.Ldarg_S
-        | _ -> CilOpCodes.Ldarg
-        |> CilInstruction
+        | 0 -> CilInstruction CilOpCodes.Ldarg_0
+        | 1 -> CilInstruction CilOpCodes.Ldarg_1
+        | 2 -> CilInstruction CilOpCodes.Ldarg_2
+        | 3 -> CilInstruction CilOpCodes.Ldarg_3
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Ldarg_S, index)
+        | _ -> CilInstruction(CilOpCodes.Ldarg, index)
 
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
@@ -374,8 +372,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
                     | LocalGet(LocalIndex index) ->
                         match index with
-                        | Arg i -> il.Add(CilInstruction.CreateLdarg(Checked.int32 i))
-                        | Loc i -> il.Add(CilInstruction.CreateLdloc(Checked.int32 i))
+                        | Arg i -> il.Add(CilInstruction.CreateLdarg i)
+                        | Loc i -> il.Add(CilInstruction.CreateLdloc i)
                     | I32Load arg ->
                         // Top of stack is address to load, which is first parameter
                         pushMemoryField 0
