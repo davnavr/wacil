@@ -76,6 +76,12 @@ type InstructionBlockBuilder =
     { mutable Instructions: System.ReadOnlyMemory<ValidInstruction>
       Labels: IntroducedLabelLookup }
 
+[<NoComparison; NoEquality>]
+type ModuleImport =
+    { Class: TypeDefinition
+      Signature: TypeDefOrRefSignature
+      Field: FieldDefinition }
+
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
         match options.TargetFramework with
@@ -347,6 +353,37 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | false, _ -> ()
 
         fields.ToImmutableArray()
+
+    let translatedModuleImports =
+        let lookup = Dictionary<string, ModuleImport>(input.Imports.Count)
+
+        for KeyValue(moduleName, imports) in input.Imports do
+            let importClassDefinition =
+                TypeDefinition (
+                    String.empty,
+                    moduleName,
+                    TypeAttributes.Sealed ||| TypeAttributes.NestedPublic
+                )
+
+            classDefinition.NestedTypes.Add importClassDefinition
+
+            let importTypeSignature = TypeDefOrRefSignature importClassDefinition
+
+            let importFieldDefinition =
+                 FieldDefinition (
+                     stringBuffer.Clear().Append("import@").Append(moduleName).ToString(),
+                     FieldAttributes.InitOnly,
+                     FieldSignature importTypeSignature
+                 )
+
+            classDefinition.Fields.Add importFieldDefinition
+
+            lookup[moduleName] <-
+                { ModuleImport.Class = importClassDefinition
+                  Signature = importTypeSignature
+                  Field = importFieldDefinition }
+
+        lookup
 
     let generatedClassFunctions =
         let mutable functions = ArrayBuilder<_>.Create(input.Functions.Length)

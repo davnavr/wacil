@@ -76,6 +76,8 @@ type ModuleImportLookup (lookup: Dictionary<string, ModuleImports>) =
             raise(KeyNotFoundException "modules does not contain any imports")
         lookup[moduleImportName]
 
+    member _.Count = lookup.Count
+
     interface IReadOnlyDictionary<string, ModuleImports> with
         member this.Item with get key = this[key]
         member _.Keys = lookup.Keys

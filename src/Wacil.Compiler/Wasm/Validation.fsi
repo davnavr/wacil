@@ -29,6 +29,8 @@ type ModuleImports =
 type ModuleImportLookup =
     member Item: moduleImportName: string -> ModuleImports with get
 
+    member Count: int
+
     interface IReadOnlyDictionary<string, ModuleImports>
 
 [<NoComparison; StructuralEquality>]
