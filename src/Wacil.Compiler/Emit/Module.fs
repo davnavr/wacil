@@ -419,6 +419,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
                     | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
                     | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
+                    | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
                     | bad -> failwithf "Compilation of %A not yet supported" bad
                 | bad -> failwithf "Compilation of %A not yet supported" bad
 
