@@ -117,6 +117,7 @@ type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 // TODO: Or should this be FuncType? It seems multi-value proposal might have been merged?
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type BlockType =
+    | Void
     | Index of index: Index
     | Val of ValType
     //| Func of FuncType

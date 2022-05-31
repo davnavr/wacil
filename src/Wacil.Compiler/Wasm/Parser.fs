@@ -73,8 +73,9 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             if cont then shifted <- Checked.(+) shifted 7
         n
 
-    member this.ReadSignedInteger() =
+    member this.ReadSignedIntegerOrNegativeZero() =
         let mutable cont, n, shifted = true, 0L, 0
+        let mutable result = ValueNone
         while cont do
             let mutable b = this.ReadByte()
 
@@ -88,10 +89,16 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             cont <- b &&& ContinueMask = ContinueMask
             shifted <- Checked.(+) shifted 7
 
-            // Insert the high sign bits
-            if not cont && shifted < 64 && SignMask &&& b = SignMask then
-                n <- n ||| (-1L <<< shifted)
-        n
+            if not cont then
+                // Insert the high sign bits
+                if shifted < 64 && SignMask &&& b = SignMask then
+                    if b &&& 0b0011_1111uy <> 0uy then
+                        result <- ValueSome(n ||| (-1L <<< shifted))
+                else
+                    result <- ValueSome n
+        result
+
+    member this.ReadSignedInteger() = ValueOption.defaultValue 0L (this.ReadSignedIntegerOrNegativeZero())
 
     /// Reads a 32-bit floating-point number in little-endian order.
     member this.ReadFloat32(): single =
@@ -130,18 +137,14 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
     member this.ReadValType() = this.ReadByte() |> getValType
 
     member this.ReadBlockType() =
-        match this.ReadByte() with
-        | 0x40uy ->
-            let value = this.ReadSignedInteger()
-            if value >= 0L then
-                BlockType.Index(Checked.uint32 value)
-            else
-                (int8 value * -1y) ||| 0b0100_0000y
-                |> uint8
-                |> getValType
-                |> BlockType.Val
-        | bad ->
-            failwithf "0x%02X is not a known block type" bad
+        match this.ReadSignedIntegerOrNegativeZero() with
+        | ValueNone -> BlockType.Void
+        | ValueSome value when value >= 0L -> BlockType.Index(Checked.uint32 value)
+        | ValueSome value ->
+            (int8 value * -1y) ||| 0b0100_0000y
+            |> uint8
+            |> getValType
+            |> BlockType.Val
 
     member this.ReadResultType(): ResultType =
         let count = this.ReadUnsignedInteger()
