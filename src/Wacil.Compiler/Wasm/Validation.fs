@@ -86,12 +86,16 @@ type ModuleImportLookup (lookup: Dictionary<string, ModuleImports>) =
         member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = lookup.GetEnumerator() :> System.Collections.IEnumerator
 
+type IntroducedLabel =
+    internal { mutable Value: int voption }
+    member this.Index = this.Value.Value
+
 type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and ValidInstructionKind =
     | Normal
     | Branching of indices: ImmutableArray<int>
-    | Structured of labels: ImmutableArray<int> * ImmutableArray<ValidInstructionSequence>
+    | Structured of labels: ImmutableArray<IntroducedLabel> * ImmutableArray<ValidInstructionSequence>
 
 and ValidInstruction =
     { Index: int32
@@ -447,17 +451,17 @@ module Validate =
             operandTypeStack.Stack.Clear()
             branchTargetBuilder.Value.Clear()
 
+            let mutable instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
+            let mutable labelIndexStack = ImmutableArray.Empty
+            let mutable index = 0
+            let mutable finalInstructions = Unchecked.defaultof<_>
+
             let actualLocalStartIndex = functionType.Parameters.Length
             let getLocalType (index: Index) =
                 let i = Checked.int32 index
                 if i < actualLocalStartIndex
                 then functionType.Parameters[i]
                 else localTypes[i - actualLocalStartIndex]
-
-            let mutable instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
-            let mutable labelIndexStack = ImmutableArray.Empty
-            let mutable index = 0
-            let mutable finalInstructions = Unchecked.defaultof<_>
 
             instructionBuilderStack.Add
                 { Start = ValueNone
@@ -475,29 +479,33 @@ module Validate =
 
                         let actualBlockType =
                             match startInstruction.Type with
-                            | BlockType.Index i -> types[Checked.int32 i]
+                            | BlockType.Void ->
+                                { FuncType.Results = ImmutableArray.Empty
+                                  Parameters = ImmutableArray.Empty }
                             | BlockType.Val v ->
                                 { FuncType.Results = ImmutableArray.Create(v)
                                   Parameters = ImmutableArray.Empty }
+                            | BlockType.Index i -> types[Checked.int32 i]
 
                         let mutable parent = instructionBuilderStack.LastRef()
 
                         // TODO: Check that block types are correct
                         //if actualBlockType = top.
 
-                        let targetIndex =
+                        labelIndexStack[0].Value <-
                             match startInstruction.Kind with
                             | Block -> startIndex + instructions.Length
                             | _ -> failwithf "TODO: Add support for validating %A branch" startInstruction
+                            |> ValueSome
 
                         parent.Instructions.Add
                             { Index = index
                               PoppedTypes = actualBlockType.Parameters
                               PushedTypes = actualBlockType.Results
                               Instruction = Instruction.Structured startInstruction
-                              Kind =
-                                Structured(labelIndexStack.Insert(0, targetIndex), ImmutableArray.Create(item = instructions)) }
+                              Kind = Structured(labelIndexStack, ImmutableArray.Create(item = instructions)) }
 
+                        labelIndexStack <- labelIndexStack.RemoveAt 0
                         index <- Checked.(+) index 1
                     else
                         finalInstructions <- instructions
@@ -553,6 +561,8 @@ module Validate =
                             emit Normal OperandTypes.twoI32 OperandTypes.oneI32
                         | _ -> failwithf "TODO: Add support for validating %A" normal
                     | Instruction.Structured structured ->
+                        labelIndexStack <- labelIndexStack.Insert(0, { Value = ValueNone })
+
                         instructionBuilderStack.Add
                             { Start = ValueSome(structured, index)
                               Source = structured.Instructions.AsMemory()

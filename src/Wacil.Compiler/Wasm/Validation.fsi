@@ -31,13 +31,19 @@ type ModuleImportLookup =
 
     interface IReadOnlyDictionary<string, ModuleImports>
 
+[<NoComparison; StructuralEquality>]
+type IntroducedLabel =
+    internal { mutable Value: int voption }
+
+    member Index: int
+
 type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and [<NoComparison; StructuralEquality>] ValidInstructionKind =
     | Normal
     | Branching of indices: ImmutableArray<int>
-    | Structured of labels: ImmutableArray<int> * ImmutableArray<ValidInstructionSequence>
-    
+    | Structured of labels: ImmutableArray<IntroducedLabel> * ImmutableArray<ValidInstructionSequence>
+
 and [<NoComparison; StructuralEquality>] ValidInstruction =
     { Index: int
       PoppedTypes: ImmutableArray<Format.ValType>
