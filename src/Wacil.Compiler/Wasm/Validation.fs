@@ -528,6 +528,10 @@ module Validate =
                             let ty = getLocalType index
                             operandTypeStack.Push ty
                             emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = ty))
+                        | LocalSet index ->
+                            let ty = getLocalType index
+                            operandTypeStack.PopExpecting ty
+                            emit Normal (ImmutableArray.Create(item = ty)) ImmutableArray.Empty
                         | I32Load _
                         | MemoryGrow ->
                             operandTypeStack.PopExpecting(ValType.Num I32)
