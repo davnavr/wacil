@@ -1,7 +1,7 @@
 
 memory.grow(1)
 
-const index = 0
+const index = 64
 
 store<i32>(index, 42)
 

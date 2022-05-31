@@ -134,7 +134,7 @@ namespace Wacil.Runtime {
         /// </summary>
         /// <remarks>This is the implementation for the <c>i32.store</c> instruction.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteInt32(int value, uint address, Memory memory, uint offset, byte alignmentPower) {
+        public static void WriteInt32(uint address, int value, Memory memory, uint offset, byte alignmentPower) {
             var location = Location.FromAddress(unchecked(offset + address));
             if (alignmentPower >= 2 && (location.Offset & 0b11) != 0) {
                 // Temporary slower implementation

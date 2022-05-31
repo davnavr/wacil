@@ -162,8 +162,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     CallingConventionAttributes.Default,
                     moduleDefinition.CorLibTypeFactory.Void,
                     [|
-                        moduleDefinition.CorLibTypeFactory.Int32
                         moduleDefinition.CorLibTypeFactory.UInt32
+                        moduleDefinition.CorLibTypeFactory.Int32
                         runtimeMemoryClassSignature
                         moduleDefinition.CorLibTypeFactory.UInt32
                         moduleDefinition.CorLibTypeFactory.Byte
