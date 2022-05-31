@@ -472,7 +472,7 @@ module Validate =
                 if top.Source.IsEmpty then
                     let mutable top = instructionBuilderStack.Pop()
                     let instructions = top.Instructions.ToImmutableArray()
-                    if instructionBuilderStack.Length > 1 then
+                    if instructionBuilderStack.Length >= 1 then
                         // We are dealing with a structured instruction
                         let struct(startInstruction, startIndex) = top.Start.Value
 
