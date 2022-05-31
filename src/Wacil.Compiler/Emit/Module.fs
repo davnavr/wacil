@@ -42,6 +42,20 @@ type CilInstruction =
         | _ when index <= 255 -> CilInstruction(CilOpCodes.Ldarg_S, index)
         | _ -> CilInstruction(CilOpCodes.Ldarg, index)
 
+    static member CreateStloc index =
+        match index with
+        | 0 -> CilInstruction CilOpCodes.Stloc_0
+        | 1 -> CilInstruction CilOpCodes.Stloc_1
+        | 2 -> CilInstruction CilOpCodes.Stloc_2
+        | 3 -> CilInstruction CilOpCodes.Stloc_3
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Stloc_S, index)
+        | _ -> CilInstruction(CilOpCodes.Stloc, index)
+
+    static member CreateStarg index =
+        match index with
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Starg_S, index)
+        | _ -> CilInstruction(CilOpCodes.Starg, index)
+
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type RuntimeLibraryReference =
@@ -56,6 +70,11 @@ type RuntimeLibraryReference =
 type LocalIndex =
     | Arg of a: int32
     | Loc of int32
+
+[<NoComparison; NoEquality>]
+type InstructionBlockBuilder =
+    { mutable Instructions: System.ReadOnlyMemory<ValidInstruction>
+      Labels: IntroducedLabelLookup }
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
@@ -416,7 +435,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let il = body.Instructions
 
         instructionBlockStack.Clear()
-        instructionBlockStack.Add(expression.Expression.AsMemory())
+        instructionBlockStack.Add { Instructions = expression.Expression.AsMemory(); Labels = IntroducedLabelLookup.Empty }
 
         instructionOffsetBuilder.Clear()
 
@@ -430,52 +449,70 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
+        /// Maps indices that refer to WASM instructions to CIL labels.
+        let labels = Dictionary<int, CilInstructionLabel>(expression.LabelIndices.Length)
+        for index in expression.LabelIndices do labels.Add(index, CilInstructionLabel())
+
         while not instructionBlockStack.IsEmpty do
-            let mutable block = &instructionBlockStack.LastRef()
-            if block.IsEmpty then
+            let block = instructionBlockStack.LastRef()
+            if block.Instructions.IsEmpty then
                 let _ = instructionBlockStack.Pop()
                 ()
             else
-                let instruction = block.Span[0]
-                //instructionOffsetBuilder.Add(body.Instructions.)
+                let instruction = block.Instructions.Span[0]
 
-                // TODO: Compile a list of all branch targets sometime, and check HERE to see if a CIL label needs to be generated
+                let emitFirstInstruction (instr: AsmResolver.PE.DotNet.Cil.CilInstruction) =
+                    il.Add instr
+                    match labels.TryGetValue instruction.Index with
+                    | false, _ -> ()
+                    | true, label -> label.Instruction <- instr
 
-                // TODO: Instead of a map, have a list mapping CIL byte offsets to WASM instruction indices, since a label index can already be easily turned into an instruction index
-                // Above might not work as no easy way to get current byte offset
-                // Could get away with generating a label for each WASM instruction, but it might be more efficient to compile a list of targets beforehand.
+                let emitLabelTarget() =
+                    match labels.TryGetValue instruction.Index with
+                    | false, _ -> ()
+                    | true, label ->
+                        let nop = CilInstruction CilOpCodes.Nop
+                        il.Add nop
+                        label.Instruction <- nop
 
                 match instruction.Instruction with
                 | Instruction.Normal normal ->
                     match normal with
                     | Br label ->
-                        failwith "BRANCH"
+                        emitFirstInstruction(CilInstruction(CilOpCodes.Br, labels[block.Labels.GetLabel(label).Index]))
                     | Call callee ->
                         // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        emitFirstInstruction(CilInstruction CilOpCodes.Ldarg_0)
                         il.Add(CilInstruction(CilOpCodes.Call, getIndexedCallee callee))
                     | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
                     | LocalGet(LocalIndex index) ->
                         match index with
-                        | Arg i -> il.Add(CilInstruction.CreateLdarg i)
-                        | Loc i -> il.Add(CilInstruction.CreateLdloc i)
+                        | Arg i -> emitFirstInstruction(CilInstruction.CreateLdarg i)
+                        | Loc i -> emitFirstInstruction(CilInstruction.CreateLdloc i)
+                    | LocalSet(LocalIndex index) ->
+                        match index with
+                        | Arg i -> emitFirstInstruction(CilInstruction.CreateStarg i)
+                        | Loc i -> emitFirstInstruction(CilInstruction.CreateStloc i)
                     | I32Load arg ->
                         // Top of stack is address to load, which is first parameter
+                        emitLabelTarget()
                         pushMemoryField 0
                         pushMemArg arg
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
                     | I32Store arg ->
                         // Stack contains the value to store on top of the address
+                        emitLabelTarget()
                         pushMemoryField 0
                         pushMemArg arg
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
                     | MemoryGrow ->
                         // Top of the stack is the size delta
+                        emitLabelTarget()
                         pushMemoryField 0
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
-                    | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
-                    | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
-                    | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
+                    | I32Const value -> emitFirstInstruction(CilInstruction.CreateLdcI4 value)
+                    | I32Add -> emitFirstInstruction(CilInstruction CilOpCodes.Add)
+                    | I32Sub -> emitFirstInstruction(CilInstruction CilOpCodes.Sub)
                     | bad -> failwithf "Compilation of %A not yet supported" bad
                 | Instruction.Structured structured ->
                     match instruction.Kind with
@@ -483,13 +520,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         match structured.Kind with
                         | Block ->
                             assert(body.Length = 1)
-                            instructionBlockStack.Add(body[0].AsMemory()) //, labels)
+                            instructionBlockStack.Add { Instructions = body[0].AsMemory(); Labels = labels }
                         | bad -> failwithf "Unsupported structured kind compile fix later %A" bad
                     | Normal -> failwithf "%A should not be marked as a normal isntruction" instruction
 
-                block <- block.Slice(1)
+                block.Instructions <- block.Instructions.Slice(1)
 
         if not hasExplicitReturn then
+            // TODO: Implicit return could be a branch target, so check here.
             il.Add(CilInstruction CilOpCodes.Ret)
 
     do

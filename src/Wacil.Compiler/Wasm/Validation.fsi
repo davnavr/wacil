@@ -37,11 +37,23 @@ type IntroducedLabel =
 
     member Index: int
 
+[<NoComparison; StructuralEquality>]
+type IntroducedLabelLookup =
+    internal
+        { Lookup: Dictionary<Format.Index, IntroducedLabel>
+          Labels: ImmutableArray<IntroducedLabel> }
+
+    member TryGetLabel: index: Format.Index * label: outref<IntroducedLabel> -> bool
+
+    member GetLabel: index: Format.Index -> IntroducedLabel
+
+    static member Empty: IntroducedLabelLookup
+
 type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and [<NoComparison; StructuralEquality>] ValidInstructionKind =
     | Normal
-    | Structured of labels: ImmutableArray<IntroducedLabel> * ImmutableArray<ValidInstructionSequence>
+    | Structured of IntroducedLabelLookup * ImmutableArray<ValidInstructionSequence>
 
 and [<NoComparison; StructuralEquality>] ValidInstruction =
     { Index: int
@@ -54,11 +66,13 @@ and [<NoComparison; StructuralEquality>] ValidInstruction =
 type ValidExpression =
     internal
         { Source: Format.Expression
-          mutable BranchTargets: ImmutableArray<int>
-          mutable Expression: ValidInstructionSequence }
+          mutable Expression: ValidInstructionSequence
+          mutable BranchTargets: ImmutableArray<int> }
 
     member Instructions: ValidInstructionSequence
-    member BranchTargetIndices: ImmutableArray<int>
+
+    /// The indices of all instructions that control flow will transfer to when a branch is taken, listed in increasing order.
+    member LabelIndices: ImmutableArray<int>
 
 [<NoComparison; StructuralEquality>]
 type Function =

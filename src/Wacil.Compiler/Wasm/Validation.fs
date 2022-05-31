@@ -90,11 +90,23 @@ type IntroducedLabel =
     internal { mutable Value: int voption }
     member this.Index = this.Value.Value
 
+type IntroducedLabelLookup =
+    internal { Lookup: Dictionary<Index, IntroducedLabel>; Labels: ImmutableArray<IntroducedLabel> }
+
+    member this.TryGetLabel(index: Index, label: outref<_>) = this.Lookup.TryGetValue(index, &label)
+
+    member this.GetLabel index =
+        match this.TryGetLabel index with
+        | true, label -> label
+        | false, _ -> raise(System.IndexOutOfRangeException())
+
+    static member Empty = { Lookup = Dictionary(capacity = 0); Labels = ImmutableArray.Empty }
+
 type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and ValidInstructionKind =
     | Normal
-    | Structured of labels: ImmutableArray<IntroducedLabel> * ImmutableArray<ValidInstructionSequence>
+    | Structured of IntroducedLabelLookup * ImmutableArray<ValidInstructionSequence>
 
 and ValidInstruction =
     { Index: int32
@@ -112,11 +124,11 @@ type ValidExpressionBuilder =
 type ValidExpression =
     internal
         { Source: Expression
-          mutable BranchTargets: ImmutableArray<int>
-          mutable Expression: ValidInstructionSequence }
+          mutable Expression: ValidInstructionSequence
+          mutable BranchTargets: ImmutableArray<int> }
 
     member this.Instructions = this.Expression
-    member this.BranchTargetIndices = this.BranchTargets
+    member this.LabelIndices = this.BranchTargets
 
 type Function =
     { Type: FuncType
@@ -406,8 +418,8 @@ module Validate =
                           LocalTypes = localTypesBuilder.ToImmutableArray()
                           Body =
                             { ValidExpression.Source = body.Body
-                              BranchTargets = Unchecked.defaultof<_>
-                              Expression = Unchecked.defaultof<_> } }
+                              Expression = Unchecked.defaultof<_>
+                              BranchTargets = Unchecked.defaultof<_> } }
 
                 moduleFunctionDefinitions.ToImmutableArray()
                 
@@ -442,16 +454,15 @@ module Validate =
         // TODO: Analyze each expression to check they are valid
         let validateExpression
             (operandTypeStack: OperandTypeStack)
-            (branchTargetBuilder: ArrayBuilder<int> ref)
             (functionType: FuncType)
             (localTypes: ImmutableArray<ValType>)
             (expression: Expression)
             =
             operandTypeStack.Stack.Clear()
-            branchTargetBuilder.Value.Clear()
 
             let mutable instructionBuilderStack = ArrayBuilder<_>.Create(capacity = 1)
             let mutable labelIndexStack = ImmutableArray.Empty
+            let mutable branchTargetList = ArrayBuilder<_>.Create()
             let mutable index = 0
             let mutable finalInstructions = Unchecked.defaultof<_>
 
@@ -497,12 +508,22 @@ module Validate =
                             | _ -> failwithf "TODO: Add support for validating %A branch" startInstruction
                             |> ValueSome
 
+                        let labelIndexLookup = Dictionary(capacity = labelIndexStack.Length)
+                        let previousLastLabel = if not branchTargetList.IsEmpty then branchTargetList.LastRef() else -1;
+                        for i = 0 to labelIndexStack.Length - 1 do
+                            let label = labelIndexStack[i]
+                            labelIndexLookup[Checked.uint32 i] <- label
+                            if label.Index > previousLastLabel then
+                                branchTargetList.Add label.Index
+
                         parent.Instructions.Add
                             { Index = index
                               PoppedTypes = actualBlockType.Parameters
                               PushedTypes = actualBlockType.Results
                               Instruction = Instruction.Structured startInstruction
-                              Kind = Structured(labelIndexStack, ImmutableArray.Create(item = instructions)) }
+                              Kind =
+                                let labels = { Lookup = labelIndexLookup; Labels = labelIndexStack }
+                                Structured(labels, ImmutableArray.Create(item = instructions)) }
 
                         labelIndexStack <- labelIndexStack.RemoveAt 0
                         index <- Checked.(+) index 1
@@ -574,12 +595,11 @@ module Validate =
 
             assert not finalInstructions.IsDefault
 
-            finalInstructions, branchTargetBuilder.Value.ToImmutableArray()
+            finalInstructions, branchTargetList.ToImmutableArray()
 
         let operandTypeStack = { OperandTypeStack.Stack = ArrayBuilder<_>.Create() }
-        let branchTargetIndices = ArrayBuilder<_>.Create() |> ref
         for func in functions do
-            let instructions, indices = validateExpression operandTypeStack branchTargetIndices func.Type func.LocalTypes func.Body.Source
+            let instructions, indices = validateExpression operandTypeStack func.Type func.LocalTypes func.Body.Source
             func.Body.Expression <- instructions
             func.Body.BranchTargets <- indices
         
