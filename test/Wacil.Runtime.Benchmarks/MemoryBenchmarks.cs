@@ -18,6 +18,6 @@ namespace Wacil.Runtime.Benchmarks {
         public int ReadInt32() => Memory.ReadInt32(address, memory, 0, 2);
 
         [Benchmark]
-        public void WriteInt32() => Memory.WriteInt32(data, address, memory, 0, 2);
+        public void WriteInt32() => Memory.WriteInt32(address, data, memory, 0, 2);
     }
 }
