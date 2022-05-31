@@ -366,7 +366,8 @@ let parseFromStream (stream: Stream) =
             //sectionContentBuffer.Capacity <- size
             //sectionContentBuffer.Seek(0, SeekOrigin.Begin) |> ignore
 
-            match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
+            let id = LanguagePrimitives.EnumOfValue(sectionTagBuffer[0])
+            match id with
             | SectionId.Custom ->
                 let name = reader.ReadName()
                 let contents = reader.ReadUnsignedInteger() |> Checked.int32 |> Array.zeroCreate
@@ -422,7 +423,7 @@ let parseFromStream (stream: Stream) =
             let actualSectionSize = reader.Offset - sectionStartOffset
             //assert (int64 actualSectionSize = sectionContentBuffer.Length)
             if actualSectionSize <> size then
-                failwithf "expected section to contain 0x%02X bytes, but got 0x%02X bytes" size actualSectionSize
+                failwithf "expected %A section to contain 0x%02X bytes, but got 0x%02X bytes" id size actualSectionSize
 
         sections.ToImmutableArray()
     finally

@@ -94,7 +94,6 @@ type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and ValidInstructionKind =
     | Normal
-    | Branching of indices: ImmutableArray<int>
     | Structured of labels: ImmutableArray<IntroducedLabel> * ImmutableArray<ValidInstructionSequence>
 
 and ValidInstruction =
@@ -525,6 +524,9 @@ module Validate =
                     | Instruction.Normal normal ->
                         match normal with
                         | Nop -> emit Normal ImmutableArray.Empty ImmutableArray.Empty
+                        | Br _ ->
+                            // TODO: WebAssembly is very lenient with branches, could maybe see which stack values need to be dropped and update the popped types accordingly?
+                            emit Normal ImmutableArray.Empty ImmutableArray.Empty
                         | Call callee ->
                             let funcType = getFunctionIndexType callee
                             operandTypeStack.PushAndPop funcType

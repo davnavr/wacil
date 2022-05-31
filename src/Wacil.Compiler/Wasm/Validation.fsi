@@ -41,7 +41,6 @@ type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and [<NoComparison; StructuralEquality>] ValidInstructionKind =
     | Normal
-    | Branching of indices: ImmutableArray<int>
     | Structured of labels: ImmutableArray<IntroducedLabel> * ImmutableArray<ValidInstructionSequence>
 
 and [<NoComparison; StructuralEquality>] ValidInstruction =
