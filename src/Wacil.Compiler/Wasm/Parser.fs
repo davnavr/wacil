@@ -27,6 +27,7 @@ let getValType (value: byte) =
 [<Sealed>]
 type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
     let [<Literal>] ContinueMask = 0b1000_0000uy
+    let [<Literal>] SignMask = 0b0100_0000uy
 
     let mutable offset = 0
 
@@ -88,8 +89,8 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             shifted <- Checked.(+) shifted 7
 
             // Insert the high sign bits
-            if not cont && shifted < 64 && 0b0100_0000uy &&& b <> 0uy then
-                n <- -1L <<< shifted
+            if not cont && shifted < 64 && SignMask &&& b = SignMask then
+                n <- n ||| (-1L <<< shifted)
         n
 
     /// Reads a 32-bit floating-point number in little-endian order.
