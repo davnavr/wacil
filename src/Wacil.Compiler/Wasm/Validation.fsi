@@ -35,11 +35,11 @@ type ValidInstructionSequence = ImmutableArray<ValidInstruction>
 
 and [<NoComparison; StructuralEquality>] ValidInstructionKind =
     | Normal
-    | Branching of indices: ImmutableArray<int32>
+    | Branching of indices: ImmutableArray<int>
     | Structured of ImmutableArray<ValidInstructionSequence>
 
 and [<NoComparison; StructuralEquality>] ValidInstruction =
-    { Index: int32
+    { Index: int
       PoppedTypes: ImmutableArray<Format.ValType>
       PushedTypes: ImmutableArray<Format.ValType>
       Instruction: Format.Instruction
