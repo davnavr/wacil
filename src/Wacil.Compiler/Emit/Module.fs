@@ -327,6 +327,35 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         fields.ToImmutableArray()
 
+    let generatedClassFunctions =
+        let mutable functions = ArrayBuilder<_>.Create(input.Functions.Length)
+
+        for i = 0 to input.Functions.Length - 1 do
+            let func = input.Functions[i]
+
+            let generatedFunctionName, generatedFunctionAccess =
+                match input.Exports.GetFunctionName(Checked.uint32 i) with
+                | true, existing -> existing, MethodAttributes.Public
+                | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
+
+            let generatedFunctionDefinition =
+                MethodDefinition(
+                    generatedFunctionName,
+                    generatedFunctionAccess ||| MethodAttributes.HideBySig,
+                    getFuncTypeSignature CallingConventionAttributes.HasThis func.Type
+                )
+
+            classDefinition.Methods.Add generatedFunctionDefinition
+            functions.Add generatedFunctionDefinition
+
+        functions.ToImmutableArray()
+
+    let generateClassFunctionStatic =
+        let mutable statics = Array.zeroCreate generatedClassFunctions.Length
+        fun index ->
+            match statics[index] with
+            | ValueSome existing -> existing
+
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
         (parameterCount: int32)
@@ -398,40 +427,20 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         if not hasExplicitReturn then
             il.Add(CilInstruction CilOpCodes.Ret)
 
-    let generatedClassFunctions =
+    do
         let instructionBlockStack = ArrayBuilder<_>.Create() |> ref
-        let mutable functions = ArrayBuilder<_>.Create(input.Functions.Length)
-
         for i = 0 to input.Functions.Length - 1 do
             let func = input.Functions[i]
-
-            let generatedFunctionName, generatedFunctionAccess =
-                match input.Exports.GetFunctionName(Checked.uint32 i) with
-                | true, existing -> existing, MethodAttributes.Public
-                | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
-
-            let generatedFunctionDefinition =
-                MethodDefinition(
-                    generatedFunctionName,
-                    generatedFunctionAccess ||| MethodAttributes.HideBySig,
-                    getFuncTypeSignature CallingConventionAttributes.HasThis func.Type
-                )
-
-            classDefinition.Methods.Add generatedFunctionDefinition
-            functions.Add generatedFunctionDefinition
-
-            let body = CilMethodBody generatedFunctionDefinition
-
+            let definition = generatedClassFunctions[i]
+            let body = CilMethodBody definition
             emitExpressionCode instructionBlockStack func.Type.Parameters.Length func.LocalTypes func.Body body
-
-            generatedFunctionDefinition.CilMethodBody <- body
-
-        functions.ToImmutableArray()
+            definition.CilMethodBody <- body
 
     match input.Start with
     | ValueSome index ->
         let il = classConstructorBody.Instructions
-        il.Add(CilInstruction CilOpCodes.Ldarg_0) // TODO: Make all generated functions static, to avoid complex insertion of Ldarg_0 instructions
+        // Can call non-static version of start function here, since WebAssembly does not allow start functions to accept parameters.
+        il.Add(CilInstruction CilOpCodes.Ldarg_0)
         il.Add(CilInstruction(CilOpCodes.Call, generatedClassFunctions[index]))
     | ValueNone -> ()
 
