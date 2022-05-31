@@ -232,6 +232,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     classDefinition.BaseType <- coreSystemObject
     moduleDefinition.TopLevelTypes.Add classDefinition
 
+    let classDefinitionSignature = TypeDefOrRefSignature classDefinition
+
     let classDefinitionConstructor =
         // TODO: Signature should accept exports
         MethodDefinition(
@@ -350,11 +352,47 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         functions.ToImmutableArray()
 
-    let generateClassFunctionStatic =
+    let generateClassFunctionDefinitionStatic =
         let mutable statics = Array.zeroCreate generatedClassFunctions.Length
+        let parameterTypeBuilder = List()
         fun index ->
             match statics[index] with
             | ValueSome existing -> existing
+            | ValueNone ->
+                let original = generatedClassFunctions[index]
+
+                parameterTypeBuilder.Clear()
+                parameterTypeBuilder.AddRange(original.Signature.ParameterTypes)
+                parameterTypeBuilder.Add classDefinitionSignature
+
+                let generatedStaticFunction =
+                    MethodDefinition(
+                        original.Name,
+                        original.Attributes ||| MethodAttributes.Static,
+                        MethodSignature(
+                            CallingConventionAttributes.Default,
+                            original.Signature.ReturnType,
+                            parameterTypeBuilder
+                        )
+                    )
+
+                let body = CilMethodBody generatedStaticFunction
+                let il = body.Instructions
+                let parameterCount = original.Signature.ParameterTypes.Count
+                il.Add(CilInstruction.CreateLdarg parameterCount)
+                for i = 0 to parameterCount - 1 do il.Add(CilInstruction.CreateLdarg i)
+                il.Add(CilInstruction(CilOpCodes.Call, original))
+                il.Add(CilInstruction CilOpCodes.Ret)
+
+                generatedStaticFunction.CilMethodBody <- body
+
+                classDefinition.Methods.Add generatedStaticFunction
+                statics[index] <- ValueSome generatedStaticFunction
+                generatedStaticFunction
+
+    let getIndexedCallee (index: Index) =
+        // TODO: Check for function imports
+        generateClassFunctionDefinitionStatic(Checked.int32 index)
 
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
@@ -398,6 +436,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 match block.Span[0].Instruction with
                 | Instruction.Normal normal ->
                     match normal with
+                    | Call callee ->
+                        // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Call, getIndexedCallee callee))
                     | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
                     | LocalGet(LocalIndex index) ->
                         match index with
