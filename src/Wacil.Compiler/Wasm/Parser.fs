@@ -136,7 +136,8 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             if value >= 0L then
                 BlockType.Index(Checked.uint32 value)
             else
-                uint8 value
+                (int8 value * -1y) ||| 0b0100_0000y
+                |> uint8
                 |> getValType
                 |> BlockType.Val
         | bad ->
@@ -223,6 +224,10 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
         | Opcode.Unreachable -> block.Add(Instruction.Normal Unreachable)
         | Opcode.Nop -> block.Add(Instruction.Normal Nop)
+        | Opcode.Block ->
+            blockInstructionStack.Add
+                { BlockBuilder.Instructions = instructionBuilderCache.Rent()
+                  State = BlockBuilderState.Block(reader.ReadBlockType()) }
         | Opcode.Loop ->
             blockInstructionStack.Add
                 { BlockBuilder.Instructions = instructionBuilderCache.Rent()
