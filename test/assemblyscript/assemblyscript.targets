@@ -10,14 +10,14 @@
     <OptimizeLevel Condition="'$(OptimizeLevel)'==''">3</OptimizeLevel>
     <ShrinkLevel Condition="'$(ShrinkLevel)'==''">2</ShrinkLevel>
     <Runtime Condition="'$(Runtime)'==''">incremental</Runtime>
-    <AscCompilerFlags>--binaryFile &quot;$(ModuleFile)&quot; --runtime &quot;$(Runtime)&quot; --optimizeLevel &quot;$(OptimizeLevel)&quot; --shrinkLevel &quot;$(ShrinkLevel)&quot;</AscCompilerFlags>
+    <AscCompilerFlags>-o &quot;$(ModuleFile)&quot; --runtime &quot;$(Runtime)&quot; --optimizeLevel &quot;$(OptimizeLevel)&quot; --shrinkLevel &quot;$(ShrinkLevel)&quot;</AscCompilerFlags>
   </PropertyGroup>
 
   <Target Name="CoreCompile" AfterTargets="Clean" Inputs="@(Compile)" Outputs="$(ModuleFile)">
     <MakeDir Directories="$(OutDir)" />
 
     <Exec Command="npx asc @(Compile, ' ') $(AscCompilerFlags)"
-          CustomErrorRegularExpression="ERROR AS[0-9]+:"
+          CustomErrorRegularExpression="ERROR TS[0-9]+:"
           ConsoleToMsBuild="true"
           LogStandardErrorAsError="true" />
   </Target>
