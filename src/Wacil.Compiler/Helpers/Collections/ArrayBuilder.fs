@@ -1,7 +1,5 @@
 namespace Wacil.Compiler.Helpers.Collections
 
-open System.Runtime.CompilerServices
-
 /// A mutable array that can be resized and converted into other collection types.
 [<Struct; NoComparison; NoEquality>]
 type internal ArrayBuilder<'a> =
@@ -10,7 +8,7 @@ type internal ArrayBuilder<'a> =
 
     private new(buffer: 'a[]) = { buffer = buffer; length = 0 }
 
-    static member Create(capacity: int32) =
+    static member Create(capacity: int32): ArrayBuilder<'a> =
         if capacity < 0 then raise(System.ArgumentOutOfRangeException(nameof capacity))
         ArrayBuilder(if capacity = 0 then System.Array.Empty() else Array.zeroCreate capacity)
 
@@ -69,5 +67,5 @@ type internal ArrayBuilder<'a> =
             System.Span(this.buffer, 0, this.length).CopyTo(System.Span(array))
             array
 
-    member this.ToImmutableArray() =
+    member this.ToImmutableArray(): System.Collections.Immutable.ImmutableArray<'a> =
         Wacil.Compiler.Helpers.Unsafe.Array.toImmutable(this.ToArray())

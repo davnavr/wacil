@@ -259,18 +259,63 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let classDefinitionSignature = TypeDefOrRefSignature classDefinition
 
+    let translatedModuleImports =
+        let lookup = SortedList<string, ModuleImport>(input.Imports.Count, System.StringComparer.OrdinalIgnoreCase)
+
+        for KeyValue(moduleName, imports) in input.Imports do
+            let importClassDefinition =
+                TypeDefinition (
+                    String.empty,
+                    moduleName,
+                    TypeAttributes.Sealed ||| TypeAttributes.NestedPublic
+                )
+
+            importClassDefinition.BaseType <- coreSystemObject
+            classDefinition.NestedTypes.Add importClassDefinition
+
+            let importTypeSignature = TypeDefOrRefSignature importClassDefinition
+
+            let importFieldDefinition =
+                 FieldDefinition (
+                     stringBuffer.Clear().Append("import_").Append(moduleName).ToString(),
+                     FieldAttributes.InitOnly,
+                     FieldSignature importTypeSignature
+                 )
+
+            classDefinition.Fields.Add importFieldDefinition
+
+            lookup[moduleName] <-
+                { ModuleImport.Class = importClassDefinition
+                  Signature = importTypeSignature
+                  Field = importFieldDefinition }
+
+        lookup
+
     let classDefinitionConstructor =
-        // TODO: Signature should accept exports
-        MethodDefinition(
+        let mutable constructorSignatureParameters = ArrayBuilder<TypeSignature>.Create translatedModuleImports.Count
+        let mutable constructorParameterNames = ArrayBuilder<string>.Create translatedModuleImports.Count
+
+        for KeyValue(name, imports) in translatedModuleImports do
+            constructorSignatureParameters.Add imports.Signature
+            constructorParameterNames.Add name
+
+        let definition = MethodDefinition(
             ".ctor",
             MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
             MethodAttributes.HideBySig,
             MethodSignature(
                 CallingConventionAttributes.HasThis,
                 moduleDefinition.CorLibTypeFactory.Void,
-                [||]
+                constructorSignatureParameters.ToImmutableArray()
             )
         )
+
+        let mutable sequence = 1us
+        for name in constructorParameterNames.ToImmutableArray() do
+            definition.ParameterDefinitions.Add(ParameterDefinition(sequence, name, Unchecked.defaultof<ParameterAttributes>))
+            sequence <- Checked.(+) sequence 1us
+
+        definition
 
     classDefinition.Methods.Add classDefinitionConstructor
 
@@ -288,8 +333,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         let body = CilMethodBody classDefinitionConstructor
         let instructons = body.Instructions
+        // Call System.Object constructor
         instructons.Add(CilInstruction CilOpCodes.Ldarg_0)
         instructons.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
+
+        // Set the fields corresponding to module imports
+        // The order of the fields matches the order of the constructor parameters, since the lookup is sorted
+
         body
 
     let classMemoryFields =
@@ -353,37 +403,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | false, _ -> ()
 
         fields.ToImmutableArray()
-
-    let translatedModuleImports =
-        let lookup = Dictionary<string, ModuleImport>(input.Imports.Count)
-
-        for KeyValue(moduleName, imports) in input.Imports do
-            let importClassDefinition =
-                TypeDefinition (
-                    String.empty,
-                    moduleName,
-                    TypeAttributes.Sealed ||| TypeAttributes.NestedPublic
-                )
-
-            classDefinition.NestedTypes.Add importClassDefinition
-
-            let importTypeSignature = TypeDefOrRefSignature importClassDefinition
-
-            let importFieldDefinition =
-                 FieldDefinition (
-                     stringBuffer.Clear().Append("import@").Append(moduleName).ToString(),
-                     FieldAttributes.InitOnly,
-                     FieldSignature importTypeSignature
-                 )
-
-            classDefinition.Fields.Add importFieldDefinition
-
-            lookup[moduleName] <-
-                { ModuleImport.Class = importClassDefinition
-                  Signature = importTypeSignature
-                  Field = importFieldDefinition }
-
-        lookup
 
     let generatedClassFunctions =
         let mutable functions = ArrayBuilder<_>.Create(input.Functions.Length)
