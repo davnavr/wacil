@@ -376,10 +376,13 @@ let parseFromStream (stream: Stream) =
             let id = LanguagePrimitives.EnumOfValue(sectionTagBuffer[0])
             match id with
             | SectionId.Custom ->
-                let name = reader.ReadName()
-                let contents = reader.ReadUnsignedInteger() |> Checked.int32 |> Array.zeroCreate
-                reader.ReadAll(Span(contents))
-                sections.Add(Section.Custom { Custom.Name = name; Custom.Contents = Unsafe.Array.toImmutable contents })
+                { Custom.Name = reader.ReadName()
+                  Custom.Contents =
+                    let contents = Array.zeroCreate(size - (reader.Offset - sectionStartOffset))
+                    reader.ReadAll(Span(contents))
+                    Unsafe.Array.toImmutable contents }
+                |> Section.Custom
+                |> sections.Add
             | SectionId.Type ->
                 let types = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
