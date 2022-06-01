@@ -55,12 +55,6 @@ type CilInstruction with
         | _ when index <= 255 -> CilInstruction(CilOpCodes.Starg_S, index)
         | _ -> CilInstruction(CilOpCodes.Starg, index)
 
-    static member CreateLdcI8 value =
-        if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
-            CilInstruction.CreateLdcI4(int32 value)
-        else
-            CilInstruction(CilOpCodes.Ldc_I8, value)
-
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type RuntimeLibraryReference =
@@ -82,15 +76,17 @@ type InstructionBlockBuilder =
       Labels: IntroducedLabelLookup }
 
 [<NoComparison; NoEquality>]
+type TranslatedFunctionImport =
+    { Delegate: TypeDefinition
+      Field: FieldDefinition
+      Invoke: MethodDefinition }
+
+[<NoComparison; NoEquality>]
 type ModuleImport =
     { Class: TypeDefinition
       Signature: TypeDefOrRefSignature
-      Field: FieldDefinition }
-
-[<NoComparison; NoEquality>]
-type FunctionImport =
-    { Delegate: TypeDefinition
-      Field: FieldDefinition }
+      Field: FieldDefinition
+      FunctionLookup: SortedList<string, TranslatedFunctionImport> }
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
@@ -346,12 +342,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 functionImportDelegate.BaseType <- coreSystemMulticastDelegate
                 importClassDefinition.NestedTypes.Add functionImportDelegate
 
-                let emitFunctionImportDelegateMethod name signature =
+                let emitFunctionImportDelegateMethod name additionalFlags signature =
                     let method =
                         MethodDefinition(
                             name,
                             MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
-                            MethodAttributes.HideBySig,
+                            MethodAttributes.HideBySig ||| additionalFlags,
                             signature
                         )
 
@@ -359,12 +355,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     functionImportDelegate.Methods.Add method
 
                     method
+                    
+                emitFunctionImportDelegateMethod ".ctor" (LanguagePrimitives.EnumOfValue 0us) delegateConstructorSignature |> ignore
 
-                emitFunctionImportDelegateMethod ".ctor" delegateConstructorSignature |> ignore
-
-                let functionImportSignature = getFuncTypeSignature CallingConventionAttributes.ThisCall func.Type
-
-                let functionImportInvoke = emitFunctionImportDelegateMethod "Invoke" functionImportSignature
+                let instanceDelegateMethodFlags = MethodAttributes.Virtual ||| MethodAttributes.NewSlot
+                let functionImportSignature = getFuncTypeSignature CallingConventionAttributes.HasThis func.Type
+                let functionImportInvoke = emitFunctionImportDelegateMethod "Invoke" instanceDelegateMethodFlags functionImportSignature
 
                 // TODO: Are BeginInvoke and EndInvoke methods necessary for generated delegates?
 
@@ -381,7 +377,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                 functionImportLookup[func.Name] <-
                     { Delegate = functionImportDelegate
-                      Field = functionImportField }
+                      Field = functionImportField
+                      Invoke = functionImportInvoke }
 
             let importClassConstructor =
                 MethodDefinition(
@@ -423,7 +420,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             lookup[moduleName] <-
                 { ModuleImport.Class = importClassDefinition
                   Signature = importTypeSignature
-                  Field = importFieldDefinition }
+                  Field = importFieldDefinition
+                  FunctionLookup = functionImportLookup }
 
         lookup
 
@@ -566,45 +564,83 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let generateClassFunctionDefinitionStatic =
         let mutable statics = Array.zeroCreate generatedClassFunctions.Length
-        let parameterTypeBuilder = List()
+        let parameterTypeBuilder = ImmutableArray.CreateBuilder()
+        let functionImportCount = input.Imports.Functions.Length
         fun index ->
             match statics[index] with
             | ValueSome existing -> existing
             | ValueNone ->
-                let original = generatedClassFunctions[index]
+                if index >= functionImportCount then
+                    let original = generatedClassFunctions[index - functionImportCount]
 
-                parameterTypeBuilder.Clear()
-                parameterTypeBuilder.AddRange(original.Signature.ParameterTypes)
-                parameterTypeBuilder.Add classDefinitionSignature
+                    parameterTypeBuilder.Clear()
+                    parameterTypeBuilder.AddRange(original.Signature.ParameterTypes)
+                    parameterTypeBuilder.Add classDefinitionSignature
 
-                let generatedStaticFunction =
-                    MethodDefinition(
-                        original.Name,
-                        original.Attributes ||| MethodAttributes.Static,
-                        MethodSignature(
-                            CallingConventionAttributes.Default,
-                            original.Signature.ReturnType,
-                            parameterTypeBuilder
+                    // TODO: Maybe mark this AggressiveInlining?
+                    let generatedStaticFunction =
+                        MethodDefinition(
+                            original.Name,
+                            original.Attributes ||| MethodAttributes.Static,
+                            MethodSignature(
+                                CallingConventionAttributes.Default,
+                                original.Signature.ReturnType,
+                                parameterTypeBuilder.ToImmutable()
+                            )
                         )
-                    )
 
-                let body = CilMethodBody generatedStaticFunction
-                let il = body.Instructions
-                let parameterCount = original.Signature.ParameterTypes.Count
-                il.Add(CilInstruction.CreateLdarg parameterCount)
-                for i = 0 to parameterCount - 1 do il.Add(CilInstruction.CreateLdarg i)
-                il.Add(CilInstruction(CilOpCodes.Call, original))
-                il.Add(CilInstruction CilOpCodes.Ret)
+                    let body = CilMethodBody generatedStaticFunction
+                    let il = body.Instructions
+                    let parameterCount = original.Signature.ParameterTypes.Count
+                    il.Add(CilInstruction.CreateLdarg parameterCount)
+                    for i = 0 to parameterCount - 1 do il.Add(CilInstruction.CreateLdarg i)
+                    il.Add(CilInstruction(CilOpCodes.Call, original))
+                    il.Add(CilInstruction CilOpCodes.Ret)
 
-                generatedStaticFunction.CilMethodBody <- body
+                    generatedStaticFunction.CilMethodBody <- body
 
-                classDefinition.Methods.Add generatedStaticFunction
-                statics[index] <- ValueSome generatedStaticFunction
-                generatedStaticFunction
+                    classDefinition.Methods.Add generatedStaticFunction
+                    statics[index] <- ValueSome generatedStaticFunction
+                    generatedStaticFunction
+                else
+                    let struct(moduleName, func) = input.Imports.Functions[index]
+                    let moduleImport = translatedModuleImports[moduleName]
+                    let import = moduleImport.FunctionLookup[func.Name]
+                    let originalParameterTypes = import.Invoke.Signature.ParameterTypes
+                    // TODO: Avoid code duplication with codegen for function definitions
+                    parameterTypeBuilder.Clear()
+                    parameterTypeBuilder.AddRange originalParameterTypes
+                    parameterTypeBuilder.Add classDefinitionSignature
 
-    let getIndexedCallee (index: Index) =
-        // TODO: Check for function imports
-        generateClassFunctionDefinitionStatic(Checked.int32 index)
+                    let helper =
+                        MethodDefinition(
+                            stringBuffer.Clear().Append("call_import_").Append(moduleName).Append('_').Append(func.Name).ToString(),
+                            MethodAttributes.Static,
+                            MethodSignature(
+                                CallingConventionAttributes.Default,
+                                import.Invoke.Signature.ReturnType,
+                                parameterTypeBuilder.ToImmutable()
+                            )
+                        )
+
+                    helper.ImplAttributes <- LanguagePrimitives.EnumOfValue 256us // AggressiveInlining
+
+                    let body = CilMethodBody helper
+                    let il = body.Instructions
+                    il.Add(CilInstruction.CreateLdarg originalParameterTypes.Count)
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, moduleImport.Field))
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, import.Field))
+                    for i = 0 to originalParameterTypes.Count - 1 do il.Add(CilInstruction.CreateLdarg i)
+                    il.Add(CilInstruction(CilOpCodes.Callvirt, import.Invoke))
+                    il.Add(CilInstruction CilOpCodes.Ret)
+
+                    helper.CilMethodBody <- body
+
+                    classDefinition.Methods.Add helper
+                    statics[index] <- ValueSome helper
+                    helper
+
+    let inline getIndexedCallee (index: Index) = generateClassFunctionDefinitionStatic(Checked.int32 index)
 
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
@@ -688,7 +724,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         pushMemoryField 0
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
                     | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
-                    | I64Const value -> il.Add(CilInstruction.CreateLdcI8 value)
+                    | I64Const value ->
+                        if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
+                            il.Add(CilInstruction.CreateLdcI4(int32 value))
+                            il.Add(CilInstruction CilOpCodes.Conv_I8)
+                        else
+                            il.Add(CilInstruction(CilOpCodes.Ldc_I8, value))
                     | F32Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R4, value))
                     | F64Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R8, value))
                     | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
