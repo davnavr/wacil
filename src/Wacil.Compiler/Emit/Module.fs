@@ -337,7 +337,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     TypeDefinition(
                         String.empty,
                         func.Name,
-                        TypeAttributes.Public ||| TypeAttributes.Sealed
+                        TypeAttributes.NestedPublic ||| TypeAttributes.Sealed
                     )
 
                 functionImportDelegate.BaseType <- coreSystemMulticastDelegate
@@ -367,7 +367,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                 let functionImportField =
                     FieldDefinition(
-                        stringBuffer.Clear().Append("function_").Append(func.Name).ToString(),
+                        func.Name,
                         FieldAttributes.InitOnly,
                         TypeDefOrRefSignature functionImportDelegate
                     )
