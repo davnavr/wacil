@@ -461,20 +461,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         // The order of the fields matches the order of the constructor parameters, since the lookup is sorted
         let mutable importParameterIndex = 1 // 1 is the first actual parameter of the constructor
         for KeyValue(name, import) in translatedModuleImports do
-            let notNullLabel = CilInstructionLabel()
+            let storeModuleImport = CilInstruction(CilOpCodes.Stfld, import.Field)
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction.CreateLdarg importParameterIndex)
-
-            // Generate null check
-            il.Add(CilInstruction(CilOpCodes.Brtrue_S, notNullLabel))
-            il.Add(CilInstruction(CilOpCodes.Ldstr, name)) // 5 bytes
-            il.Add(CilInstruction(CilOpCodes.Newobj, coreSystemArgumentNullExceptionConstructor)) // 5 bytes
-            il.Add(CilInstruction CilOpCodes.Throw) // 1 byte
-
-            notNullLabel.Instruction <- CilInstruction.CreateLdarg importParameterIndex
-            il.Add notNullLabel.Instruction
-            il.Add(CilInstruction(CilOpCodes.Stfld, import.Field))
-
+            il.Add(CilInstruction CilOpCodes.Dup)
+            il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel storeModuleImport))
+            il.Add(CilInstruction(CilOpCodes.Ldstr, name))
+            il.Add(CilInstruction(CilOpCodes.Newobj, coreSystemArgumentNullExceptionConstructor))
+            il.Add(CilInstruction CilOpCodes.Throw)
+            il.Add storeModuleImport
             importParameterIndex <- importParameterIndex + 1
 
         body
