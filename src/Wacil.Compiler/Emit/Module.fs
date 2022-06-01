@@ -329,6 +329,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             classDefinition.Fields.Add importFieldDefinition
             let mutable importConstructorParameterTypes = ArrayBuilder<TypeSignature>.Create()
+            let mutable importConstructorParameters = ArrayBuilder<_>.Create()
 
             let functionImportLookup = SortedList(imports.Functions.Length, System.StringComparer.Ordinal)
             for func in imports.Functions do
@@ -366,7 +367,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                 let functionImportField =
                     FieldDefinition(
-                        func.Name,
+                        stringBuffer.Clear().Append("function_").Append(func.Name).ToString(),
                         FieldAttributes.InitOnly,
                         TypeDefOrRefSignature functionImportDelegate
                     )
@@ -374,6 +375,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 importClassDefinition.Fields.Add functionImportField
 
                 importConstructorParameterTypes.Add(TypeDefOrRefSignature functionImportDelegate)
+                importConstructorParameters.Add func.Name
 
                 functionImportLookup[func.Name] <-
                     { Delegate = functionImportDelegate
@@ -391,6 +393,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         importConstructorParameterTypes.ToImmutableArray()
                     )
                 )
+
+            let mutable constructorParameterIndex = 1us
+            for name in importConstructorParameters.ToImmutableArray() do
+                importClassConstructor.ParameterDefinitions.Add(ParameterDefinition(constructorParameterIndex, name, Unchecked.defaultof<_>))
+                constructorParameterIndex <- constructorParameterIndex + 1us
 
             importClassDefinition.Methods.Add importClassConstructor
 
