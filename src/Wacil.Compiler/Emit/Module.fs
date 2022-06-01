@@ -22,8 +22,7 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm.Format
 open Wacil.Compiler.Wasm.Validation
 
-[<AbstractClass; Sealed>]
-type CilInstruction =
+type CilInstruction with
     static member CreateLdloc index =
         match index with
         | 0 -> CilInstruction CilOpCodes.Ldloc_0
@@ -55,6 +54,12 @@ type CilInstruction =
         match index with
         | _ when index <= 255 -> CilInstruction(CilOpCodes.Starg_S, index)
         | _ -> CilInstruction(CilOpCodes.Starg, index)
+
+    static member CreateLdcI8 value =
+        if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
+            CilInstruction.CreateLdcI4(int32 value)
+        else
+            CilInstruction(CilOpCodes.Ldc_I8, value)
 
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
@@ -683,6 +688,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         pushMemoryField 0
                         il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
                     | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
+                    | I64Const value -> il.Add(CilInstruction.CreateLdcI8 value)
+                    | F32Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R4, value))
+                    | F64Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R8, value))
                     | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
                     | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
                     | bad -> failwithf "Compilation of %A not yet supported" bad

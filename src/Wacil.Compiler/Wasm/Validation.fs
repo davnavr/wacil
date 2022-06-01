@@ -217,6 +217,9 @@ type OperandTypeStack =
 [<RequireQualifiedAccess>]
 module OperandTypes =
     let oneI32 = ImmutableArray.Create(item = ValType.Num I32)
+    let oneI64 = ImmutableArray.Create(item = ValType.Num I64)
+    let oneF32 = ImmutableArray.Create(item = ValType.Num F32)
+    let oneF64 = ImmutableArray.Create(item = ValType.Num F64)
     let twoI32 = ImmutableArray.Create(ValType.Num I32, ValType.Num I32)
 
 [<RequireQualifiedAccess>]
@@ -577,6 +580,15 @@ module Validate =
                         | I32Const _ ->
                             operandTypeStack.Push(ValType.Num I32)
                             emit Normal ImmutableArray.Empty OperandTypes.oneI32
+                        | I64Const _ ->
+                            operandTypeStack.Push(ValType.Num I64)
+                            emit Normal ImmutableArray.Empty OperandTypes.oneI64
+                        | F32Const _ ->
+                            operandTypeStack.Push(ValType.Num F32)
+                            emit Normal ImmutableArray.Empty OperandTypes.oneF32
+                        | F64Const _ ->
+                            operandTypeStack.Push(ValType.Num F64)
+                            emit Normal ImmutableArray.Empty OperandTypes.oneF64
                         | I32Add
                         | I32Sub
                         | I32Mul ->
