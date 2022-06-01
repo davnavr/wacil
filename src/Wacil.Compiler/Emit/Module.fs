@@ -332,13 +332,19 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             |> moduleDefinition.DefaultImporter.ImportMethod
 
         let body = CilMethodBody classDefinitionConstructor
-        let instructons = body.Instructions
+        let il = body.Instructions
         // Call System.Object constructor
-        instructons.Add(CilInstruction CilOpCodes.Ldarg_0)
-        instructons.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
+        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+        il.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
 
         // Set the fields corresponding to module imports
         // The order of the fields matches the order of the constructor parameters, since the lookup is sorted
+        let mutable importParameterIndex = 1 // 1 is the first actual parameter of the constructor
+        for import in translatedModuleImports.Values do
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction.CreateLdarg importParameterIndex)
+            il.Add(CilInstruction(CilOpCodes.Stfld, import.Field))
+            importParameterIndex <- importParameterIndex + 1
 
         body
 
