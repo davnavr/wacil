@@ -371,6 +371,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                 let functionImportInvoke = emitFunctionImportDelegateMethod "Invoke" functionImportSignature
 
+                // TODO: Are BeginInvoke and EndInvoke methods necessary for generated delegates?
+
+                let functionImportField =
+                    FieldDefinition(
+                        func.Name,
+                        FieldAttributes.InitOnly,
+                        TypeDefOrRefSignature functionImportDelegate
+                    )
+
+                importClassDefinition.Fields.Add functionImportField
+
                 ()
 
             importClassConstructor.MethodBody <-
