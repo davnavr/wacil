@@ -28,6 +28,7 @@ type ModuleImports =
 [<Sealed>]
 type ModuleImportLookup =
     member Item: moduleImportName: string -> ModuleImports with get
+    member Functions: ImmutableArray<struct(string * FunctionImport)>
 
     member Count: int
 

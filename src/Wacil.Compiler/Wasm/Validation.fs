@@ -70,13 +70,20 @@ type ModuleImports =
       Globals: ImmutableArray<GlobalImport> }
 
 [<Sealed>]
-type ModuleImportLookup (lookup: Dictionary<string, ModuleImports>) =
+type ModuleImportLookup
+    (
+        lookup: Dictionary<string, ModuleImports>,
+        functions: ImmutableArray<struct(string * FunctionImport)>
+    )
+    =
     member _.Item with get (moduleImportName: string) =
         if isNull lookup then
             raise(KeyNotFoundException "modules does not contain any imports")
         lookup[moduleImportName]
 
     member _.Count = lookup.Count
+
+    member _.Functions = functions
 
     interface IReadOnlyDictionary<string, ModuleImports> with
         member this.Item with get key = this[key]
@@ -366,6 +373,7 @@ module Validate =
                 let mutable tables = ArrayBuilder<TableImport>.Create()
                 let mutable memories = ArrayBuilder<MemoryImport>.Create()
                 let mutable globals = ArrayBuilder<GlobalImport>.Create()
+                let mutable allFunctions = ArrayBuilder<_>.Create()
 
                 for KeyValue(importModuleName, moduleImports) in moduleImportLookup do
                     functions.Clear()
@@ -376,7 +384,9 @@ module Validate =
                     for import in moduleImports do
                         match import.Description with
                         | ImportDesc.Func index ->
-                            functions.Add { FunctionImport.Name = import.Name; Type = types[Checked.int32 index] }
+                            let func = { FunctionImport.Name = import.Name; Type = types[Checked.int32 index] }
+                            functions.Add func
+                            allFunctions.Add(struct(importModuleName, func))
                         | ImportDesc.Table ty -> tables.Add { TableImport.Name = import.Name; Type = ty }
                         | ImportDesc.Mem limits -> memories.Add { MemoryImport.Name = import.Name; Limits = limits }
                         | ImportDesc.Global ty -> globals.Add { GlobalImport.Name = import.Name; Type = ty }
@@ -387,9 +397,12 @@ module Validate =
                           Memories = memories.ToImmutableArray()
                           Globals = globals.ToImmutableArray() }
 
-                ModuleImportLookup(actualModuleImports)
+                ModuleImportLookup(
+                    actualModuleImports,
+                    allFunctions.ToImmutableArray()
+                )
             else
-                ModuleImportLookup(null)
+                ModuleImportLookup(null, ImmutableArray.Empty)
 
         // TODO: Loop through each import and create a dictionary of dictionaries
         // TODO: Loop through each export similarly as the imports to create a dictionary
@@ -427,7 +440,7 @@ module Validate =
                               BranchTargets = Unchecked.defaultof<_> } }
 
                 moduleFunctionDefinitions.ToImmutableArray()
-                
+
         let exports =
             let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
             let lookup = Dictionary(capacity = exports.Length)
@@ -441,7 +454,10 @@ module Validate =
                         match e.Description with
                         | ExportDesc.Func index ->
                             functionNames.Add(index, e.Name)
-                            ModuleExport.Function functions[Checked.int32 index]
+                            let i = Checked.int32 index - imports.Functions.Length
+                            if i < 0 then
+                                failwith "TODO: Fix, attempt was made to exprot a function import. Is this behavior allowed?"
+                            ModuleExport.Function functions[i]
                         | ExportDesc.Table index ->
                             ModuleExport.Table
                         | ExportDesc.Mem index ->
@@ -453,8 +469,11 @@ module Validate =
 
         let getFunctionIndexType (index: Index) =
             let i = Checked.int32 index
-            //if i < imports.Functions.Length
-            functions[i].Type
+            if i < imports.Functions.Length then
+                let struct(_, func) = imports.Functions[i]
+                func.Type
+            else
+                functions[i - imports.Functions.Length].Type
 
         // TODO: Analyze each expression to check they are valid
         let validateExpression
