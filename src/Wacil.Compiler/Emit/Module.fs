@@ -94,6 +94,21 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreSystemObject =
         coreLibraryReference.CreateTypeReference("System", "Object") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
+    let coreSystemArgumentNullException =
+        coreLibraryReference.CreateTypeReference("System", "ArgumentNullException")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemArgumentNullExceptionConstructor =
+        coreSystemArgumentNullException.CreateMemberReference(
+            ".ctor",
+            new MethodSignature(
+                CallingConventionAttributes.HasThis,
+                moduleDefinition.CorLibTypeFactory.Void,
+                Array.singleton moduleDefinition.CorLibTypeFactory.String
+            )
+        )
+        |> moduleDefinition.DefaultImporter.ImportMethod
+
     let assemblyDefinition =
         match options.OutputType with
         | OutputType.Assembly ->
@@ -340,10 +355,21 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         // Set the fields corresponding to module imports
         // The order of the fields matches the order of the constructor parameters, since the lookup is sorted
         let mutable importParameterIndex = 1 // 1 is the first actual parameter of the constructor
-        for import in translatedModuleImports.Values do
+        for KeyValue(name, import) in translatedModuleImports do
+            let notNullLabel = CilInstructionLabel()
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction.CreateLdarg importParameterIndex)
+
+            // Generate null check
+            il.Add(CilInstruction(CilOpCodes.Brtrue_S, notNullLabel))
+            il.Add(CilInstruction(CilOpCodes.Ldstr, name)) // 5 bytes
+            il.Add(CilInstruction(CilOpCodes.Newobj, coreSystemArgumentNullExceptionConstructor)) // 5 bytes
+            il.Add(CilInstruction CilOpCodes.Throw) // 1 byte
+
+            notNullLabel.Instruction <- CilInstruction.CreateLdarg importParameterIndex
+            il.Add notNullLabel.Instruction
             il.Add(CilInstruction(CilOpCodes.Stfld, import.Field))
+
             importParameterIndex <- importParameterIndex + 1
 
         body
