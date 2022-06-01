@@ -81,7 +81,7 @@ type ModuleImportLookup
             raise(KeyNotFoundException "modules does not contain any imports")
         lookup[moduleImportName]
 
-    member _.Count = lookup.Count
+    member _.Count = if isNull lookup then 0 else lookup.Count
 
     member _.Functions = functions
 
@@ -89,7 +89,7 @@ type ModuleImportLookup
         member this.Item with get key = this[key]
         member _.Keys = lookup.Keys
         member _.Values = lookup.Values
-        member _.Count = lookup.Count
+        member this.Count = this.Count
         member _.ContainsKey key = lookup.ContainsKey key
         member _.TryGetValue(key: string, value: byref<ModuleImports>) = lookup.TryGetValue(key, &value)
         member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
