@@ -94,6 +94,18 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreSystemObject =
         coreLibraryReference.CreateTypeReference("System", "Object") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
+    
+    let coreSystemObjectConstructor =
+        coreSystemObject.CreateMemberReference(
+            ".ctor",
+            new MethodSignature(
+                CallingConventionAttributes.HasThis,
+                moduleDefinition.CorLibTypeFactory.Void,
+                Array.empty
+            )
+        )
+        |> moduleDefinition.DefaultImporter.ImportMethod
+
     let coreSystemArgumentNullException =
         coreLibraryReference.CreateTypeReference("System", "ArgumentNullException")
         |> moduleDefinition.DefaultImporter.ImportTypeOrNull
@@ -233,6 +245,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreSystemDelegate =
         coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
+    // The MulticastDelegate base class is imported here to serve as the base class for any delegate classes generated later
+    let coreSystemMulticastDelegate =
+        coreLibraryReference.CreateTypeReference("System", "MulticastDelegate")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
     let getValTypeSignature (ty: ValType) =
         match ty with
         | ValType.Num I32 -> moduleDefinition.CorLibTypeFactory.Int32 :> TypeSignature
@@ -277,6 +294,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let translatedModuleImports =
         let lookup = SortedList<string, ModuleImport>(input.Imports.Count, System.StringComparer.OrdinalIgnoreCase)
 
+        let delegateConstructorSignature =
+            MethodSignature(
+                CallingConventionAttributes.HasThis,
+                moduleDefinition.CorLibTypeFactory.Void,
+                [| moduleDefinition.CorLibTypeFactory.Object; moduleDefinition.CorLibTypeFactory.IntPtr |]
+            )
+
         for KeyValue(moduleName, imports) in input.Imports do
             let importClassDefinition =
                 TypeDefinition (
@@ -298,6 +322,64 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                  )
 
             classDefinition.Fields.Add importFieldDefinition
+
+            let importClassConstructor =
+                let mutable parameters = ArrayBuilder<_>.Create()
+
+                MethodDefinition(
+                    ".ctor",
+                    MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
+                    MethodAttributes.HideBySig,
+                    MethodSignature(
+                        CallingConventionAttributes.HasThis,
+                        moduleDefinition.CorLibTypeFactory.Void,
+                        parameters.ToImmutableArray()
+                    )
+                )
+
+            importClassDefinition.Methods.Add importClassConstructor
+
+            //let someFunctionDictionary = SortedList
+            for func in imports.Functions do
+                let functionImportDelegate =
+                    TypeDefinition(
+                        String.empty,
+                        func.Name,
+                        TypeAttributes.Public ||| TypeAttributes.Sealed
+                    )
+
+                functionImportDelegate.BaseType <- coreSystemMulticastDelegate
+                importClassDefinition.NestedTypes.Add functionImportDelegate
+
+                let emitFunctionImportDelegateMethod name signature =
+                    let method =
+                        MethodDefinition(
+                            name,
+                            MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
+                            MethodAttributes.HideBySig,
+                            signature
+                        )
+
+                    method.ImplAttributes <- MethodImplAttributes.Runtime
+                    functionImportDelegate.Methods.Add method
+
+                    method
+
+                emitFunctionImportDelegateMethod ".ctor" delegateConstructorSignature |> ignore
+
+                let functionImportSignature = getFuncTypeSignature CallingConventionAttributes.ThisCall func.Type
+
+                let functionImportInvoke = emitFunctionImportDelegateMethod "Invoke" functionImportSignature
+
+                ()
+
+            importClassConstructor.MethodBody <-
+                let importConstructorBody = CilMethodBody importClassConstructor
+                let il = importConstructorBody.Instructions
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
+                il.Add(CilInstruction CilOpCodes.Ret)
+                importConstructorBody
 
             lookup[moduleName] <-
                 { ModuleImport.Class = importClassDefinition
@@ -335,17 +417,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     classDefinition.Methods.Add classDefinitionConstructor
 
     let classConstructorBody =
-        let coreSystemObjectConstructor =
-            coreSystemObject.CreateMemberReference(
-                ".ctor",
-                new MethodSignature(
-                    CallingConventionAttributes.HasThis,
-                    moduleDefinition.CorLibTypeFactory.Void,
-                    Array.empty
-                )
-            )
-            |> moduleDefinition.DefaultImporter.ImportMethod
-
         let body = CilMethodBody classDefinitionConstructor
         let il = body.Instructions
         // Call System.Object constructor
