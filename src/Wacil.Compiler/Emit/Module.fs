@@ -82,6 +82,11 @@ type ModuleImport =
       Signature: TypeDefOrRefSignature
       Field: FieldDefinition }
 
+[<NoComparison; NoEquality>]
+type FunctionImport =
+    { Delegate: TypeDefinition
+      Field: FieldDefinition }
+
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
         match options.TargetFramework with
@@ -322,24 +327,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                  )
 
             classDefinition.Fields.Add importFieldDefinition
+            let mutable importConstructorParameterTypes = ArrayBuilder<TypeSignature>.Create()
 
-            let importClassConstructor =
-                let mutable parameters = ArrayBuilder<_>.Create()
-
-                MethodDefinition(
-                    ".ctor",
-                    MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
-                    MethodAttributes.HideBySig,
-                    MethodSignature(
-                        CallingConventionAttributes.HasThis,
-                        moduleDefinition.CorLibTypeFactory.Void,
-                        parameters.ToImmutableArray()
-                    )
-                )
-
-            importClassDefinition.Methods.Add importClassConstructor
-
-            //let someFunctionDictionary = SortedList
+            let functionImportLookup = SortedList(imports.Functions.Length, System.StringComparer.Ordinal)
             for func in imports.Functions do
                 let functionImportDelegate =
                     TypeDefinition(
@@ -382,13 +372,46 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                 importClassDefinition.Fields.Add functionImportField
 
-                ()
+                importConstructorParameterTypes.Add(TypeDefOrRefSignature functionImportDelegate)
+
+                functionImportLookup[func.Name] <-
+                    { Delegate = functionImportDelegate
+                      Field = functionImportField }
+
+            let importClassConstructor =
+                MethodDefinition(
+                    ".ctor",
+                    MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
+                    MethodAttributes.HideBySig,
+                    MethodSignature(
+                        CallingConventionAttributes.HasThis,
+                        moduleDefinition.CorLibTypeFactory.Void,
+                        importConstructorParameterTypes.ToImmutableArray()
+                    )
+                )
+
+            importClassDefinition.Methods.Add importClassConstructor
 
             importClassConstructor.MethodBody <-
                 let importConstructorBody = CilMethodBody importClassConstructor
                 let il = importConstructorBody.Instructions
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
                 il.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
+                
+                // TODO: Figure out what kind of duplicate imports will be allowed.
+                let mutable index = 1
+                for KeyValue(name, func) in functionImportLookup do
+                    let storeFunctionImport = CilInstruction(CilOpCodes.Stfld, func.Field)
+                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                    il.Add(CilInstruction.CreateLdarg index)
+                    il.Add(CilInstruction CilOpCodes.Dup)
+                    il.Add(CilInstruction(CilOpCodes.Brtrue, CilInstructionLabel storeFunctionImport))
+                    il.Add(CilInstruction(CilOpCodes.Ldstr, name))
+                    il.Add(CilInstruction(CilOpCodes.Newobj, coreSystemArgumentNullExceptionConstructor))
+                    il.Add(CilInstruction CilOpCodes.Throw)
+                    il.Add storeFunctionImport
+                    index <- index + 1
+
                 il.Add(CilInstruction CilOpCodes.Ret)
                 importConstructorBody
 
