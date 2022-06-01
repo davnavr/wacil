@@ -6,10 +6,12 @@
     <OutDir Condition="'$(OutDir)'==''">$(MSBuildProjectDirectory)\out</OutDir>
     <ModuleName Condition="'$(ModuleName)'==''">$(MSBuildProjectName)</ModuleName>
     <ModuleFile>$(OutDir)\$(ModuleName).wasm</ModuleFile>
+    <WacilRuntimeConfiguration Condition="'$(WacilRuntimeConfiguration)'==''">Debug</WacilRuntimeConfiguration>
   </PropertyGroup>
 
   <PropertyGroup>
     <WacilOutputFile>$(OutDir)\$(ModuleName).dll</WacilOutputFile>
+    <WacilRuntimeOutputDirectory></WacilRuntimeOutputDirectory>
     <WacilCompilerFlags>--project &quot;$(RootDirectory)\src\wacil\wacil.fsproj&quot; --module &quot;$(ModuleFile)&quot; --out &quot;$(WacilOutputFile)&quot;</WacilCompilerFlags>
   </PropertyGroup>
 
@@ -17,18 +19,26 @@
     <RemoveDir Directories="$(OutDir)" />
   </Target>
 
+  <Target AfterTargets="Clean" Name="CompileRuntimeLibrary">
+    <MSBuild
+      Projects="$(RootDirectory)\src\Wacil.Runtime\Wacil.Runtime.csproj"
+      Properties="Configuration=$(WacilRuntimeConfiguration);OutputPath=$(OutDir)" />
+  </Target>
+
   <Target Name="Compile" DependsOnTargets="CoreCompile">
     <Message Text="$(MSBuildProjectName) -> $(ModuleFile)" Importance="high" />
   </Target>
 
-  <Target Name="Build"
-          AfterTargets="Clean"
-          DependsOnTargets="Compile"
-          Inputs="$(ModuleFile)"
-          Outputs="$(WacilOutputFile)">
-    <Exec Command="dotnet run $(WacilCompilerFlags)"
-          ConsoleToMsBuild="true"
-          LogStandardErrorAsError="true" />
+  <Target
+    Name="Build"
+    AfterTargets="Clean"
+    DependsOnTargets="Compile;CompileRuntimeLibrary"
+    Inputs="$(ModuleFile)"
+    Outputs="$(WacilOutputFile)">
+    <Exec
+      Command="dotnet run $(WacilCompilerFlags)"
+      ConsoleToMsBuild="true"
+      LogStandardErrorAsError="true" />
 
     <Message Text="$(MSBuildProjectName) -> $(WacilOutputFile)" Importance="high" />
   </Target>

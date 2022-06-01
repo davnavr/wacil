@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AsmResolver.DotNet" Version="4.11.1" />
+
+    <Compile Include="Helpers\Span.fs" />
+    <Compile Include="Helpers\String.fs" />
+    <Compile Include="Helpers\Unsafe.fsi" />
+    <Compile Include="Helpers\Unsafe.fs" />
+    <Compile Include="Helpers\Collections\ArrayBuilder.fs" />
+
+    <Compile Include="Wasm\Format.fsi" />
+    <Compile Include="Wasm\Format.fs" />
+    <Compile Include="Wasm\Parser.fsi" />
+    <Compile Include="Wasm\Parser.fs" />
+    <Compile Include="Wasm\Validation.fsi" />
+    <Compile Include="Wasm\Validation.fs" />
+    <Compile Include="Wasm\Disassemble.fsi" />
+    <Compile Include="Wasm\Disassemble.fs" />
+
+    <Compile Include="Emit\Options.fs" />
+    <Compile Include="Emit\Module.fsi" />
+    <Compile Include="Emit\Module.fs" />
+  </ItemGroup>
+
+</Project>
