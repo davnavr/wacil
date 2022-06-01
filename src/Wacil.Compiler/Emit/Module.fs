@@ -347,8 +347,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     let method =
                         MethodDefinition(
                             name,
-                            MethodAttributes.Public ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName |||
-                            MethodAttributes.HideBySig ||| additionalFlags,
+                            MethodAttributes.Public ||| MethodAttributes.HideBySig ||| additionalFlags,
                             signature
                         )
 
@@ -357,7 +356,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                     method
                     
-                emitFunctionImportDelegateMethod ".ctor" (LanguagePrimitives.EnumOfValue 0us) delegateConstructorSignature |> ignore
+                emitFunctionImportDelegateMethod ".ctor" (MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName) delegateConstructorSignature |> ignore
 
                 let instanceDelegateMethodFlags = MethodAttributes.Virtual ||| MethodAttributes.NewSlot
                 let functionImportSignature = getFuncTypeSignature CallingConventionAttributes.HasThis func.Type
