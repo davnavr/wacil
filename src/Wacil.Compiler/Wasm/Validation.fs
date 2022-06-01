@@ -443,7 +443,7 @@ module Validate =
 
         let exports =
             let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
-            let lookup = Dictionary(capacity = exports.Length)
+            let lookup = Dictionary(exports.Length, System.StringComparer.Ordinal)
             let memories = Dictionary()
             let functionNames = Dictionary()
             for e in exports do

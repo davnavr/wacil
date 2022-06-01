@@ -546,7 +546,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let func = input.Functions[i]
 
             let generatedFunctionName, generatedFunctionAccess =
-                match input.Exports.GetFunctionName(Checked.uint32 i) with
+                match input.Exports.GetFunctionName(Checked.uint32(i + input.Imports.Functions.Length)) with
                 | true, existing -> existing, MethodAttributes.Public
                 | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
 
