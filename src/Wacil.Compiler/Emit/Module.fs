@@ -943,13 +943,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 il.Add(CilInstruction CilOpCodes.Dup)
                 il.Add(CilInstruction CilOpCodes.Stloc_0)
                 // The delegate should be on top of the stack
-                il.Add(CilInstruction(CilOpCodes.Isinst))
-                let invoke = CilInstruction CilOpCodes.Nop
-                il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel invoke))
+                il.Add(CilInstruction(CilOpCodes.Isinst, dynamicInvocationDelegate))
+                il.Add(CilInstruction CilOpCodes.Dup)
+                let beginDelegateInvocation = CilInstruction CilOpCodes.Nop
+                il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel beginDelegateInvocation))
 
-                // Null reference is on top of stack since conversion failed
-                il.Add(CilInstruction CilOpCodes.Pop)
                 // Slow path, need to allocate a new helper delegate
+                il.Add(CilInstruction CilOpCodes.Pop)
                 il.Add(CilInstruction(CilOpCodes.Ldtoken, dynamicInvocationDelegate))
                 il.Add(CilInstruction(CilOpCodes.Call, coreSystemGetTypeFromHandle))
                 il.Add(CilInstruction CilOpCodes.Ldloc_0)
@@ -959,7 +959,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 il.Add(CilInstruction(CilOpCodes.Call, coreSystemDelegateCreate))
                 il.Add(CilInstruction(CilOpCodes.Castclass, dynamicInvocationDelegate))
 
-                il.Add invoke
+                il.Add beginDelegateInvocation
                 for i = 0 to functionIndexParameter - 1 do il.Add(CilInstruction.CreateLdarg i)
                 il.Add(CilInstruction(CilOpCodes.Callvirt, invoke))
                 il.Add(CilInstruction CilOpCodes.Ret)
@@ -1107,6 +1107,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
                         il.Add(CilInstruction CilOpCodes.Ldarg_0)
                         il.Add(CilInstruction(CilOpCodes.Call, getIndexedCallee callee))
+                    | CallIndirect(ty, tableIndex) ->
+                        let helper: MethodDefinition = generateDynamicInvocationHelper tableIndex input.Types[Checked.int32 ty]
+                        // Parameters are already on the stack in the correct order, including the table index
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Call, helper))
                     | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
                     | LocalGet(LocalIndex index) ->
                         match index with
