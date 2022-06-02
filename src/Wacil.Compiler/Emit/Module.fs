@@ -331,22 +331,29 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | ValType.Vec _ -> raise(System.NotImplementedException "TODO: Compilation with vectors is not yet supported")
 
     let getFuncTypeSignature cconv (ty: FuncType) =
-        // TODO: For multi-return, use out parameters
-        if ty.Results.Length > 1 then failwith "TODO: Compilation of functions with multiple return values is not yet supported"
+            // TODO: For multi-return, use out parameters
+            if ty.Results.Length > 1 then failwith "TODO: Compilation of functions with multiple return values is not yet supported"
 
-        let returnTypes =
-            if ty.Results.IsEmpty
-            then moduleDefinition.CorLibTypeFactory.Void :> TypeSignature
-            else getValTypeSignature ty.Results[0]
+            let returnTypes =
+                if ty.Results.IsEmpty
+                then moduleDefinition.CorLibTypeFactory.Void :> TypeSignature
+                else getValTypeSignature ty.Results[0]
 
-        let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
+            let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
 
-        for parameter in ty.Parameters do
-            parameterTypes.Add(getValTypeSignature parameter)
+            for parameter in ty.Parameters do
+                parameterTypes.Add(getValTypeSignature parameter)
 
-        MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
+            MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
 
     moduleDefinition.GetOrCreateModuleType().BaseType <- coreSystemObject
+
+    let delegateConstructorSignature =
+        MethodSignature(
+            CallingConventionAttributes.HasThis,
+            moduleDefinition.CorLibTypeFactory.Void,
+            [| moduleDefinition.CorLibTypeFactory.Object; moduleDefinition.CorLibTypeFactory.IntPtr |]
+        )
 
     let classDefinition =
         TypeDefinition(
@@ -362,13 +369,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let translatedModuleImports =
         let lookup = SortedList<string, ModuleImport>(input.Imports.Count, System.StringComparer.OrdinalIgnoreCase)
-
-        let delegateConstructorSignature =
-            MethodSignature(
-                CallingConventionAttributes.HasThis,
-                moduleDefinition.CorLibTypeFactory.Void,
-                [| moduleDefinition.CorLibTypeFactory.Object; moduleDefinition.CorLibTypeFactory.IntPtr |]
-            )
 
         for KeyValue(moduleName, imports) in input.Imports do
             let importClassDefinition =
@@ -776,6 +776,80 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                   TranslatedGlobal.Initializer = initializer
                   TranslatedGlobal.Setter = setter }
         Unsafe.Array.toImmutable globals
+
+    // Maybe Wacil.Runtime could have a sealed FuncRef class that handles dynamic invocation w/ Delegate.CreateDelegate?
+    let generateDynamicInvocationDelegate =
+        let lookup = Dictionary<FuncType, TypeDefinition * MethodDefinition>()
+        fun (ty: FuncType) ->
+            match lookup.TryGetValue ty with
+            | true, existing -> existing
+            | false, _ ->
+                let invocationDelegateDefinition =
+                    TypeDefinition(
+                        String.empty,
+                        stringBuffer.Clear().Append("funcref#").Append(lookup.Count).ToString(),
+                        TypeAttributes.Sealed
+                    )
+
+                invocationDelegateDefinition.BaseType <- coreSystemMulticastDelegate
+                classDefinition.NestedTypes.Add invocationDelegateDefinition
+
+                let emitHelperDelegateMethod name additionalFlags signature =
+                    let method =
+                        MethodDefinition(
+                            name,
+                            MethodAttributes.Public ||| MethodAttributes.HideBySig ||| additionalFlags,
+                            signature
+                        )
+
+                    method.ImplAttributes <- MethodImplAttributes.Runtime
+                    invocationDelegateDefinition.Methods.Add method
+
+                    method
+
+                emitHelperDelegateMethod
+                    ".ctor"
+                    (MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName)
+                    delegateConstructorSignature
+                |> ignore
+
+                let instanceDelegateMethodFlags = MethodAttributes.Virtual ||| MethodAttributes.NewSlot
+                let helperSignature = getFuncTypeSignature CallingConventionAttributes.HasThis ty
+                let helperInvoke = emitHelperDelegateMethod "Invoke" instanceDelegateMethodFlags helperSignature
+
+                // TODO: Avoid code duplication w/ function import delegate generation
+                let item = invocationDelegateDefinition, helperInvoke
+                lookup[ty] <- item
+                item
+
+    // Helper to generate a static method used when translating indirect calls
+    let generateDynamicInvocationHelper =
+        let lookup = Dictionary<FuncType, MethodDefinition>()
+        fun (ty: FuncType) ->
+            match lookup.TryGetValue ty with
+            | true, existing -> existing
+            | false, _ ->
+                let signature = getFuncTypeSignature CallingConventionAttributes.Default ty
+                signature.ParameterTypes.Add moduleDefinition.CorLibTypeFactory.Int32
+                signature.ParameterTypes.Add classDefinitionSignature
+
+                // TODO: Put the return and parameter types in the helper name
+                let definition =
+                    MethodDefinition(
+                        stringBuffer.Clear().Append("call_indirect#").Append(lookup.Count).ToString(),
+                        MethodAttributes.Static,
+                        signature
+                    )
+
+                classDefinition.Methods.Add definition
+
+                let body = CilMethodBody definition
+                let il = body.Instructions
+                //il.Add(CilInstruction.)
+                definition.CilMethodBody <- body
+
+                lookup[ty] <- definition
+                definition
 
     let generateClassFunctionDefinitionStatic =
         let mutable statics = Array.zeroCreate generatedClassFunctions.Length
