@@ -57,8 +57,9 @@ type CilInstruction with
 
 [<NoComparison; NoEquality>]
 type RuntimeLibraryTable =
-    { Specification: GenericInstanceTypeSignature
-      //Constructor: IMethodDefOrRef
+    { Instantiation: GenericInstanceTypeSignature
+      Specification: TypeSpecification
+      Constructor: IMethodDefOrRef
       }
 
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
@@ -284,10 +285,27 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         | FuncRef -> coreSystemMulticastDelegateSignature
                         | ExternRef -> coreSystemObjectSignature
 
-                    let specification = runtimeTableClass.MakeGenericInstanceType(tableElementType)
+                    let instantiation = runtimeTableClass.MakeGenericInstanceType(tableElementType)
+                    let specification = TypeSpecification instantiation
+
+                    let constructor =
+                        MemberReference(
+                            specification,
+                            ".ctor",
+                            MethodSignature(
+                                CallingConventionAttributes.HasThis,
+                                moduleDefinition.CorLibTypeFactory.Void,
+                                [| 
+                                    moduleDefinition.CorLibTypeFactory.Int32
+                                    moduleDefinition.CorLibTypeFactory.Int32
+                                |]
+                            )
+                        )
 
                     let instantiation =
-                        { RuntimeLibraryTable.Specification = specification }
+                        { RuntimeLibraryTable.Instantiation = instantiation
+                          Specification = specification
+                          Constructor = constructor }
 
                     lookup[ty] <- instantiation
                     instantiation
@@ -600,12 +618,20 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 FieldDefinition(
                     stringBuffer.Clear().Append("table#").Append(i).ToString(),
                     FieldAttributes.InitOnly,
-                    FieldSignature runtimeTableReference.Specification
+                    FieldSignature runtimeTableReference.Instantiation
                 )
 
             classDefinition.Fields.Add generatedTableField
 
             // TODO: Generate a getter property if table is an export
+
+            do
+                let il = classConstructorBody.Instructions
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction.CreateLdcI4(int32 table.Limits.Minimum))
+                il.Add(CilInstruction.CreateLdcI4(ValueOption.map int32 table.Limits.Maximum |> ValueOption.defaultValue -1))
+                il.Add(CilInstruction(CilOpCodes.Newobj, runtimeTableReference.Constructor))
+                il.Add(CilInstruction(CilOpCodes.Stfld, generatedTableField))
 
             fields[i] <-
                 { TranslatedTable.ElementType = table.ElementType
