@@ -568,6 +568,49 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         functions.ToImmutableArray()
 
+    let translatedModuleGlobals =
+        let mutable globals = Array.zeroCreate input.Globals.Length
+        for i = 0 to globals.Length - 1 do
+            let glbl = input.Globals[i]
+            // TODO: Check export for name
+            let name, access =
+                stringBuffer.Clear().Append("global#").Append(i).ToString(), FieldAttributes.PrivateScope
+
+            let mutability =
+                match glbl.Type.Mutability with
+                | Mutability.Const -> FieldAttributes.InitOnly
+                | Mutability.Var -> Unchecked.defaultof<FieldAttributes>
+
+            let field =
+                FieldDefinition(
+                    name,
+                    mutability ||| access,
+                    FieldSignature(getValTypeSignature glbl.Type.Type)
+                )
+
+            classDefinition.Fields.Add field
+
+            // Note that the initializer method is not static, since CIL methods are assumed to be instance methods during translation
+            let initializer =
+                MethodDefinition(
+                    stringBuffer.Clear().Append("init$").Append(name).ToString(),
+                    MethodAttributes.CompilerControlled,
+                    MethodSignature(
+                        CallingConventionAttributes.HasThis,
+                        field.Signature.FieldType,
+                        System.Array.Empty()
+                    )
+                )
+
+            classDefinition.Methods.Add initializer
+
+            let il = classConstructorBody.Instructions
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction CilOpCodes.Dup)
+            il.Add(CilInstruction(CilOpCodes.Call, initializer))
+            il.Add(CilInstruction(CilOpCodes.Stfld, field))
+        Unsafe.Array.toImmutable globals
+
     let generateClassFunctionDefinitionStatic =
         let mutable statics = Array.zeroCreate generatedClassFunctions.Length
         let parameterTypeBuilder = ImmutableArray.CreateBuilder()

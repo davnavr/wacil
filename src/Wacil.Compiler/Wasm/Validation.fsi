@@ -108,6 +108,7 @@ type ValidModule =
     member Imports: ModuleImportLookup
     member Functions: ImmutableArray<Function>
     member Memories: ImmutableArray<Format.Limits>
+    member Globals: ImmutableArray<Global>
     member Exports: ModuleExportLookup
     member Start: int voption
 

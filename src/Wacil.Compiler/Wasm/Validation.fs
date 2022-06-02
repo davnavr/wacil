@@ -171,6 +171,7 @@ type ValidModule
         functions: ImmutableArray<Function>,
         imports: ModuleImportLookup,
         memories: ImmutableArray<Limits>,
+        globals: ImmutableArray<Global>,
         exports: ModuleExportLookup,
         start: int voption
     )
@@ -180,6 +181,7 @@ type ValidModule
     member _.Imports = imports
     member _.Functions = functions
     member _.Memories = memories
+    member _.Globals = globals
     member _.Exports = exports
     member _.Start = start
 
@@ -666,6 +668,7 @@ module Validate =
             imports = imports,
             functions = functions,
             memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories,
+            globals = globals,
             exports = exports,
             start = ValueOption.map Checked.int32 builder.Start
         ))
