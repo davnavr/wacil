@@ -407,6 +407,10 @@ let parseFromStream (stream: Stream) =
                 let indices = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadUnsignedInteger() |> Checked.uint32
                 sections.Add(Section.Function(Unsafe.Array.toImmutable indices))
+            | SectionId.Table ->
+                let tables = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                for i = 0 to tables.Length - 1 do tables[i] <- reader.ReadTableType()
+                sections.Add(Section.Table(Unsafe.Array.toImmutable tables))
             | SectionId.Memory ->
                 let mems = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()

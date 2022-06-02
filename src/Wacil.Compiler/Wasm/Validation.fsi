@@ -107,6 +107,7 @@ type ValidModule =
     member Types: ImmutableArray<Format.FuncType>
     member Imports: ModuleImportLookup
     member Functions: ImmutableArray<Function>
+    member Tables: ImmutableArray<Format.TableType>
     member Memories: ImmutableArray<Format.Limits>
     member Globals: ImmutableArray<Global>
     member Exports: ModuleExportLookup

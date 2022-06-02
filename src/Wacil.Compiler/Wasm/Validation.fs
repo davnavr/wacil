@@ -169,6 +169,7 @@ type ValidModule
         custom: ImmutableArray<Custom>,
         types: ImmutableArray<FuncType>,
         functions: ImmutableArray<Function>,
+        tables: ImmutableArray<TableType>,
         imports: ModuleImportLookup,
         memories: ImmutableArray<Limits>,
         globals: ImmutableArray<Global>,
@@ -180,6 +181,7 @@ type ValidModule
     member _.Types = types
     member _.Imports = imports
     member _.Functions = functions
+    member _.Tables = tables
     member _.Memories = memories
     member _.Globals = globals
     member _.Exports = exports
@@ -678,6 +680,7 @@ module Validate =
             types = types,
             imports = imports,
             functions = functions,
+            tables = ValueOption.defaultValue ImmutableArray.Empty builder.Tables,
             memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories,
             globals = globals,
             exports = exports,
