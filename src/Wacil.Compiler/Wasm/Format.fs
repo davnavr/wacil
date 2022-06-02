@@ -122,6 +122,7 @@ type NormalInstruction =
     | Br of label: Index
     | Drop
     | Call of callee: Index
+    | CallIndirect of functionType: Index * table: Index
     | LocalGet of Index
     | LocalSet of Index
     | LocalTee of Index

@@ -458,6 +458,8 @@ module Validate =
 
                 moduleFunctionDefinitions.ToImmutableArray()
 
+        let tables = ValueOption.defaultValue ImmutableArray.Empty builder.Tables
+
         let exports =
             let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
             let lookup = Dictionary(exports.Length, System.StringComparer.Ordinal)
@@ -595,6 +597,11 @@ module Validate =
                             let funcType = getFunctionIndexType callee
                             operandTypeStack.PushAndPop funcType
                             emit Normal funcType.Parameters funcType.Results
+                        | CallIndirect(typeIndex, tableIndex) ->
+                            let funcType = types[Checked.int32 typeIndex]
+                            if uint32 tables.Length >= tableIndex then failwithf "TABLE %i DNE" tableIndex
+                            operandTypeStack.PushAndPop funcType
+                            emit Normal funcType.Parameters funcType.Results
                         | Drop ->
                             let poppedType = operandTypeStack.PopAny()
                             emit Normal (ImmutableArray.Create(item = poppedType)) ImmutableArray.Empty
@@ -684,7 +691,7 @@ module Validate =
             types = types,
             imports = imports,
             functions = functions,
-            tables = ValueOption.defaultValue ImmutableArray.Empty builder.Tables,
+            tables = tables,
             memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories,
             globals = globals,
             exports = exports,

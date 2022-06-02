@@ -270,6 +270,11 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
             instructionBuilderCache.Return popped.Instructions
         | Opcode.Br -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Br |> Instruction.Normal)
         | Opcode.Call -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Call |> Instruction.Normal)
+        | Opcode.CallIndirect ->
+            (reader.ReadUnsignedInteger() |> Checked.uint32, reader.ReadUnsignedInteger() |> Checked.uint32)
+            |> CallIndirect
+            |> Instruction.Normal
+            |> block.Add
         | Opcode.Drop -> block.Add(Instruction.Normal Drop)
         | Opcode.LocalGet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet |> Instruction.Normal)
         | Opcode.LocalSet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet |> Instruction.Normal)
