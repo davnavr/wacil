@@ -1,9 +1,8 @@
 (module
-  (memory 1)
-  (global $_stack_ptr (mut i32) (i32.const 65535))
+  (memory (export "memory") 2)
+  (global $_stack_ptr (mut i32) (i32.const 65536))
   (func $_stack_push (export "_stack_push") (param $amount i32) (result i32)
     global.get $_stack_ptr
-    i32.load align=4
     local.get $amount
     i32.sub
     global.set $_stack_ptr
@@ -11,7 +10,6 @@
   )
   (func $_stack_pop (export "_stack_pop") (param $amount i32)
     global.get $_stack_ptr
-    i32.load align=4
     local.get $amount
     i32.add
     global.set $_stack_ptr
