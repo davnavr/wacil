@@ -271,10 +271,11 @@ let parseExpression (reader: Reader) (instructionBuilderCache: byref<Instruction
         | Opcode.Br -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Br |> Instruction.Normal)
         | Opcode.Call -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Call |> Instruction.Normal)
         | Opcode.CallIndirect ->
-            (reader.ReadUnsignedInteger() |> Checked.uint32, reader.ReadUnsignedInteger() |> Checked.uint32)
-            |> CallIndirect
-            |> Instruction.Normal
-            |> block.Add
+            let instruction =
+                (reader.ReadUnsignedInteger() |> Checked.uint32, reader.ReadUnsignedInteger() |> Checked.uint32)
+                |> CallIndirect
+                |> Instruction.Normal
+            block.Add instruction
         | Opcode.Drop -> block.Add(Instruction.Normal Drop)
         | Opcode.LocalGet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet |> Instruction.Normal)
         | Opcode.LocalSet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet |> Instruction.Normal)

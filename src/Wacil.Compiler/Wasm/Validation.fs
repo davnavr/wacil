@@ -599,7 +599,7 @@ module Validate =
                             emit Normal funcType.Parameters funcType.Results
                         | CallIndirect(typeIndex, tableIndex) ->
                             let funcType = types[Checked.int32 typeIndex]
-                            if uint32 tables.Length >= tableIndex then failwithf "TABLE %i DNE" tableIndex
+                            if uint32 tables.Length <= tableIndex then failwithf "TABLE %i DNE" tableIndex
                             operandTypeStack.PushAndPop funcType
                             emit Normal funcType.Parameters funcType.Results
                         | Drop ->
