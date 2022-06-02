@@ -622,8 +622,44 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 )
 
             classDefinition.Fields.Add generatedTableField
+            
+            match input.Exports.GetTableName(Checked.uint32 i) with
+            | true, name ->
+                let tableFieldGetter =
+                    MethodDefinition(
+                        stringBuffer.Clear().Append("get_").Append(name).ToString(),
+                        MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.HideBySig,
+                        MethodSignature(
+                            CallingConventionAttributes.HasThis,
+                            runtimeTableReference.Instantiation,
+                            Array.empty
+                        )
+                    )
 
-            // TODO: Generate a getter property if table is an export
+                classDefinition.Methods.Add tableFieldGetter
+                tableFieldGetter.ImplAttributes <- methodImplAggressiveInlining
+
+                let body = CilMethodBody tableFieldGetter
+                let il = body.Instructions
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Ldfld, generatedTableField))
+                il.Add(CilInstruction CilOpCodes.Ret)
+                tableFieldGetter.CilMethodBody <- body
+
+                let tableFieldProperty =
+                    PropertyDefinition(
+                        name,
+                        PropertyAttributes.None,
+                        PropertySignature(
+                            CallingConventionAttributes.HasThis,
+                            runtimeTableReference.Instantiation,
+                            Array.empty
+                        )
+                    )
+
+                tableFieldProperty.SetSemanticMethods(tableFieldGetter, null)
+                classDefinition.Properties.Add tableFieldProperty
+            | false, _ -> ()
 
             do
                 let il = classConstructorBody.Instructions
