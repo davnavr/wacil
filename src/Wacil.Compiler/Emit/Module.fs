@@ -633,6 +633,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                             )
                         )
 
+                    classDefinition.Methods.Add definition
+
                     definition.ImplAttributes <- methodImplAggressiveInlining
 
                     definition.CilMethodBody <-
@@ -641,6 +643,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         il.Add(CilInstruction CilOpCodes.Ldarg_1)
                         il.Add(CilInstruction CilOpCodes.Ldarg_0)
                         il.Add(CilInstruction(CilOpCodes.Stfld, field))
+                        il.Add(CilInstruction CilOpCodes.Ret)
                         body
 
                     ValueSome definition
@@ -798,6 +801,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         match index with
                         | Arg i -> il.Add(CilInstruction.CreateStarg i)
                         | Loc i -> il.Add(CilInstruction.CreateStloc i)
+                    | GlobalGet index ->
+                        // TODO: Check for imported globals
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Ldfld, translatedModuleGlobals[Checked.int32 index].Field))
+                    | GlobalSet index ->
+                        // TODO: Check for imported globals
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Call, translatedModuleGlobals[Checked.int32 index].Setter.Value))
                     | I32Load arg ->
                         // Top of stack is address to load, which is first parameter
                         pushMemoryField 0
@@ -856,6 +867,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let body = CilMethodBody definition
             emitExpressionCode instructionBlockStack instructionOffsetBuilder func.Type.Parameters.Length func.LocalTypes func.Body body
             definition.CilMethodBody <- body
+
+    // TODO: Call emitExpressionCode for all globals
 
     match input.Start with
     | ValueSome index ->
