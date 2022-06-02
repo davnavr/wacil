@@ -139,10 +139,10 @@ type ValidExpression =
     member this.Instructions = this.Expression
     member this.LabelIndices = this.BranchTargets
 
-type Function =
-    { Type: FuncType
-      LocalTypes: ImmutableArray<ValType>
-      Body: ValidExpression }
+type Function = { Type: FuncType; LocalTypes: ImmutableArray<ValType>; Body: ValidExpression }
+
+[<RequireQualifiedAccess>]
+type Global = { Type: GlobalType; Value: ValidExpression }
 
 [<RequireQualifiedAccess>]
 type ModuleExport =
@@ -408,7 +408,18 @@ module Validate =
         // TODO: Loop through each export similarly as the imports to create a dictionary
         //let export = Dictionary<string, _>(capacity = )
 
-        // TODO: In sections where only constant expressions are allowed, loop through them to check they are valid
+        let globals =
+            let moduleGlobalDefinitions = ValueOption.defaultValue ImmutableArray.Empty builder.Globals
+            let mutable globals = Array.zeroCreate moduleGlobalDefinitions.Length
+            for i = 0 to globals.Length - 1 do
+                let glbl = moduleGlobalDefinitions[i]
+                globals[i] <-
+                    { Global.Type = glbl.Type
+                      Global.Value =
+                        { ValidExpression.Source = glbl.Expression
+                          Expression = Unchecked.defaultof<_>
+                          BranchTargets = Unchecked.defaultof<_> } }
+            Unsafe.Array.toImmutable globals
 
         let functions =
             let moduleFunctionTypes = ValueOption.defaultValue ImmutableArray.Empty builder.Functions
@@ -587,6 +598,14 @@ module Validate =
                             let ty = getLocalType index
                             operandTypeStack.PopExpecting ty
                             emit Normal (ImmutableArray.Create(item = ty)) ImmutableArray.Empty
+                        | GlobalGet index ->
+                            let ty = globals[Checked.int32 index].Type.Type
+                            operandTypeStack.Push ty
+                            emit Normal ImmutableArray.Empty (ImmutableArray.Create(item = ty))
+                        | GlobalSet index ->
+                            let ty = globals[Checked.int32 index].Type.Type
+                            operandTypeStack.PopExpecting ty
+                            emit Normal (ImmutableArray.Create(item = ty)) ImmutableArray.Empty
                         | I32Load _
                         | MemoryGrow ->
                             operandTypeStack.PopExpecting(ValType.Num I32)
@@ -635,6 +654,9 @@ module Validate =
             let instructions, indices = validateExpression operandTypeStack func.Type func.LocalTypes func.Body.Source
             func.Body.Expression <- instructions
             func.Body.BranchTargets <- indices
+
+        // TODO: Check that expressions are "constant" in global values
+
         
         match error with
         | ValueSome error' -> Error(error')

@@ -83,6 +83,11 @@ type Function =
       LocalTypes: ImmutableArray<Format.ValType>
       Body: ValidExpression }
 
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
+type Global =
+    { Type: Format.GlobalType
+      Value: ValidExpression }
+
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type ModuleExport =
     | Function of Function

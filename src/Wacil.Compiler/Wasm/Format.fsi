@@ -59,6 +59,8 @@ type Opcode =
     | LocalGet = 0x20uy
     | LocalSet = 0x21uy
     | LocalTee = 0x22uy
+    | GlobalGet = 0x23uy
+    | GlobalSet = 0x24uy
     | I32Load = 0x28uy
     | I64Load = 0x29uy
     | F32Load = 0x2Auy
@@ -133,6 +135,8 @@ type NormalInstruction =
     | LocalGet of Index
     | LocalSet of Index
     | LocalTee of Index
+    | GlobalGet of Index
+    | GlobalSet of Index
     | I32Load of MemArg
     | I64Load of MemArg
     | F32Load of MemArg
