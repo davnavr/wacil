@@ -75,6 +75,11 @@ type InstructionBlockBuilder =
     { mutable Instructions: System.ReadOnlyMemory<ValidInstruction>
       Labels: IntroducedLabelLookup }
 
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type TranslatedGlobal =
+    { Field: FieldDefinition
+      Setter: MethodDefinition voption }
+
 [<NoComparison; NoEquality>]
 type TranslatedFunctionImport =
     { Delegate: TypeDefinition
@@ -87,6 +92,8 @@ type ModuleImport =
       Signature: TypeDefOrRefSignature
       Field: FieldDefinition
       FunctionLookup: SortedList<string, TranslatedFunctionImport> }
+
+let methodImplAggressiveInlining: MethodImplAttributes = LanguagePrimitives.EnumOfValue 256us
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let coreLibraryReference =
@@ -568,6 +575,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         functions.ToImmutableArray()
 
+    // TODO: A "setter" will need to be generated for global.set, since a ldarg_0 (the "this" pointer) cannot be inserted before value (which is already on the top of the stack)
     let translatedModuleGlobals =
         let mutable globals = Array.zeroCreate input.Globals.Length
         for i = 0 to globals.Length - 1 do
@@ -604,11 +612,43 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             classDefinition.Methods.Add initializer
 
-            let il = classConstructorBody.Instructions
-            il.Add(CilInstruction CilOpCodes.Ldarg_0)
-            il.Add(CilInstruction CilOpCodes.Dup)
-            il.Add(CilInstruction(CilOpCodes.Call, initializer))
-            il.Add(CilInstruction(CilOpCodes.Stfld, field))
+            do
+                let il = classConstructorBody.Instructions
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction CilOpCodes.Dup)
+                il.Add(CilInstruction(CilOpCodes.Call, initializer))
+                il.Add(CilInstruction(CilOpCodes.Stfld, field))
+
+            let setter =
+                match glbl.Type.Mutability with
+                | Mutability.Var ->
+                    let definition =
+                        MethodDefinition(
+                            stringBuffer.Clear().Append("set$").Append(name).ToString(),
+                            MethodAttributes.Static,
+                            MethodSignature(
+                                CallingConventionAttributes.Default,
+                                moduleDefinition.CorLibTypeFactory.Void,
+                                [| field.Signature.FieldType; classDefinitionSignature |]
+                            )
+                        )
+
+                    definition.ImplAttributes <- methodImplAggressiveInlining
+
+                    definition.CilMethodBody <-
+                        let body = CilMethodBody definition
+                        let il = body.Instructions
+                        il.Add(CilInstruction CilOpCodes.Ldarg_1)
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Stfld, field))
+                        body
+
+                    ValueSome definition
+                | Mutability.Const -> ValueNone
+
+            globals[i] <-
+                { TranslatedGlobal.Field = field
+                  TranslatedGlobal.Setter = setter }
         Unsafe.Array.toImmutable globals
 
     let generateClassFunctionDefinitionStatic =
@@ -672,7 +712,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                             )
                         )
 
-                    helper.ImplAttributes <- LanguagePrimitives.EnumOfValue 256us // AggressiveInlining
+                    helper.ImplAttributes <- methodImplAggressiveInlining
 
                     let body = CilMethodBody helper
                     let il = body.Instructions
