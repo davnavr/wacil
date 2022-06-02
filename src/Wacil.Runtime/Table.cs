@@ -20,6 +20,13 @@ namespace Wacil.Runtime {
             get => elements.Count;
         }
 
+        public E? this[int index] {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Get(index, this);
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set => Set(index, value, this);
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static E? Get(int index, Table<E> table) {
             return table.elements[index];
