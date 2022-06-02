@@ -658,7 +658,18 @@ module Validate =
             func.Body.BranchTargets <- indices
 
         // TODO: Check that expressions are "constant" in global values
+        for glbl in globals do
+            let instructions, indices =
+                validateExpression
+                    operandTypeStack
+                    { FuncType.Parameters = ImmutableArray.Empty
+                      Results = ImmutableArray.Create(glbl.Type.Type) }
+                    ImmutableArray.Empty
+                    glbl.Value.Source
 
+            if not indices.IsDefaultOrEmpty then failwith "TODO: Global contains branch instructions!"
+            glbl.Value.Expression <- instructions
+            glbl.Value.BranchTargets <- ImmutableArray.Empty
         
         match error with
         | ValueSome error' -> Error(error')

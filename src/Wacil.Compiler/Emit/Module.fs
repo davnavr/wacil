@@ -78,6 +78,7 @@ type InstructionBlockBuilder =
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type TranslatedGlobal =
     { Field: FieldDefinition
+      Initializer: MethodDefinition
       Setter: MethodDefinition voption }
 
 [<NoComparison; NoEquality>]
@@ -651,6 +652,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             globals[i] <-
                 { TranslatedGlobal.Field = field
+                  TranslatedGlobal.Initializer = initializer
                   TranslatedGlobal.Setter = setter }
         Unsafe.Array.toImmutable globals
 
@@ -706,7 +708,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                     let helper =
                         MethodDefinition(
-                            stringBuffer.Clear().Append("call_import_").Append(moduleName).Append('_').Append(func.Name).ToString(),
+                            stringBuffer.Clear().Append("call_import$").Append(moduleName).Append('_').Append(func.Name).ToString(),
                             MethodAttributes.Static,
                             MethodSignature(
                                 CallingConventionAttributes.Default,
@@ -868,7 +870,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             emitExpressionCode instructionBlockStack instructionOffsetBuilder func.Type.Parameters.Length func.LocalTypes func.Body body
             definition.CilMethodBody <- body
 
-    // TODO: Call emitExpressionCode for all globals
+        for i = 0 to translatedModuleGlobals.Length - 1 do
+            let translated = translatedModuleGlobals[i]
+            let original = input.Globals[i]
+            let body = CilMethodBody translated.Initializer
+            emitExpressionCode instructionBlockStack instructionOffsetBuilder 0 ImmutableArray.Empty original.Value body
+            translated.Initializer.CilMethodBody <- body
 
     match input.Start with
     | ValueSome index ->
