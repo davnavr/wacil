@@ -156,11 +156,13 @@ type ModuleExportLookup
     (
         memories: Dictionary<Index, string>,
         functions: Dictionary<Index, string>,
+        tables: Dictionary<Index, string>,
         lookup: Dictionary<string, ModuleExport>
     )
     =
     member _.GetMemoryName(index, name: outref<_>) = memories.TryGetValue(index, &name)
     member _.GetFunctionName(index, name: outref<_>) = functions.TryGetValue(index, &name)
+    member _.GetTableName(index, name: outref<_>) = tables.TryGetValue(index, &name)
     member _.Item with get name = lookup[name]
 
 [<Sealed>]
@@ -459,8 +461,9 @@ module Validate =
         let exports =
             let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
             let lookup = Dictionary(exports.Length, System.StringComparer.Ordinal)
-            let memories = Dictionary()
+            let memoryNames = Dictionary()
             let functionNames = Dictionary()
+            let tableNames = Dictionary()
             for e in exports do
                 match lookup.TryGetValue e.Name with
                 | true, _ -> failwithf "Duplicate export %s" e.Name
@@ -474,13 +477,14 @@ module Validate =
                                 failwith "TODO: Fix, attempt was made to exprot a function import. Is this behavior allowed?"
                             ModuleExport.Function functions[i]
                         | ExportDesc.Table index ->
+                            tableNames.Add(index, e.Name)
                             ModuleExport.Table
                         | ExportDesc.Mem index ->
-                            memories.Add(index, e.Name)
+                            memoryNames.Add(index, e.Name)
                             ModuleExport.Memory index
                         | ExportDesc.Global index ->
                             ModuleExport.Global
-            ModuleExportLookup(memories, functionNames, lookup)
+            ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
 
         let getFunctionIndexType (index: Index) =
             let i = Checked.int32 index
