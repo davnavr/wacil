@@ -60,7 +60,7 @@ type RuntimeLibraryTable =
     { Instantiation: GenericInstanceTypeSignature
       Specification: TypeSpecification
       Constructor: IMethodDefOrRef
-      }
+      Get: IMethodDefOrRef }
 
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
@@ -93,7 +93,8 @@ type TranslatedGlobal =
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type TranslatedTable =
     { ElementType: RefType
-      Field: FieldDefinition }
+      Field: FieldDefinition
+      Operations: RuntimeLibraryTable }
 
 [<NoComparison; NoEquality>]
 type TranslatedFunctionImport =
@@ -145,7 +146,60 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             new MethodSignature(
                 CallingConventionAttributes.HasThis,
                 moduleDefinition.CorLibTypeFactory.Void,
-                Array.singleton moduleDefinition.CorLibTypeFactory.String
+                [| moduleDefinition.CorLibTypeFactory.String |]
+            )
+        )
+        |> moduleDefinition.DefaultImporter.ImportMethod
+
+    // Imported in order to utilize helper static methods in System.Delegate
+    let coreSystemDelegate =
+        coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemDelegateSignature = TypeDefOrRefSignature coreSystemDelegate
+
+    let coreSystemDelegateGetTarget =
+        coreSystemDelegate.CreateMemberReference(
+            "get_Target",
+            new MethodSignature(
+                CallingConventionAttributes.HasThis,
+                moduleDefinition.CorLibTypeFactory.Object,
+                Array.empty
+            )
+        )
+        |> moduleDefinition.DefaultImporter.ImportMethod
+
+    let coreSystemType =
+        coreLibraryReference.CreateTypeReference("System", "Type") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemTypeSignature = TypeDefOrRefSignature coreSystemType
+
+    let coreSystemReflectionMethodInfoSignature =
+        coreLibraryReference.CreateTypeReference("System.Reflection", "MethodInfo")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+        |> TypeDefOrRefSignature
+
+    let coreSystemDelegateGetMethod =
+        coreSystemDelegate.CreateMemberReference(
+            "get_Method",
+            new MethodSignature(
+                CallingConventionAttributes.HasThis,
+                coreSystemReflectionMethodInfoSignature,
+                Array.empty
+            )
+        )
+        |> moduleDefinition.DefaultImporter.ImportMethod
+
+    let coreSystemDelegateCreate =
+        coreSystemDelegate.CreateMemberReference(
+            "Create",
+            new MethodSignature(
+                CallingConventionAttributes.Default,
+                coreSystemDelegateSignature,
+                [|
+                    coreSystemTypeSignature
+                    moduleDefinition.CorLibTypeFactory.Object
+                    coreSystemReflectionMethodInfoSignature
+                |]
             )
         )
         |> moduleDefinition.DefaultImporter.ImportMethod
@@ -156,6 +210,21 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
     let coreSystemMulticastDelegateSignature = TypeDefOrRefSignature coreSystemMulticastDelegate
+
+    let coreSystemRuntimeTypeHandle =
+        coreLibraryReference.CreateTypeReference("System", "RuntimeTypeHandle")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemGetTypeFromHandle =
+        coreSystemType.CreateMemberReference(
+            "GetTypeFromHandle",
+            new MethodSignature(
+                CallingConventionAttributes.Default,
+                coreSystemTypeSignature,
+                [| TypeDefOrRefSignature coreSystemRuntimeTypeHandle |]
+            )
+        )
+        |> moduleDefinition.DefaultImporter.ImportMethod
 
     let assemblyDefinition =
         match options.OutputType with
@@ -302,10 +371,25 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                             )
                         )
 
+                    let getter =
+                        MemberReference(
+                            specification,
+                            "Get",
+                            MethodSignature(
+                                CallingConventionAttributes.Default,
+                                tableElementType,
+                                [|
+                                    moduleDefinition.CorLibTypeFactory.Int32
+                                    instantiation
+                                |]
+                            )
+                        )
+
                     let instantiation =
                         { RuntimeLibraryTable.Instantiation = instantiation
                           Specification = specification
-                          Constructor = constructor }
+                          Constructor = constructor
+                          Get = getter }
 
                     lookup[ty] <- instantiation
                     instantiation
@@ -671,7 +755,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             fields[i] <-
                 { TranslatedTable.ElementType = table.ElementType
-                  TranslatedTable.Field = generatedTableField }
+                  TranslatedTable.Field = generatedTableField 
+                  TranslatedTable.Operations = runtimeTableReference }
         Unsafe.Array.toImmutable fields
 
     let generatedClassFunctions =
@@ -824,19 +909,24 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     // Helper to generate a static method used when translating indirect calls
     let generateDynamicInvocationHelper =
-        let lookup = Dictionary<FuncType, MethodDefinition>()
-        fun (ty: FuncType) ->
-            match lookup.TryGetValue ty with
+        let lookup = Dictionary<struct(Index * FuncType), MethodDefinition>()
+        fun index (ty: FuncType) ->
+            let key = struct(index, ty)
+            match lookup.TryGetValue key with
             | true, existing -> existing
             | false, _ ->
+                let table = classTableFields[Checked.int32 index]
+                let dynamicInvocationDelegate, invoke = generateDynamicInvocationDelegate ty
                 let signature = getFuncTypeSignature CallingConventionAttributes.Default ty
+                let functionIndexParameter = signature.ParameterTypes.Count
+                let currentModuleParameter = functionIndexParameter + 1
                 signature.ParameterTypes.Add moduleDefinition.CorLibTypeFactory.Int32
                 signature.ParameterTypes.Add classDefinitionSignature
 
                 // TODO: Put the return and parameter types in the helper name
                 let definition =
                     MethodDefinition(
-                        stringBuffer.Clear().Append("call_indirect#").Append(lookup.Count).ToString(),
+                        stringBuffer.Clear().Append("call_indirect$").Append(table.Field.Name).ToString(),
                         MethodAttributes.Static,
                         signature
                     )
@@ -844,11 +934,37 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 classDefinition.Methods.Add definition
 
                 let body = CilMethodBody definition
+                body.LocalVariables.Add(CilLocalVariable coreSystemDelegateSignature)
                 let il = body.Instructions
-                //il.Add(CilInstruction.)
-                definition.CilMethodBody <- body
+                il.Add(CilInstruction.CreateLdarg functionIndexParameter)
+                il.Add(CilInstruction.CreateLdarg currentModuleParameter)
+                il.Add(CilInstruction(CilOpCodes.Ldfld, table.Field))
+                il.Add(CilInstruction(CilOpCodes.Call, table.Operations.Get))
+                il.Add(CilInstruction CilOpCodes.Dup)
+                il.Add(CilInstruction CilOpCodes.Stloc_0)
+                // The delegate should be on top of the stack
+                il.Add(CilInstruction(CilOpCodes.Isinst))
+                let invoke = CilInstruction CilOpCodes.Nop
+                il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel invoke))
 
-                lookup[ty] <- definition
+                // Null reference is on top of stack since conversion failed
+                il.Add(CilInstruction CilOpCodes.Pop)
+                // Slow path, need to allocate a new helper delegate
+                il.Add(CilInstruction(CilOpCodes.Ldtoken, dynamicInvocationDelegate))
+                il.Add(CilInstruction(CilOpCodes.Call, coreSystemGetTypeFromHandle))
+                il.Add(CilInstruction CilOpCodes.Ldloc_0)
+                il.Add(CilInstruction(CilOpCodes.Callvirt, coreSystemDelegateGetTarget))
+                il.Add(CilInstruction CilOpCodes.Ldloc_0)
+                il.Add(CilInstruction(CilOpCodes.Callvirt, coreSystemDelegateGetMethod))
+                il.Add(CilInstruction(CilOpCodes.Call, coreSystemDelegateCreate))
+                il.Add(CilInstruction(CilOpCodes.Castclass, dynamicInvocationDelegate))
+
+                il.Add invoke
+                for i = 0 to functionIndexParameter - 1 do il.Add(CilInstruction.CreateLdarg i)
+                il.Add(CilInstruction(CilOpCodes.Callvirt, invoke))
+                il.Add(CilInstruction CilOpCodes.Ret)
+                definition.CilMethodBody <- body
+                lookup[key] <- definition
                 definition
 
     let generateClassFunctionDefinitionStatic =
