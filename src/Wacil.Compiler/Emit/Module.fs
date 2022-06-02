@@ -55,6 +55,12 @@ type CilInstruction with
         | _ when index <= 255 -> CilInstruction(CilOpCodes.Starg_S, index)
         | _ -> CilInstruction(CilOpCodes.Starg, index)
 
+[<NoComparison; NoEquality>]
+type RuntimeLibraryTable =
+    { Specification: GenericInstanceTypeSignature
+      //Constructor: IMethodDefOrRef
+      }
+
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type RuntimeLibraryReference =
@@ -63,7 +69,9 @@ type RuntimeLibraryReference =
       MemoryConstructor: IMethodDefOrRef
       MemoryI32Load: IMethodDefOrRef
       MemoryI32Store: IMethodDefOrRef
-      MemoryGrow: IMethodDefOrRef }
+      MemoryGrow: IMethodDefOrRef
+      Table: ITypeDefOrRef
+      InstantiatedTable: RefType -> RuntimeLibraryTable }
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type LocalIndex =
@@ -80,6 +88,11 @@ type TranslatedGlobal =
     { Field: FieldDefinition
       Initializer: MethodDefinition
       Setter: MethodDefinition voption }
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type TranslatedTable =
+    { ElementType: RefType
+      Field: FieldDefinition }
 
 [<NoComparison; NoEquality>]
 type TranslatedFunctionImport =
@@ -107,8 +120,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let coreSystemObject =
         coreLibraryReference.CreateTypeReference("System", "Object") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
     
+    let coreSystemObjectSignature = TypeDefOrRefSignature coreSystemObject
+
     let coreSystemObjectConstructor =
         coreSystemObject.CreateMemberReference(
             ".ctor",
@@ -134,6 +148,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             )
         )
         |> moduleDefinition.DefaultImporter.ImportMethod
+
+    // The MulticastDelegate base class is imported here to serve as the base class for any delegate classes generated later
+    let coreSystemMulticastDelegate =
+        coreLibraryReference.CreateTypeReference("System", "MulticastDelegate")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemMulticastDelegateSignature = TypeDefOrRefSignature coreSystemMulticastDelegate
 
     let assemblyDefinition =
         match options.OutputType with
@@ -249,20 +270,36 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             )
             |> moduleDefinition.DefaultImporter.ImportMethodOrNull
 
+        let runtimeTableClass =
+            assembly.CreateTypeReference(runtimeLibraryName, "Table`1") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+        let instantiateRuntimeTable =
+            let lookup = Dictionary<RefType, _>(capacity = 2)
+            fun ty ->
+                match lookup.TryGetValue ty with
+                | true, existing -> existing
+                | false, _ ->
+                    let tableElementType =
+                        match ty with
+                        | FuncRef -> coreSystemMulticastDelegateSignature
+                        | ExternRef -> coreSystemObjectSignature
+
+                    let specification = runtimeTableClass.MakeGenericInstanceType(tableElementType)
+
+                    let instantiation =
+                        { RuntimeLibraryTable.Specification = specification }
+
+                    lookup[ty] <- instantiation
+                    instantiation
+
         { Memory = runtimeMemoryClass
           MemorySignature = runtimeMemoryClassSignature
           MemoryConstructor = runtimeMemoryConstructor
           MemoryI32Load = runtimeMemoryReadInt32
           MemoryI32Store = runtimeMemoryWriteInt32
-          MemoryGrow = runtimeMemoryGrow }
-
-    let coreSystemDelegate =
-        coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    // The MulticastDelegate base class is imported here to serve as the base class for any delegate classes generated later
-    let coreSystemMulticastDelegate =
-        coreLibraryReference.CreateTypeReference("System", "MulticastDelegate")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+          MemoryGrow = runtimeMemoryGrow
+          Table = runtimeTableClass
+          InstantiatedTable = instantiateRuntimeTable }
 
     let getValTypeSignature (ty: ValType) =
         match ty with
@@ -271,7 +308,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | ValType.Num F32 -> moduleDefinition.CorLibTypeFactory.Single
         | ValType.Num F64 -> moduleDefinition.CorLibTypeFactory.Double
         | ValType.Ref ExternRef -> moduleDefinition.CorLibTypeFactory.Object
-        | ValType.Ref FuncRef -> TypeDefOrRefSignature coreSystemDelegate
+        | ValType.Ref FuncRef -> coreSystemMulticastDelegateSignature
         // System.Runtime.Intrinsics.Vector128
         | ValType.Vec _ -> raise(System.NotImplementedException "TODO: Compilation with vectors is not yet supported")
 
@@ -553,6 +590,28 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         fields.ToImmutableArray()
 
+    let classTableFields =
+        let fields = Array.zeroCreate input.Tables.Length
+        for i = 0 to fields.Length - 1 do
+            let table = input.Tables[i]
+            let runtimeTableReference = runtimeLibraryReference.InstantiatedTable table.ElementType
+
+            let generatedTableField =
+                FieldDefinition(
+                    stringBuffer.Clear().Append("table#").Append(i).ToString(),
+                    FieldAttributes.InitOnly,
+                    FieldSignature runtimeTableReference.Specification
+                )
+
+            classDefinition.Fields.Add generatedTableField
+
+            // TODO: Generate a getter property if table is an export
+
+            fields[i] <-
+                { TranslatedTable.ElementType = table.ElementType
+                  TranslatedTable.Field = generatedTableField }
+        Unsafe.Array.toImmutable fields
+
     let generatedClassFunctions =
         let mutable functions = ArrayBuilder<_>.Create(input.Functions.Length)
 
@@ -735,6 +794,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     helper
 
     let inline getIndexedCallee (index: Index) = generateClassFunctionDefinitionStatic(Checked.int32 index)
+
+    //let getIndexedTable (index: Index): TranslatedTable
 
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
