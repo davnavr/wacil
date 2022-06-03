@@ -122,6 +122,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let coreSystemObject =
         coreLibraryReference.CreateTypeReference("System", "Object") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemValueType =
+        coreLibraryReference.CreateTypeReference("System", "ValueType") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
     
     let coreSystemObjectSignature = TypeDefOrRefSignature coreSystemObject
 
@@ -878,6 +881,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let passiveDataSegments = Array.zeroCreate input.Data.Length
     for i = 0 to input.Data.Length - 1 do
+        let data = input.Data[i]
+
         let dataContentsDefinition =
             TypeDefinition(
                 String.empty,
@@ -885,16 +890,19 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 TypeAttributes.NestedAssembly ||| TypeAttributes.ExplicitLayout ||| TypeAttributes.Sealed
             )
 
+        dataContentsDefinition.BaseType <- coreSystemValueType
         implementationDetailsDefinition.NestedTypes.Add dataContentsDefinition
+        dataContentsDefinition.ClassLayout <- ClassLayout(1us, uint32 data.Bytes.Length)
 
         let dataContentsField =
             FieldDefinition(
                 stringBuffer.Clear().Append("bytes$data#").Append(i).ToString(),
-                FieldAttributes.Assembly ||| FieldAttributes.Static ||| FieldAttributes.InitOnly,
+                FieldAttributes.Assembly ||| FieldAttributes.Static ||| FieldAttributes.InitOnly ||| FieldAttributes.HasFieldRva,
                 FieldSignature(TypeDefOrRefSignature dataContentsDefinition)
             )
 
-        dataContentsDefinition.Fields.Add dataContentsField
+        implementationDetailsDefinition.Fields.Add dataContentsField
+        //dataContentsField.FieldRva
         
         ()
 
