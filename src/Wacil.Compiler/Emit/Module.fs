@@ -349,12 +349,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 match lookup.TryGetValue ty with
                 | true, existing -> existing
                 | false, _ ->
-                    let tableElementType =
-                        match ty with
-                        | FuncRef -> coreSystemMulticastDelegateSignature
-                        | ExternRef -> coreSystemObjectSignature
+                    let instantiation =
+                        let tableElementType =
+                            match ty with
+                            | FuncRef -> coreSystemMulticastDelegateSignature
+                            | ExternRef -> coreSystemObjectSignature
+                        runtimeTableClass.MakeGenericInstanceType tableElementType
 
-                    let instantiation = runtimeTableClass.MakeGenericInstanceType(tableElementType)
+                    let elementTypeParameter = GenericParameterSignature(GenericParameterType.Type, 0)
+                    let selfTableClass = runtimeTableClass.MakeGenericInstanceType elementTypeParameter
                     let specification = TypeSpecification instantiation
 
                     let constructor =
@@ -377,10 +380,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                             "Get",
                             MethodSignature(
                                 CallingConventionAttributes.Default,
-                                tableElementType,
+                                elementTypeParameter,
                                 [|
                                     moduleDefinition.CorLibTypeFactory.Int32
-                                    instantiation
+                                    selfTableClass
                                 |]
                             )
                         )
