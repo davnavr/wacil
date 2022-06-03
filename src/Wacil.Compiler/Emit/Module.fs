@@ -876,7 +876,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     TypeDefinition(
                         String.empty,
                         stringBuffer.Clear().Append("funcref#").Append(lookup.Count).ToString(),
-                        TypeAttributes.Sealed
+                        TypeAttributes.Sealed ||| TypeAttributes.NestedPrivate
                     )
 
                 invocationDelegateDefinition.BaseType <- coreSystemMulticastDelegate
