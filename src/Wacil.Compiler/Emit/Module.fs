@@ -218,6 +218,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         coreLibraryReference.CreateTypeReference("System", "RuntimeTypeHandle")
         |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
+    let coreSystemRuntimeFieldHandle =
+        coreLibraryReference.CreateTypeReference("System", "RuntimeFieldHandle")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
     let coreSystemGetTypeFromHandle =
         coreSystemType.CreateMemberReference(
             "GetTypeFromHandle",
@@ -225,6 +229,27 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 CallingConventionAttributes.Default,
                 coreSystemTypeSignature,
                 [| TypeDefOrRefSignature coreSystemRuntimeTypeHandle |]
+            )
+        )
+        |> moduleDefinition.DefaultImporter.ImportMethod
+
+    let coreSystemRuntimeHelpers =
+        coreLibraryReference.CreateTypeReference("System.Runtime.CompilerServices", "RuntimeHelpers")
+        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemArray =
+        coreLibraryReference.CreateTypeReference("System", "Array") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+    let coreSystemRuntimeHelpersInitializeArray =
+        coreSystemRuntimeHelpers.CreateMemberReference(
+            "InitializeArray",
+            new MethodSignature(
+                CallingConventionAttributes.Default,
+                moduleDefinition.CorLibTypeFactory.Void,
+                [|
+                    TypeDefOrRefSignature coreSystemArray
+                    TypeDefOrRefSignature coreSystemRuntimeFieldHandle
+                |]
             )
         )
         |> moduleDefinition.DefaultImporter.ImportMethod
@@ -879,7 +904,22 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                   TranslatedGlobal.Setter = setter }
         Unsafe.Array.toImmutable globals
 
+    let classDefinitionStaticConstructor =
+        lazy
+            let definition =
+                MethodDefinition(
+                    ".cctor",
+                    MethodAttributes.Private ||| MethodAttributes.HideBySig ||| MethodAttributes.SpecialName |||
+                    MethodAttributes.RuntimeSpecialName ||| MethodAttributes.Static,
+                    MethodSignature(CallingConventionAttributes.Default, moduleDefinition.CorLibTypeFactory.Void, Array.empty)
+                )
+
+            classDefinition.Methods.Add definition
+            definition.CilMethodBody <- CilMethodBody definition
+            definition
+
     let passiveDataSegments = Array.zeroCreate input.Data.Length
+    let byteArraySignature = SzArrayTypeSignature moduleDefinition.CorLibTypeFactory.Byte
     for i = 0 to input.Data.Length - 1 do
         let data = input.Data[i]
 
@@ -903,8 +943,30 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         implementationDetailsDefinition.Fields.Add dataContentsField
         dataContentsField.FieldRva <- DataSegment(data.Bytes.AsSpan().ToArray())
-        
-        ()
+
+        let dataBytesField =
+            FieldDefinition(
+                dataContentsField.Name,
+                FieldAttributes.Static ||| FieldAttributes.InitOnly,
+                byteArraySignature
+            )
+
+        classDefinition.Fields.Add dataBytesField
+
+        do
+            let il = classDefinitionStaticConstructor.Value.CilMethodBody.Instructions
+            // Copy from the data field to the byte array
+            il.Add(CilInstruction.CreateLdcI4 data.Bytes.Length)
+            il.Add(CilInstruction(CilOpCodes.Newarr, coreLibraryReference.CreateTypeReference("System", "Byte") |> moduleDefinition.DefaultImporter.ImportTypeOrNull)) // moduleDefinition.CorLibTypeFactory.Byte
+            il.Add(CilInstruction CilOpCodes.Dup)
+            il.Add(CilInstruction(CilOpCodes.Ldtoken, dataContentsField))
+            il.Add(CilInstruction(CilOpCodes.Call, coreSystemRuntimeHelpersInitializeArray))
+            il.Add(CilInstruction(CilOpCodes.Stsfld, dataBytesField))
+
+        passiveDataSegments[i] <-
+            match data.Mode with
+            | ValueNone -> ValueSome dataBytesField
+            | ValueSome _ -> ValueNone
 
     // Maybe Wacil.Runtime could have a sealed FuncRef class that handles dynamic invocation w/ Delegate.CreateDelegate?
     let generateDynamicInvocationDelegate =
@@ -1250,6 +1312,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     // Done generating code for constructor
     classConstructorBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
     classDefinitionConstructor.CilMethodBody <- classConstructorBody
+
+    // Done generating class constructor
+    if classDefinitionStaticConstructor.IsValueCreated then
+        classDefinitionStaticConstructor.Value.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
     moduleDefinition
 
