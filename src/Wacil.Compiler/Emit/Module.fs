@@ -191,7 +191,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let coreSystemDelegateCreate =
         coreSystemDelegate.CreateMemberReference(
-            "Create",
+            "CreateDelegate",
             new MethodSignature(
                 CallingConventionAttributes.Default,
                 coreSystemDelegateSignature,
