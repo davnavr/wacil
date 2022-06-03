@@ -381,8 +381,7 @@ let parseFromStream (stream: Stream) =
             //sectionContentBuffer.Capacity <- size
             //sectionContentBuffer.Seek(0, SeekOrigin.Begin) |> ignore
 
-            let id = LanguagePrimitives.EnumOfValue(sectionTagBuffer[0])
-            match id with
+            match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
             | SectionId.Custom ->
                 { Custom.Name = reader.ReadName()
                   Custom.Contents =

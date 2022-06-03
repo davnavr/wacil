@@ -472,9 +472,11 @@ module Validate =
 
         let data =
             let data = ValueOption.defaultValue ImmutableArray.Empty builder.Data
-            let expectedDataCount = ValueOption.defaultValue 0u builder.DataCount
+            let expectedDataCount = ValueOption.defaultValue (uint32 data.Length) builder.DataCount
+            // Some tools such as wat2wasm omit the data count even when data segments are present
+            // A better way to validate the counts would be to use the expectedDataCount when validating the code before this point
             if expectedDataCount <> uint32 data.Length then
-                failwith "expected %i data segments but got %i" expectedDataCount data.Length
+                failwithf "expected %i data segments but got %i" expectedDataCount data.Length
 
             let mutable segments = Array.zeroCreate data.Length
             for i = 0 to data.Length - 1 do
