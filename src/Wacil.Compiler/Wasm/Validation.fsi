@@ -102,6 +102,17 @@ type ModuleExportLookup =
     member GetTableName: index: Format.Index * name: outref<string> -> bool
     member Item: name: string -> ModuleExport with get
 
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type ValidActiveData =
+    { Memory: Format.Index
+      /// An expression that evaluates to an offset that the data is copied to.
+      Offset: ValidExpression }
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type ValidData =
+    { Bytes: ImmutableArray<byte>
+      Mode: ValidActiveData voption }
+
 [<Sealed>]
 type ValidModule =
     member CustomSections: ImmutableArray<Format.Custom>
@@ -113,6 +124,7 @@ type ValidModule =
     member Globals: ImmutableArray<Global>
     member Exports: ModuleExportLookup
     member Start: int voption
+    member Data: ImmutableArray<ValidData>
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Error =

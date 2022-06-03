@@ -165,6 +165,12 @@ type ModuleExportLookup
     member _.GetTableName(index, name: outref<_>) = tables.TryGetValue(index, &name)
     member _.Item with get name = lookup[name]
 
+[<RequireQualifiedAccess>]
+type ValidActiveData = { Memory: Index; Offset: ValidExpression }
+
+[<RequireQualifiedAccess>]
+type ValidData = { Bytes: ImmutableArray<byte>; Mode: ValidActiveData voption }
+
 [<Sealed>]
 type ValidModule
     (
@@ -176,7 +182,8 @@ type ValidModule
         memories: ImmutableArray<Limits>,
         globals: ImmutableArray<Global>,
         exports: ModuleExportLookup,
-        start: int voption
+        start: int voption,
+        data: ImmutableArray<ValidData>
     )
     =
     member _.CustomSections = custom
@@ -188,6 +195,7 @@ type ValidModule
     member _.Globals = globals
     member _.Exports = exports
     member _.Start = start
+    member _.Data = data
 
 type Error =
     | MultiMemoryNotSupported
@@ -460,6 +468,31 @@ module Validate =
 
         let tables = ValueOption.defaultValue ImmutableArray.Empty builder.Tables
 
+        let memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories
+
+        let data =
+            let data = ValueOption.defaultValue ImmutableArray.Empty builder.Data
+            let expectedDataCount = ValueOption.defaultValue 0u builder.DataCount
+            if expectedDataCount <> uint32 data.Length then
+                failwith "expected %i data segments but got %i" expectedDataCount data.Length
+
+            let mutable segments = Array.zeroCreate data.Length
+            for i = 0 to data.Length - 1 do
+                let dataSegment = data[i]
+                segments[i] <-
+                    { ValidData.Bytes = dataSegment.Bytes
+                      ValidData.Mode =
+                        match dataSegment.Mode with
+                        | DataMode.Passive -> ValueNone
+                        | DataMode.Active(memory, offset) ->
+                            ValueSome
+                                { ValidActiveData.Memory = memory
+                                  ValidActiveData.Offset =
+                                    { ValidExpression.Source = offset
+                                      Expression = Unchecked.defaultof<_>
+                                      BranchTargets = Unchecked.defaultof<_> } } }
+            Unsafe.Array.toImmutable segments
+
         let exports =
             let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
             let lookup = Dictionary(exports.Length, System.StringComparer.Ordinal)
@@ -683,6 +716,22 @@ module Validate =
             if not indices.IsDefaultOrEmpty then failwith "TODO: Global contains branch instructions!"
             glbl.Value.Expression <- instructions
             glbl.Value.BranchTargets <- ImmutableArray.Empty
+
+        for segment in data do
+            match segment.Mode with
+            | ValueNone -> ()
+            | ValueSome activeDataSegment ->
+                let instructions, indices =
+                    validateExpression
+                        operandTypeStack
+                        { FuncType.Parameters = ImmutableArray.Empty
+                          Results = ImmutableArray.Create(item = ValType.Num I32) }
+                        ImmutableArray.Empty
+                        activeDataSegment.Offset.Source
+
+                if not indices.IsDefaultOrEmpty then failwith "TODO: Data segment offset contains branch instructions!"
+                activeDataSegment.Offset.Expression <- instructions
+                activeDataSegment.Offset.BranchTargets <- ImmutableArray.Empty
         
         match error with
         | ValueSome error' -> Error(error')
@@ -692,8 +741,9 @@ module Validate =
             imports = imports,
             functions = functions,
             tables = tables,
-            memories = ValueOption.defaultValue ImmutableArray.Empty builder.Memories,
+            memories = memories,
             globals = globals,
             exports = exports,
-            start = ValueOption.map Checked.int32 builder.Start
+            start = ValueOption.map Checked.int32 builder.Start,
+            data = data
         ))
