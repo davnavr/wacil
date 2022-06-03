@@ -454,6 +454,29 @@ let parseFromStream (stream: Stream) =
                 let code = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionBuilderCache
                 sections.Add(Section.Code(Unsafe.Array.toImmutable code))
+            | SectionId.Data ->
+                let data = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                for i = 0 to data.Length - 1 do
+                    data[i] <-
+                        match reader.ReadUnsignedInteger() |> Checked.uint32 with
+                        | 0u ->
+                            let expression = parseExpression reader &instructionBuilderCache
+                            let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                            reader.ReadAll(Span bytes)
+                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(0u, expression) }
+                        | 1u ->
+                            let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                            reader.ReadAll(Span bytes)
+                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Passive }
+                        | 2u ->
+                            let index = reader.ReadUnsignedInteger() |> Checked.uint32
+                            let expression = parseExpression reader &instructionBuilderCache
+                            let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                            reader.ReadAll(Span bytes)
+                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(index, expression) }
+                        | bad -> failwithf "0x%02X is not a valid data kind" bad
+                sections.Add(Section.Data(Unsafe.Array.toImmutable data))
+            | SectionId.DataCount -> sections.Add(Section.DataCount(reader.ReadUnsignedInteger() |> Checked.uint32))
             | unknown -> failwithf "unknown section id 0x%02X" (uint8 unknown)
 
             let actualSectionSize = reader.Offset - sectionStartOffset
