@@ -435,6 +435,16 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     moduleDefinition.GetOrCreateModuleType().BaseType <- coreSystemObject
 
+    let implementationDetailsDefinition =
+        TypeDefinition(
+            String.empty,
+            "<PrivateImplementationDetails>",
+            TypeAttributes.Sealed
+        )
+
+    implementationDetailsDefinition.BaseType <- coreSystemObject
+    moduleDefinition.TopLevelTypes.Add implementationDetailsDefinition
+
     let delegateConstructorSignature =
         MethodSignature(
             CallingConventionAttributes.HasThis,
@@ -633,6 +643,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         body
 
+    // TODO: Maybe move memory initalization further down?
     let classMemoryFields =
         let mutable fields = ArrayBuilder<_>.Create(input.Memories.Length)
 
@@ -864,6 +875,28 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                   TranslatedGlobal.Initializer = initializer
                   TranslatedGlobal.Setter = setter }
         Unsafe.Array.toImmutable globals
+
+    let passiveDataSegments = Array.zeroCreate input.Data.Length
+    for i = 0 to input.Data.Length - 1 do
+        let dataContentsDefinition =
+            TypeDefinition(
+                String.empty,
+                stringBuffer.Clear().Append("value$data#").Append(i).ToString(),
+                TypeAttributes.NestedAssembly ||| TypeAttributes.ExplicitLayout ||| TypeAttributes.Sealed
+            )
+
+        implementationDetailsDefinition.NestedTypes.Add dataContentsDefinition
+
+        let dataContentsField =
+            FieldDefinition(
+                stringBuffer.Clear().Append("bytes$data#").Append(i).ToString(),
+                FieldAttributes.Assembly ||| FieldAttributes.Static ||| FieldAttributes.InitOnly,
+                FieldSignature(TypeDefOrRefSignature dataContentsDefinition)
+            )
+
+        dataContentsDefinition.Fields.Add dataContentsField
+        
+        ()
 
     // Maybe Wacil.Runtime could have a sealed FuncRef class that handles dynamic invocation w/ Delegate.CreateDelegate?
     let generateDynamicInvocationDelegate =
