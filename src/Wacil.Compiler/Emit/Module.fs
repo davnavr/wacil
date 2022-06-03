@@ -902,7 +902,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             )
 
         implementationDetailsDefinition.Fields.Add dataContentsField
-        //dataContentsField.FieldRva
+        dataContentsField.FieldRva <- DataSegment(data.Bytes.AsSpan().ToArray())
         
         ()
 
