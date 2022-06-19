@@ -1,4 +1,13 @@
+#r "nuget: Unquote"
 #r "./out/Wacil.Runtime.dll"
 #r "./out/data_segments.dll"
 
-let instance = data_segments()
+open Swensen.Unquote
+
+// necessary since Span cannot be stored in static fields
+do
+    let instance = data_segments()
+    let buffer = System.Span<byte>(Array.zeroCreate 4)
+    instance.memory.Read(0x200u, buffer)
+    let bytes = buffer.ToArray()
+    test <@ bytes = "Hey?"B @>

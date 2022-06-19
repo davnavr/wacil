@@ -154,11 +154,28 @@ namespace Wacil.Runtime {
             for (int i = start.Page; i <= end.Page; i++) {
                 var length = remaining.Length > PageSize ? PageSize : remaining.Length;
 
-                if (i == start.Page) {
-                    length -= start.Offset;
+                if (i == start.Page && length > start.RemainingBytes) {
+                    length = start.RemainingBytes;
                 }
 
                 remaining.Slice(0, length).CopyTo(new Span<byte>(pages[i], i == start.Page ? start.Offset : 0, length));
+                remaining = remaining.Slice(length);
+            }
+        }
+
+        public void Read(uint address, Span<byte> destination) {
+            // TODO: Avoid code duplication with Write
+            var start = Location.FromAddress(address);
+            var end = Location.FromAddress(address + (uint)destination.Length);
+            var remaining = destination;
+            for (int i = start.Page; i <= end.Page; i++) {
+                var length = remaining.Length > PageSize ? PageSize : remaining.Length;
+
+                if (i == start.Page && length > start.RemainingBytes) {
+                    length = start.RemainingBytes;
+                }
+
+                new Span<byte>(pages[i], i == start.Page ? start.Offset : 0, length).CopyTo(remaining);
                 remaining = remaining.Slice(length);
             }
         }
