@@ -143,5 +143,29 @@ namespace Wacil.Runtime {
                 memory.WriteInt32Slow(location, value);
             }
         }
+
+        /// <summary>
+        /// Writes the specified <paramref name="bytes"/> at the specified <paramref name="address"/>.
+        /// </summary>
+        public void Write(uint address, Span<byte> bytes) {
+            var start = Location.FromAddress(address);
+            var end = Location.FromAddress(address + (uint)bytes.Length);
+            var remaining = bytes;
+            for (int i = start.Page; i <= end.Page; i++) {
+                var length = remaining.Length > PageSize ? PageSize : remaining.Length;
+
+                if (i == start.Page) {
+                    length -= start.Offset;
+                }
+
+                remaining.Slice(0, length).CopyTo(new Span<byte>(pages[i], i == start.Page ? start.Offset : 0, length));
+                remaining = remaining.Slice(length);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Write(uint address, byte[] bytes) {
+            Write(address, new Span<byte>(bytes));
+        }
     }
 }

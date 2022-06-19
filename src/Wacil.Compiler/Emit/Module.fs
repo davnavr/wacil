@@ -71,6 +71,7 @@ type RuntimeLibraryReference =
       MemoryI32Load: IMethodDefOrRef
       MemoryI32Store: IMethodDefOrRef
       MemoryGrow: IMethodDefOrRef
+      MemoryWriteArray: IMethodDefOrRef
       Table: ITypeDefOrRef
       InstantiatedTable: RefType -> RuntimeLibraryTable }
 
@@ -254,6 +255,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         )
         |> moduleDefinition.DefaultImporter.ImportMethod
 
+    let byteArraySignature = SzArrayTypeSignature moduleDefinition.CorLibTypeFactory.Byte
+
     let assemblyDefinition =
         match options.OutputType with
         | OutputType.Assembly ->
@@ -368,6 +371,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             )
             |> moduleDefinition.DefaultImporter.ImportMethodOrNull
 
+        let runtimeMemoryWriteArray =
+            runtimeMemoryClass.CreateMemberReference(
+                "Write",
+                new MethodSignature(
+                    CallingConventionAttributes.HasThis,
+                    moduleDefinition.CorLibTypeFactory.Void,
+                    [| moduleDefinition.CorLibTypeFactory.UInt32; byteArraySignature |]
+                )
+            )
+            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
+
         let runtimeTableClass =
             assembly.CreateTypeReference(runtimeLibraryName, "Table`1") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
@@ -431,6 +445,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
           MemoryI32Load = runtimeMemoryReadInt32
           MemoryI32Store = runtimeMemoryWriteInt32
           MemoryGrow = runtimeMemoryGrow
+          MemoryWriteArray = runtimeMemoryWriteArray
           Table = runtimeTableClass
           InstantiatedTable = instantiateRuntimeTable }
 
@@ -919,7 +934,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             definition
 
     let passiveDataSegments = Array.zeroCreate input.Data.Length
-    let byteArraySignature = SzArrayTypeSignature moduleDefinition.CorLibTypeFactory.Byte
+    let activeDataSegments = ResizeArray(capacity = input.Data.Length)
     for i = 0 to input.Data.Length - 1 do
         let data = input.Data[i]
 
@@ -963,10 +978,34 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction(CilOpCodes.Call, coreSystemRuntimeHelpersInitializeArray))
             il.Add(CilInstruction(CilOpCodes.Stsfld, dataBytesField))
 
-        passiveDataSegments[i] <-
-            match data.Mode with
-            | ValueNone -> ValueSome dataBytesField
-            | ValueSome _ -> ValueNone
+        match data.Mode with
+        | ValueNone -> passiveDataSegments[i] <- ValueSome dataBytesField
+        | ValueSome activeDataSegment ->
+            // Generate method that returns the offset that the data is copied to
+            let dataOffsetHelper =
+                MethodDefinition(
+                    stringBuffer.Clear().Append("offset$data#").Append(i).ToString(),
+                    MethodAttributes.HideBySig,
+                    MethodSignature(
+                        CallingConventionAttributes.Default,
+                        moduleDefinition.CorLibTypeFactory.Int32,
+                        System.Array.Empty()
+                    )
+                )
+
+            classDefinition.Methods.Add dataOffsetHelper
+
+            // Generate code that copies from active data segment to memory
+            let il = classConstructorBody.Instructions
+            let memory = classMemoryFields[Checked.int32 activeDataSegment.Memory]
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction CilOpCodes.Dup)
+            il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+            il.Add(CilInstruction(CilOpCodes.Call, dataOffsetHelper))
+            il.Add(CilInstruction(CilOpCodes.Ldsfld, dataBytesField))
+            il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryWriteArray))
+
+            activeDataSegments.Add(activeDataSegment.Offset, dataOffsetHelper)
 
     // Maybe Wacil.Runtime could have a sealed FuncRef class that handles dynamic invocation w/ Delegate.CreateDelegate?
     let generateDynamicInvocationDelegate =
@@ -1155,6 +1194,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     //let getIndexedTable (index: Index): TranslatedTable
 
+    // TODO: Figure out if more efficient to have an explicit "this" parameter be the last parameter?
     let emitExpressionCode
         (instructionBlockStack: ArrayBuilder<_> ref)
         (instructionOffsetBuilder: ResizeArray<_>)
@@ -1300,6 +1340,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let body = CilMethodBody translated.Initializer
             emitExpressionCode instructionBlockStack instructionOffsetBuilder 0 ImmutableArray.Empty original.Value body
             translated.Initializer.CilMethodBody <- body
+
+        for (expression, helper) in activeDataSegments do
+            let body = CilMethodBody helper
+            emitExpressionCode instructionBlockStack instructionOffsetBuilder 0 ImmutableArray.Empty expression body
+            helper.CilMethodBody <- body
 
     match input.Start with
     | ValueSome index ->
