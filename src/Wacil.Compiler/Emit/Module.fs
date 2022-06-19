@@ -999,8 +999,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let il = classConstructorBody.Instructions
             let memory = classMemoryFields[Checked.int32 activeDataSegment.Memory]
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
-            il.Add(CilInstruction CilOpCodes.Dup)
             il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction(CilOpCodes.Call, dataOffsetHelper))
             il.Add(CilInstruction(CilOpCodes.Ldsfld, dataBytesField))
             il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryWriteArray))
