@@ -987,7 +987,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     stringBuffer.Clear().Append("offset$data#").Append(i).ToString(),
                     MethodAttributes.HideBySig,
                     MethodSignature(
-                        CallingConventionAttributes.Default,
+                        CallingConventionAttributes.HasThis,
                         moduleDefinition.CorLibTypeFactory.Int32,
                         System.Array.Empty()
                     )
