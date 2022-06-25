@@ -51,6 +51,29 @@ type InvalidSectionOrderException (current: Format.SectionId, next: Format.Secti
     member _.CurrentSection = current
     member _.NextSection = next
 
+type FunctionSectionCountException (section: Format.SectionId, expected: int, actual: int) =
+    inherit
+        ValidationException(
+            sprintf
+                "The %O section used for functions was expected to contain %i items, but got %i items"
+                section
+                expected
+                actual
+        )
+
+    member _.Section = section
+
+type DataSegmentCountException (expected: int, actual: int) =
+    inherit ValidationException(sprintf "Expected %i data segments but got %i" expected actual)
+
+    member _.Expected = expected
+    member _.Actual = actual
+
+type DuplicateExportException (name: string) =
+    inherit ValidationException(sprintf "An export corresponding to the name \"%s\" already exists" name)
+
+    member _.Name = name
+
 module Validate =
     let errwith format = Printf.kprintf (fun msg -> raise(ValidationException msg)) format
 
@@ -286,37 +309,35 @@ module Validate =
             let mutable localTypesBuilder = ArrayBuilder<Format.ValType>.Create()
 
             if expectedFunctionCount <> moduleFunctionBodies.Length then
-                error <-
-                    ValueSome(FunctionSectionCountMismatch(SectionId.Code, expectedFunctionCount, moduleFunctionBodies.Length))
-                ImmutableArray.Empty
-            else
-                let mutable moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
+                raise(FunctionSectionCountException(Format.SectionId.Code, expectedFunctionCount, moduleFunctionBodies.Length))
+                
+            let mutable moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
 
-                for i = 0 to expectedFunctionCount - 1 do
-                    let body = moduleFunctionBodies[i]
-                    
-                    localTypesBuilder.Clear()
-                    for local in body.Locals do
-                        for i = 0 to int local.Count - 1 do
-                            localTypesBuilder.Add local.Type
-                    
-                    moduleFunctionDefinitions.Add
-                        { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
-                          LocalTypes = localTypesBuilder.ToImmutableArray()
-                          Body =
-                            { ValidExpression.Source = body.Body
-                              Expression = Unchecked.defaultof<_>
-                              BranchTargets = Unchecked.defaultof<_> } }
+            for i = 0 to expectedFunctionCount - 1 do
+                let body = moduleFunctionBodies[i]
+                
+                localTypesBuilder.Clear()
+                for local in body.Locals do
+                    for i = 0 to int local.Count - 1 do
+                        localTypesBuilder.Add local.Type
+                
+                moduleFunctionDefinitions.Add
+                    { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
+                      LocalTypes = localTypesBuilder.ToImmutableArray()
+                      Body =
+                        { ValidExpression.Source = body.Body
+                          Expression = Unchecked.defaultof<_>
+                          BranchTargets = Unchecked.defaultof<_> } }
 
-                moduleFunctionDefinitions.ToImmutableArray()
+            moduleFunctionDefinitions.ToImmutableArray()
 
         let data =
             let data = itemsOrEmpty contents.Data
-            let expectedDataCount = ValueOption.defaultValue (uint32 data.Length) contents.DataCount
+            let expectedDataCount = ValueOption.defaultValue data.Length (ValueOption.map Checked.int32 contents.DataCount)
             // Some tools such as wat2wasm omit the data count even when data segments are present
             // A better way to validate the counts would be to use the expectedDataCount when validating the code before this point
-            if expectedDataCount <> uint32 data.Length then
-                failwithf "expected %i data segments but got %i" expectedDataCount data.Length
+            if expectedDataCount <> data.Length then
+                raise(DataSegmentCountException(expectedDataCount, data.Length))
 
             let mutable segments = Array.zeroCreate data.Length
             for i = 0 to data.Length - 1 do
@@ -325,8 +346,8 @@ module Validate =
                     { ValidData.Bytes = dataSegment.Bytes
                       ValidData.Mode =
                         match dataSegment.Mode with
-                        | DataMode.Passive -> ValueNone
-                        | DataMode.Active(memory, offset) ->
+                        | Format.DataMode.Passive -> ValueNone
+                        | Format.DataMode.Active(memory, offset) ->
                             ValueSome
                                 { ValidActiveData.Memory = memory
                                   ValidActiveData.Offset =
@@ -336,30 +357,30 @@ module Validate =
             Unsafe.Array.toImmutable segments
 
         let exports =
-            let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
+            let exports = ValueOption.defaultValue ImmutableArray.Empty contents.Exports
             let lookup = Dictionary(exports.Length, System.StringComparer.Ordinal)
-            let memoryNames = Dictionary()
+            let memoryNames = Dictionary() // TODO: Use arrays in export lookup
             let functionNames = Dictionary()
             let tableNames = Dictionary()
             for e in exports do
                 match lookup.TryGetValue e.Name with
-                | true, _ -> failwithf "Duplicate export %s" e.Name
+                | true, _ -> raise(DuplicateExportException e.Name)
                 | false, _ ->
                     lookup[e.Name] <-
                         match e.Description with
-                        | ExportDesc.Func index ->
-                            functionNames.Add(index, e.Name)
+                        | Format.ExportDesc.Func index ->
+                            functionNames.Add(Checked.int32 index, e.Name)
                             let i = Checked.int32 index - imports.Functions.Length
                             if i < 0 then
                                 failwith "TODO: Fix, attempt was made to exprot a function import. Is this behavior allowed?"
                             ModuleExport.Function functions[i]
-                        | ExportDesc.Table index ->
-                            tableNames.Add(index, e.Name)
+                        | Format.ExportDesc.Table index ->
+                            tableNames.Add(Checked.int32 index, e.Name)
                             ModuleExport.Table
-                        | ExportDesc.Mem index ->
-                            memoryNames.Add(index, e.Name)
-                            ModuleExport.Memory index
-                        | ExportDesc.Global index ->
+                        | Format.ExportDesc.Mem index ->
+                            memoryNames.Add(Checked.int32 index, e.Name)
+                            ModuleExport.Memory(Checked.int32 index)
+                        | Format.ExportDesc.Global index ->
                             ModuleExport.Global
             ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
 

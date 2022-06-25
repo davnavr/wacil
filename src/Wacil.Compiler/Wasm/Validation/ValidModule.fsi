@@ -38,6 +38,28 @@ type InvalidSectionOrderException =
     /// The section that should be placed before the current section.
     member NextSection: Format.SectionId
 
+[<Sealed; Class>]
+type FunctionSectionCountException =
+    inherit ValidationException
+
+    member Section: Format.SectionId
+    member ExpectedCount: int
+    member ActualCount: int
+
+/// Thrown when the number of data segments is not equal to the data count.
+[<Sealed; Class>]
+type DataSegmentCountException =
+    inherit ValidationException
+
+    member Expected: int
+    member Actual: int
+
+[<Sealed; Class>]
+type DuplicateExportException =
+    inherit ValidationException
+
+    member Name: string
+
 [<RequireQualifiedAccess>]
 module Validate =
     /// <summary>Performs validation on a WebAssembly module containing the given <paramref name="sections"/>.</summary>
