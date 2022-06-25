@@ -1,7 +1,9 @@
 namespace Wacil.Compiler.Wasm.Validation
 
 open System.Collections.Immutable
+open System.Collections.Generic
 
+open Wacil.Compiler.Helpers
 open Wacil.Compiler.Helpers.Collections
 
 open Wacil.Compiler.Wasm
@@ -201,7 +203,167 @@ module Validate =
                         order <- SectionOrder.Export
                         contents.Data <- ValueSome data
 
-        failwith "A"
+        let inline itemsOrEmpty items = ValueOption.defaultValue ImmutableArray.Empty items
+
+        // The order used to validate a module's sections as in the specification is not exactly followed here
+
+        let types = itemsOrEmpty contents.Types
+        let tables = itemsOrEmpty contents.Tables
+        let memories = itemsOrEmpty contents.Memories
+
+        let imports =
+            // Group all imports by module name
+            let moduleImportLookup =
+                let imports = itemsOrEmpty contents.Imports
+                let lookup = if imports.IsEmpty then null else Dictionary(capacity = imports.Length)
+                for import in imports do
+                    // Loop is skipped if lookup is null
+                    let entries =
+                        match lookup.TryGetValue import.Module with
+                        | true, entries' -> entries'
+                        | false, _ ->
+                            let entries' = List()
+                            lookup[import.Module] <- entries'
+                            entries'
+
+                    entries.Add(import)
+                lookup
+
+            if not(isNull moduleImportLookup) then
+                let actualModuleImports = Dictionary(capacity = moduleImportLookup.Count)
+                let mutable functions = ArrayBuilder<FunctionImport>.Create()
+                let mutable tables = ArrayBuilder<TableImport>.Create()
+                let mutable memories = ArrayBuilder<MemoryImport>.Create()
+                let mutable globals = ArrayBuilder<GlobalImport>.Create()
+                let mutable allFunctions = ArrayBuilder<_>.Create()
+
+                for KeyValue(importModuleName, moduleImports) in moduleImportLookup do
+                    functions.Clear()
+                    tables.Clear()
+                    memories.Clear()
+                    globals.Clear()
+
+                    for import in moduleImports do
+                        match import.Description with
+                        | Format.ImportDesc.Func index ->
+                            let func = { FunctionImport.Name = import.Name; FunctionImport.Type = types[Checked.int32 index] }
+                            functions.Add func
+                            allFunctions.Add(struct(importModuleName, func))
+                        | Format.ImportDesc.Table ty -> tables.Add { TableImport.Name = import.Name; TableImport.Type = ty }
+                        | Format.ImportDesc.Mem limits -> memories.Add { MemoryImport.Name = import.Name; Limits = limits }
+                        | Format.ImportDesc.Global ty -> globals.Add { GlobalImport.Name = import.Name; Type = ty }
+
+                    actualModuleImports[importModuleName] <- 
+                        { ModuleImports.Functions = functions.ToImmutableArray()
+                          ModuleImports.Tables = tables.ToImmutableArray()
+                          ModuleImports.Memories = memories.ToImmutableArray()
+                          ModuleImports.Globals = globals.ToImmutableArray() }
+
+                ModuleImportLookup(
+                    actualModuleImports,
+                    allFunctions.ToImmutableArray()
+                )
+            else
+                ModuleImportLookup(null, ImmutableArray.Empty)
+
+        let globals =
+            let moduleGlobalDefinitions = itemsOrEmpty contents.Globals
+            let mutable globals = Array.zeroCreate moduleGlobalDefinitions.Length
+            for i = 0 to globals.Length - 1 do
+                let glbl = moduleGlobalDefinitions[i]
+                globals[i] <-
+                    { Global.Type = glbl.Type
+                      Global.Value =
+                        { ValidExpression.Source = glbl.Expression
+                          Expression = Unchecked.defaultof<_>
+                          BranchTargets = Unchecked.defaultof<_> } }
+            Unsafe.Array.toImmutable globals
+
+        let functions =
+            let moduleFunctionTypes = itemsOrEmpty contents.Functions
+            let moduleFunctionBodies = itemsOrEmpty contents.Code
+            let expectedFunctionCount = moduleFunctionTypes.Length
+            let mutable localTypesBuilder = ArrayBuilder<Format.ValType>.Create()
+
+            if expectedFunctionCount <> moduleFunctionBodies.Length then
+                error <-
+                    ValueSome(FunctionSectionCountMismatch(SectionId.Code, expectedFunctionCount, moduleFunctionBodies.Length))
+                ImmutableArray.Empty
+            else
+                let mutable moduleFunctionDefinitions = ArrayBuilder<Function>.Create expectedFunctionCount
+
+                for i = 0 to expectedFunctionCount - 1 do
+                    let body = moduleFunctionBodies[i]
+                    
+                    localTypesBuilder.Clear()
+                    for local in body.Locals do
+                        for i = 0 to int local.Count - 1 do
+                            localTypesBuilder.Add local.Type
+                    
+                    moduleFunctionDefinitions.Add
+                        { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
+                          LocalTypes = localTypesBuilder.ToImmutableArray()
+                          Body =
+                            { ValidExpression.Source = body.Body
+                              Expression = Unchecked.defaultof<_>
+                              BranchTargets = Unchecked.defaultof<_> } }
+
+                moduleFunctionDefinitions.ToImmutableArray()
+
+        let data =
+            let data = itemsOrEmpty contents.Data
+            let expectedDataCount = ValueOption.defaultValue (uint32 data.Length) contents.DataCount
+            // Some tools such as wat2wasm omit the data count even when data segments are present
+            // A better way to validate the counts would be to use the expectedDataCount when validating the code before this point
+            if expectedDataCount <> uint32 data.Length then
+                failwithf "expected %i data segments but got %i" expectedDataCount data.Length
+
+            let mutable segments = Array.zeroCreate data.Length
+            for i = 0 to data.Length - 1 do
+                let dataSegment = data[i]
+                segments[i] <-
+                    { ValidData.Bytes = dataSegment.Bytes
+                      ValidData.Mode =
+                        match dataSegment.Mode with
+                        | DataMode.Passive -> ValueNone
+                        | DataMode.Active(memory, offset) ->
+                            ValueSome
+                                { ValidActiveData.Memory = memory
+                                  ValidActiveData.Offset =
+                                    { ValidExpression.Source = offset
+                                      Expression = Unchecked.defaultof<_>
+                                      BranchTargets = Unchecked.defaultof<_> } } }
+            Unsafe.Array.toImmutable segments
+
+        let exports =
+            let exports = ValueOption.defaultValue ImmutableArray.Empty builder.Exports
+            let lookup = Dictionary(exports.Length, System.StringComparer.Ordinal)
+            let memoryNames = Dictionary()
+            let functionNames = Dictionary()
+            let tableNames = Dictionary()
+            for e in exports do
+                match lookup.TryGetValue e.Name with
+                | true, _ -> failwithf "Duplicate export %s" e.Name
+                | false, _ ->
+                    lookup[e.Name] <-
+                        match e.Description with
+                        | ExportDesc.Func index ->
+                            functionNames.Add(index, e.Name)
+                            let i = Checked.int32 index - imports.Functions.Length
+                            if i < 0 then
+                                failwith "TODO: Fix, attempt was made to exprot a function import. Is this behavior allowed?"
+                            ModuleExport.Function functions[i]
+                        | ExportDesc.Table index ->
+                            tableNames.Add(index, e.Name)
+                            ModuleExport.Table
+                        | ExportDesc.Mem index ->
+                            memoryNames.Add(index, e.Name)
+                            ModuleExport.Memory index
+                        | ExportDesc.Global index ->
+                            ModuleExport.Global
+            ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
+
+        // TODO: Validate expressions
 
         ValidModule(
             custom = contents.CustomSections.ToImmutableArray(),
@@ -212,6 +374,6 @@ module Validate =
             memories = memories,
             globals = globals,
             exports = exports,
-            start = ValueOption.map Checked.int32 builder.Start,
+            start = ValueOption.map Checked.int32 contents.Start,
             data = data
         )

@@ -1,6 +1,7 @@
 namespace Wacil.Compiler.Wasm.Validation.Table
 
 open System.Collections.Immutable
+open System.Collections.Generic
 
 open Wacil.Compiler.Wasm
 
@@ -27,12 +28,14 @@ type ModuleImports =
       
 [<Sealed>]
 type ModuleImportLookup =
+    internal new: lookup: Dictionary<string, ModuleImports> * functions: ImmutableArray<struct(string * FunctionImport)> -> unit
+
     member Item: moduleImportName: string -> ModuleImports with get
     member Functions: ImmutableArray<struct(string * FunctionImport)>
 
     member Count: int
 
-    interface System.Collections.Generic.IReadOnlyDictionary<string, ModuleImports>
+    interface IReadOnlyDictionary<string, ModuleImports>
 
 // TODO: Label and instruction stuff
 
@@ -60,6 +63,12 @@ type ModuleExport =
 
 [<Sealed>]
 type ModuleExportLookup =
+    internal new:
+        memories: Dictionary<Index, string> *
+        functions: Dictionary<Index, string> *
+        tables: Dictionary<Index, string> *
+        lookup: Dictionary<string, ModuleExport> -> unit
+
     member GetMemoryName: index: Index * name: outref<string> -> bool
     member GetFunctionName: index: Index * name: outref<string> -> bool
     member GetTableName: index: Index * name: outref<string> -> bool
