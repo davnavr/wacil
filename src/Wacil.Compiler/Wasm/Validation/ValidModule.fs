@@ -296,10 +296,7 @@ module Validate =
                 let glbl = moduleGlobalDefinitions[i]
                 globals[i] <-
                     { Global.Type = glbl.Type
-                      Global.Value =
-                        { ValidExpression.Source = glbl.Expression
-                          Expression = Unchecked.defaultof<_>
-                          BranchTargets = Unchecked.defaultof<_> } }
+                      Global.Value = ValidExpression glbl.Expression }
             Unsafe.Array.toImmutable globals
 
         let functions =
@@ -324,10 +321,7 @@ module Validate =
                 moduleFunctionDefinitions.Add
                     { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
                       LocalTypes = localTypesBuilder.ToImmutableArray()
-                      Body =
-                        { ValidExpression.Source = body.Body
-                          Expression = Unchecked.defaultof<_>
-                          BranchTargets = Unchecked.defaultof<_> } }
+                      Body = ValidExpression body.Body }
 
             moduleFunctionDefinitions.ToImmutableArray()
 
@@ -349,11 +343,8 @@ module Validate =
                         | Format.DataMode.Passive -> ValueNone
                         | Format.DataMode.Active(memory, offset) ->
                             ValueSome
-                                { ValidActiveData.Memory = memory
-                                  ValidActiveData.Offset =
-                                    { ValidExpression.Source = offset
-                                      Expression = Unchecked.defaultof<_>
-                                      BranchTargets = Unchecked.defaultof<_> } } }
+                                { ValidActiveData.Memory = Checked.int32 memory
+                                  ValidActiveData.Offset = ValidExpression offset } }
             Unsafe.Array.toImmutable segments
 
         let exports =

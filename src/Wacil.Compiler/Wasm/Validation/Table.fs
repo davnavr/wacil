@@ -84,10 +84,12 @@ type ValidInstruction =
 
 [<Sealed>]
 type ValidExpression =
+    val private source: ImmutableArray<Instruction>
     val mutable private instructions: ImmutableArray<ValidInstruction>
     val mutable private resultTypes: ImmutableArray<OperandType>
 
-    internal new() = { instructions = Unchecked.defaultof<_>; resultTypes = Unchecked.defaultof<_> }
+    internal new(source) =
+        { source = source; instructions = Unchecked.defaultof<_>; resultTypes = Unchecked.defaultof<_> }
 
     member expr.SetInstructions instructions = expr.instructions <- instructions
     member expr.SetResultTypes resultTypes = expr.resultTypes <- resultTypes
