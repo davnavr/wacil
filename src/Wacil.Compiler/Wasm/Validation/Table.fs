@@ -3,6 +3,7 @@ namespace Wacil.Compiler.Wasm.Validation.Table
 open System.Collections.Immutable
 open System.Collections.Generic
 
+open Wacil.Compiler.Wasm
 open Wacil.Compiler.Wasm.Format
 
 type Index = int
@@ -27,7 +28,7 @@ type ModuleImports =
       Globals: ImmutableArray<GlobalImport> }
 
 [<Sealed>]
-type ModuleImportLookup
+type ModuleImportLookup internal
     (
         lookup: Dictionary<string, ModuleImports>,
         functions: ImmutableArray<struct(string * FunctionImport)>
@@ -52,10 +53,51 @@ type ModuleImportLookup
         member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = lookup.GetEnumerator() :> System.Collections.IEnumerator
 
-// TODO: Label and instruction stuff
+[<Struct>]
+type Unreachable = Unreachable | Reachable
+
+type OperandType =
+    | ValType of ValType
+    | UnknownType
+
+module OperandType =
+    let (|IsNumType|) ty =
+        match ty with
+        | ValType(ValType.Num _) | UnknownType -> true
+        | ValType(ValType.Ref _ | ValType.Vec _) -> false
+
+    let (|IsVecType|) ty =
+        match ty with
+        | ValType(ValType.Vec _) | UnknownType -> true
+        | ValType(ValType.Ref _ | ValType.Num _) -> false
+
+    let (|IsRefType|) ty =
+        match ty with
+        | ValType(ValType.Ref _) | UnknownType -> true
+        | ValType(ValType.Num _ | ValType.Vec _) -> false
+
+type ValidInstruction =
+    { Instruction: Instruction
+      PoppedTypes: ImmutableArray<OperandType>
+      PushedTypes: ImmutableArray<OperandType>
+      Unreachable: Unreachable }
 
 [<Sealed>]
-type ValidExpression internal () = class end
+type ValidExpression =
+    val mutable private instructions: ImmutableArray<ValidInstruction>
+    val mutable private resultTypes: ImmutableArray<OperandType>
+
+    internal new() = { instructions = Unchecked.defaultof<_>; resultTypes = Unchecked.defaultof<_> }
+
+    member expr.SetInstructions instructions = expr.instructions <- instructions
+    member expr.SetResultTypes resultTypes = expr.resultTypes <- resultTypes
+
+    static member inline private EnsureNotDefault(items: ImmutableArray<'a>) =
+        if items.IsDefault then invalidOp "expression was not set"
+        items
+
+    member expr.Instructions = ValidExpression.EnsureNotDefault expr.instructions
+    member expr.ResultTypes = ValidExpression.EnsureNotDefault expr.resultTypes
 
 type Function = { Type: FuncType; LocalTypes: ImmutableArray<ValType>; Body: ValidExpression }
 
@@ -70,7 +112,7 @@ type ModuleExport =
     | Global
 
 [<Sealed>]
-type ModuleExportLookup
+type ModuleExportLookup internal
     (
         memories: Dictionary<Index, string>,
         functions: Dictionary<Index, string>,

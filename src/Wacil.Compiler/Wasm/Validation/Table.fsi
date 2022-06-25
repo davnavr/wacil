@@ -28,7 +28,9 @@ type ModuleImports =
       
 [<Sealed>]
 type ModuleImportLookup =
-    internal new: lookup: Dictionary<string, ModuleImports> * functions: ImmutableArray<struct(string * FunctionImport)> -> unit
+    internal new:
+        lookup: Dictionary<string, ModuleImports> *
+        functions: ImmutableArray<struct(string * FunctionImport)> -> ModuleImportLookup
 
     member Item: moduleImportName: string -> ModuleImports with get
     member Functions: ImmutableArray<struct(string * FunctionImport)>
@@ -37,11 +39,37 @@ type ModuleImportLookup =
 
     interface IReadOnlyDictionary<string, ModuleImports>
 
-// TODO: Label and instruction stuff
+[<System.Runtime.CompilerServices.IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type Unreachable = Unreachable | Reachable
 
-// TODO: Should have ImmutableArray<struct(Format.Instruction * MaybeAFuncTypeHere)>
+[<NoComparison; StructuralEquality>]
+type OperandType =
+    | ValType of Format.ValType
+    | UnknownType
+
+[<AutoOpen>]
+module OperandType =
+    val (|IsNumType|): OperandType -> bool
+    val (|IsVecType|): OperandType -> bool
+    val (|IsRefType|): OperandType -> bool
+
+[<NoComparison; StructuralEquality>]
+type ValidInstruction =
+    { Instruction: Format.Instruction
+      PoppedTypes: ImmutableArray<OperandType>
+      PushedTypes: ImmutableArray<OperandType>
+      Unreachable: Unreachable }
+
 [<Sealed>]
-type ValidExpression = class end
+type ValidExpression =
+    internal new: unit -> ValidExpression
+
+    member internal SetInstructions: ImmutableArray<ValidInstruction> -> unit
+    member internal SetResultTypes: ImmutableArray<OperandType> -> unit
+
+    member Instructions: ImmutableArray<ValidInstruction>
+    member ResultTypes: ImmutableArray<OperandType>
+    //member BranchTargets: ImmutableArray<> // TODO: May not be necessary. Perhaps the labels can be kept track of during translation?
 
 [<NoComparison; StructuralEquality>]
 type Function =
@@ -67,7 +95,7 @@ type ModuleExportLookup =
         memories: Dictionary<Index, string> *
         functions: Dictionary<Index, string> *
         tables: Dictionary<Index, string> *
-        lookup: Dictionary<string, ModuleExport> -> unit
+        lookup: Dictionary<string, ModuleExport> -> ModuleExportLookup
 
     member GetMemoryName: index: Index * name: outref<string> -> bool
     member GetFunctionName: index: Index * name: outref<string> -> bool
