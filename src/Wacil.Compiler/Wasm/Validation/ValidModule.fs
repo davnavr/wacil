@@ -165,6 +165,7 @@ module Validate =
         // TODO: Ensure no struct copying occurs here
         let mutable valueTypeStack = ArrayBuilder<OperandType>.Create()
         let mutable controlFrameStack = ArrayBuilder<ControlFrame>.Create()
+        let mutable validInstructonBuilder = ArrayBuilder<ValidInstruction>.Create()
 
         member _.GetCurrentValueTypes() = valueTypeStack.CopyToImmutableArray()
 
@@ -227,14 +228,17 @@ module Validate =
             frame.Unreachable <- true
 
         member _.Validate(expression: ValidExpression) =
-            let source = expression.Source
-
             // Reset the validator
             valueTypeStack.Clear()
             controlFrameStack.Clear()
+            validInstructonBuilder.Clear()
 
+            for instruction in expression.Source do
+                match instruction with
+                | _ -> failwithf "todo %A" instruction
+                |> validInstructonBuilder.Add
 
-            failwith "todo"
+            expression.SetInstructions(validInstructonBuilder.CopyToImmutableArray())
 
     let fromModuleSections (sections: ImmutableArray<Format.Section>) =
         let mutable contents =
@@ -485,7 +489,15 @@ module Validate =
 
         let instructionSequenceValidator = InstructionValidator()
 
-        failwith "TODO: Validate instrs"
+        for func in functions do instructionSequenceValidator.Validate func.Body
+
+        // TODO: Check that expressions are "constant" in global values and data segments
+        for glbl in globals do instructionSequenceValidator.Validate glbl.Value
+
+        for segment in data do
+            match segment.Mode with
+            | ValueNone -> ()
+            | ValueSome activeDataSegment -> instructionSequenceValidator.Validate activeDataSegment.Offset
 
         ValidModule(
             custom = contents.CustomSections.ToImmutableArray(),

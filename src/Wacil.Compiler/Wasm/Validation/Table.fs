@@ -83,13 +83,10 @@ type ValidInstruction =
 type ValidExpression =
     val private source: ImmutableArray<Instruction>
     val mutable private instructions: ImmutableArray<ValidInstruction>
-    val mutable private resultTypes: ImmutableArray<OperandType>
 
-    internal new(source) =
-        { source = source; instructions = Unchecked.defaultof<_>; resultTypes = Unchecked.defaultof<_> }
+    internal new(source) = { source = source; instructions = Unchecked.defaultof<_> }
 
     member expr.SetInstructions instructions = expr.instructions <- instructions
-    member expr.SetResultTypes resultTypes = expr.resultTypes <- resultTypes
 
     static member inline private EnsureNotDefault(items: ImmutableArray<'a>) =
         if items.IsDefault then invalidOp "expression was not set"
@@ -97,7 +94,6 @@ type ValidExpression =
 
     member expr.Source = expr.source
     member expr.Instructions = ValidExpression.EnsureNotDefault expr.instructions
-    member expr.ResultTypes = ValidExpression.EnsureNotDefault expr.resultTypes
 
 type Function = { Type: FuncType; LocalTypes: ImmutableArray<ValType>; Body: ValidExpression }
 

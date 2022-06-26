@@ -62,11 +62,9 @@ type ValidExpression =
     internal new: source: ImmutableArray<Format.Instruction> -> ValidExpression
 
     member internal SetInstructions: ImmutableArray<ValidInstruction> -> unit
-    member internal SetResultTypes: ImmutableArray<OperandType> -> unit
 
     member Source: ImmutableArray<Format.Instruction>
     member Instructions: ImmutableArray<ValidInstruction>
-    member ResultTypes: ImmutableArray<OperandType>
     //member BranchTargets: ImmutableArray<> // TODO: May not be necessary. Perhaps the labels can be kept track of during translation?
 
 [<NoComparison; StructuralEquality>]
