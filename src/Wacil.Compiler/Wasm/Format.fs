@@ -116,10 +116,15 @@ type BlockType =
     | Val of ValType
     //| Func of FuncType
 
-type NormalInstruction =
+type Instruction =
     | Unreachable
     | Nop
     | Br of label: Index
+    | Block of BlockType
+    | Loop of BlockType
+    | If of BlockType
+    | Else
+    | End
     | Drop
     | Call of callee: Index
     | CallIndirect of functionType: Index * table: Index
@@ -169,20 +174,6 @@ type NormalInstruction =
     | I32And
     | I64Sub
     | I64Mul
-
-type StructuredInstructionKind =
-    | Block
-    | Loop
-    | IfElse of elseBlock: ImmutableArray<Instruction>
-
-and StructuredInstruction =
-    { Kind: StructuredInstructionKind
-      Type: BlockType
-      Instructions: ImmutableArray<Instruction> }
-
-and Instruction =
-    | Normal of NormalInstruction
-    | Structured of StructuredInstruction
 
 type Name = string
 

@@ -126,10 +126,15 @@ type BlockType =
 
 /// Contains instructions that don't mark the start of nested blocks.
 [<NoComparison; StructuralEquality>]
-type NormalInstruction =
+type Instruction =
     | Unreachable
     | Nop
     | Br of label: Index
+    | Block of BlockType
+    | Loop of BlockType
+    | If of BlockType
+    | Else
+    | End
     | Drop
     | Call of callee: Index
     | CallIndirect of functionType: Index * table: Index
@@ -179,20 +184,6 @@ type NormalInstruction =
     | I32And
     | I64Sub
     | I64Mul
-
-type [<NoComparison; StructuralEquality>] StructuredInstructionKind =
-    | Block
-    | Loop
-    | IfElse of elseBlock: ImmutableArray<Instruction>
-
-and [<NoComparison; StructuralEquality>] StructuredInstruction =
-    { Kind: StructuredInstructionKind
-      Type: BlockType
-      Instructions: ImmutableArray<Instruction> }
-
-and [<RequireQualifiedAccess; NoComparison; StructuralEquality>] Instruction =
-    | Normal of NormalInstruction
-    | Structured of StructuredInstruction
 
 type Name = string
 
