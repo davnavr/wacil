@@ -189,6 +189,7 @@ module Validate =
     type InstructionValidator
         (
             types: ImmutableArray<Format.FuncType>,
+            memories: ImmutableArray<_>,
             globals: ImmutableArray<Global>
         )
         =
@@ -345,6 +346,30 @@ module Validate =
 
                     let ty = ValType glbl.Type.Type
                     poppedTypes <- ImmutableArray.Create(this.PopValue ty)
+                | Format.I32Load _ ->
+                    this.PopValue OperandType.i32 |> ignore
+                    this.PushValue OperandType.i32
+                    poppedTypes <- OperandType.singleI32
+                    pushedTypes <- OperandType.singleI32
+                | Format.I64Load _ ->
+                    this.PopValue OperandType.i32 |> ignore
+                    this.PushValue OperandType.i64
+                    poppedTypes <- OperandType.singleI32
+                    pushedTypes <- OperandType.singleI64
+                | Format.F32Load _ ->
+                    this.PopValue OperandType.i32 |> ignore
+                    this.PushValue OperandType.f32
+                    poppedTypes <- OperandType.singleI32
+                    pushedTypes <- OperandType.singleF32
+                | Format.F64Load _ ->
+                    this.PopValue OperandType.i32 |> ignore
+                    this.PushValue OperandType.f64
+                    poppedTypes <- OperandType.singleI32
+                    pushedTypes <- OperandType.singleF64
+                | Format.I32Store _ -> poppedTypes <- this.PopManyValues Format.ValType.tupleI32
+                | Format.I64Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeI64
+                | Format.F32Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeF32
+                | Format.F64Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeF64
                 | _ -> failwithf "todo %A" instruction
                 
                 validInstructonBuilder.Add
@@ -618,7 +643,7 @@ module Validate =
                             ModuleExport.Global
             ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
 
-        let instructionSequenceValidator = InstructionValidator(types, globals)
+        let instructionSequenceValidator = InstructionValidator(types, memories, globals)
 
         for func in functions do instructionSequenceValidator.Validate func.Body
 

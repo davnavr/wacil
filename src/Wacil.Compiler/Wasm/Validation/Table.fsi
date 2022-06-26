@@ -51,8 +51,14 @@ module OperandType =
     val (|IsRefType|): OperandType -> bool
 
     val i32: OperandType
+    val i64: OperandType
+    val f32: OperandType
+    val f64: OperandType
 
     val singleI32: ImmutableArray<OperandType>
+    val singleI64: ImmutableArray<OperandType>
+    val singleF32: ImmutableArray<OperandType>
+    val singleF64: ImmutableArray<OperandType>
 
 [<NoComparison; StructuralEquality>]
 type ValidInstruction =
