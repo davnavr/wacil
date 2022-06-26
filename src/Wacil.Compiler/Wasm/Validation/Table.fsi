@@ -63,20 +63,25 @@ type ValidInstruction =
 
 [<Sealed>]
 type ValidExpression =
-    internal new: source: ImmutableArray<Format.Instruction> * resultTypes: ImmutableArray<Format.ValType> -> ValidExpression
+    internal new:
+        source: ImmutableArray<Format.Instruction> *
+        parameterTypes: ImmutableArray<Format.ValType> *
+        localTypes: ImmutableArray<Format.ValType> *
+        resultTypes: ImmutableArray<Format.ValType> -> ValidExpression
 
     member internal SetInstructions: ImmutableArray<ValidInstruction> -> unit
 
     member Source: ImmutableArray<Format.Instruction>
     member Instructions: ImmutableArray<ValidInstruction>
+    member ParameterTypes: ImmutableArray<Format.ValType>
+    member LocalTypes: ImmutableArray<Format.ValType>
     member ResultTypes: ImmutableArray<Format.ValType>
     //member BranchTargets: ImmutableArray<> // TODO: May not be necessary. Perhaps the labels can be kept track of during translation?
 
+    member TryGetLocal: index: int32 * variableType: outref<Format.ValType> -> bool
+
 [<NoComparison; StructuralEquality>]
-type Function =
-    { Type: Format.FuncType
-      LocalTypes: ImmutableArray<Format.ValType>
-      Body: ValidExpression }
+type Function = { Type: Format.FuncType; Body: ValidExpression }
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Global =

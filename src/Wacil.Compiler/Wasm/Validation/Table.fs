@@ -85,12 +85,16 @@ type ValidInstruction =
 [<Sealed>]
 type ValidExpression =
     val private source: ImmutableArray<Instruction>
+    val private parameterTypes: ImmutableArray<ValType>
+    val private localTypes: ImmutableArray<ValType>
     val private resultTypes: ImmutableArray<ValType>
     val mutable private instructions: ImmutableArray<ValidInstruction>
 
-    internal new(source, resultTypes) =
+    internal new(source, parameterTypes, localTypes, resultTypes) =
         { source = source
           instructions = Unchecked.defaultof<_>
+          parameterTypes = parameterTypes
+          localTypes = localTypes
           resultTypes = resultTypes }
 
     member expr.SetInstructions instructions = expr.instructions <- instructions
@@ -101,9 +105,21 @@ type ValidExpression =
 
     member expr.Source = expr.source
     member expr.Instructions = ValidExpression.EnsureNotDefault expr.instructions
+    member expr.ParameterTypes = expr.parameterTypes
+    member expr.LocalTypes = expr.localTypes
     member expr.ResultTypes = expr.resultTypes
 
-type Function = { Type: FuncType; LocalTypes: ImmutableArray<ValType>; Body: ValidExpression }
+    member expr.TryGetLocal(index, variableType: outref<_>) =
+        if index < expr.parameterTypes.Length then
+            variableType <- expr.parameterTypes[index]
+            true
+        else if index - expr.parameterTypes.Length < expr.localTypes.Length then
+            variableType <- expr.localTypes[index - expr.parameterTypes.Length]
+            true
+        else
+            false
+
+type Function = { Type: FuncType; Body: ValidExpression }
 
 [<RequireQualifiedAccess>]
 type Global = { Type: GlobalType; Value: ValidExpression }

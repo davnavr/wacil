@@ -173,6 +173,11 @@ module Validate =
         for i = 0 to types.Length - 1 do mapped[i] <- ValType types[i]
         Unsafe.Array.toImmutable mapped
 
+    let getVariableType (expression: ValidExpression) (index: Format.Index) =
+        match expression.TryGetLocal(Checked.int32 index) with
+        | true, ty -> ValType ty
+        | false, _ -> raise(System.ArgumentOutOfRangeException(nameof index, index, "Local variable was not defined"))
+
     /// Implementation of the WebAssembly instruction validation algorithm.
     [<Sealed>]
     type InstructionValidator (types: ImmutableArray<Format.FuncType>) =
@@ -281,7 +286,7 @@ module Validate =
                 let mutable pushedTypes = ImmutableArray.Empty
 
                 match instruction with
-                | Format.Unreachable -> this.MarkUnreachable()
+                | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
                 | Format.Nop -> ()
                 | Format.Br target ->
                     let target' = this.CheckBranchTarget target
@@ -306,8 +311,19 @@ module Validate =
                     let frame = this.PopControlFrame()
                     this.PushManyValues frame.EndTypes
                     poppedTypes <- mapToOperandTypes frame.EndTypes
-                | Format.Drop ->
-                    poppedTypes <- ImmutableArray.Create(this.PopValue())
+                | Format.Drop -> poppedTypes <- ImmutableArray.Create(this.PopValue())
+                | Format.LocalGet i ->
+                    let ty = getVariableType expression i
+                    this.PushValue ty
+                    pushedTypes <- ImmutableArray.Create ty
+                | Format.LocalSet i ->
+                    let ty = getVariableType expression i
+                    poppedTypes <- ImmutableArray.Create(this.PopValue ty)
+                | Format.LocalTee i ->
+                    let ty = getVariableType expression i
+                    poppedTypes <- ImmutableArray.Create(this.PopValue ty)
+                    this.PushValue ty
+                    pushedTypes <- ImmutableArray.Create ty
                 | _ -> failwithf "todo %A" instruction
                 
                 validInstructonBuilder.Add
@@ -486,7 +502,12 @@ module Validate =
                 let glbl = moduleGlobalDefinitions[i]
                 globals[i] <-
                     { Global.Type = glbl.Type
-                      Global.Value = ValidExpression(glbl.Expression, ImmutableArray.Create glbl.Type.Type) }
+                      Global.Value = ValidExpression(
+                        glbl.Expression,
+                        ImmutableArray.Empty,
+                        ImmutableArray.Empty,
+                        ImmutableArray.Create glbl.Type.Type
+                      ) }
             Unsafe.Array.toImmutable globals
 
         let functions =
@@ -512,8 +533,12 @@ module Validate =
 
                 moduleFunctionDefinitions.Add
                     { Function.Type = functionType
-                      LocalTypes = localTypesBuilder.ToImmutableArray()
-                      Body = ValidExpression(body.Body, functionType.Results) }
+                      Body = ValidExpression(
+                        body.Body,
+                        functionType.Parameters,
+                        localTypesBuilder.ToImmutableArray(),
+                        functionType.Results
+                      ) }
 
             moduleFunctionDefinitions.ToImmutableArray()
 
@@ -536,7 +561,12 @@ module Validate =
                         | Format.DataMode.Active(memory, offset) ->
                             ValueSome
                                 { ValidActiveData.Memory = Checked.int32 memory
-                                  ValidActiveData.Offset = ValidExpression(offset, Format.ValType.singleI32) } }
+                                  ValidActiveData.Offset = ValidExpression(
+                                    offset,
+                                    ImmutableArray.Empty,
+                                    ImmutableArray.Empty,
+                                    Format.ValType.singleI32
+                                  ) } }
             Unsafe.Array.toImmutable segments
 
         let exports =
