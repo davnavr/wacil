@@ -105,6 +105,12 @@ type ElseInstructionMismatchException (index: int, previous: Format.Instruction)
     member _.Index = index
     member _.PreviousStructuredInstruction = previous
 
+[<Sealed>]
+type GlobalIsNotMutableException (index: Format.Index) =
+    inherit ValidationException(sprintf "The global variable at index %i is not mutable" index)
+
+    member _.Index = index
+
 module Validate =
     let errwith format = Printf.kprintf (fun msg -> raise(ValidationException msg)) format
 
@@ -180,7 +186,12 @@ module Validate =
 
     /// Implementation of the WebAssembly instruction validation algorithm.
     [<Sealed>]
-    type InstructionValidator (types: ImmutableArray<Format.FuncType>) =
+    type InstructionValidator
+        (
+            types: ImmutableArray<Format.FuncType>,
+            globals: ImmutableArray<Global>
+        )
+        =
         let mutable valueTypeStack = ArrayBuilder<OperandType>.Create()
         let mutable controlFrameStack = ArrayBuilder<ControlFrame>.Create()
         let mutable validInstructonBuilder = ArrayBuilder<ValidInstruction>.Create()
@@ -324,6 +335,16 @@ module Validate =
                     poppedTypes <- ImmutableArray.Create(this.PopValue ty)
                     this.PushValue ty
                     pushedTypes <- ImmutableArray.Create ty
+                | Format.GlobalGet i ->
+                    let ty = ValType globals[Checked.int32 i].Type.Type
+                    this.PushValue ty
+                    pushedTypes <- ImmutableArray.Create ty
+                | Format.GlobalSet i ->
+                    let glbl = globals[Checked.int32 i]
+                    if glbl.Type.Mutability <> Format.Mutability.Var then raise(GlobalIsNotMutableException i)
+
+                    let ty = ValType glbl.Type.Type
+                    poppedTypes <- ImmutableArray.Create(this.PopValue ty)
                 | _ -> failwithf "todo %A" instruction
                 
                 validInstructonBuilder.Add
@@ -597,7 +618,7 @@ module Validate =
                             ModuleExport.Global
             ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
 
-        let instructionSequenceValidator = InstructionValidator types
+        let instructionSequenceValidator = InstructionValidator(types, globals)
 
         for func in functions do instructionSequenceValidator.Validate func.Body
 
