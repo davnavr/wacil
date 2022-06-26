@@ -36,6 +36,11 @@ type internal ArrayBuilder<'a> =
 
     member this.Clear() = this.length <- 0
 
+    member this.ClearWithDefault() =
+        let lastElementIndex = this.length - 1
+        this.Clear()
+        for i = 0 to lastElementIndex do this.buffer[i] <- Unchecked.defaultof<'a>
+
     member this.Add(item: 'a) =
         let index = this.length
         this.length <- index + 1

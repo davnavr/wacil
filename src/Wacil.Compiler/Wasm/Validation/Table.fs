@@ -82,9 +82,13 @@ type ValidInstruction =
 [<Sealed>]
 type ValidExpression =
     val private source: ImmutableArray<Instruction>
+    val private resultTypes: ImmutableArray<ValType>
     val mutable private instructions: ImmutableArray<ValidInstruction>
 
-    internal new(source) = { source = source; instructions = Unchecked.defaultof<_> }
+    internal new(source, resultTypes) =
+        { source = source
+          instructions = Unchecked.defaultof<_>
+          resultTypes = resultTypes }
 
     member expr.SetInstructions instructions = expr.instructions <- instructions
 
@@ -94,6 +98,7 @@ type ValidExpression =
 
     member expr.Source = expr.source
     member expr.Instructions = ValidExpression.EnsureNotDefault expr.instructions
+    member expr.ResultTypes = expr.resultTypes
 
 type Function = { Type: FuncType; LocalTypes: ImmutableArray<ValType>; Body: ValidExpression }
 

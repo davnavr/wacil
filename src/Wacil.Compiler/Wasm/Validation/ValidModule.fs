@@ -159,10 +159,12 @@ module Validate =
           StartHeight: uint32
           mutable Unreachable: bool }
 
+    module OperandTypes =
+        let oneI32 = ImmutableArray.Create(Format.ValType.Num Format.I32)
+
     /// Implementation of the WebAssembly instruction validation algorithm.
     [<Sealed>]
     type InstructionValidator () =
-        // TODO: Ensure no struct copying occurs here
         let mutable valueTypeStack = ArrayBuilder<OperandType>.Create()
         let mutable controlFrameStack = ArrayBuilder<ControlFrame>.Create()
         let mutable validInstructonBuilder = ArrayBuilder<ValidInstruction>.Create()
@@ -218,25 +220,50 @@ module Validate =
 
         member _.LabelTypes frame =
             match frame.Instruction with
-            | Format.Instruction.Structured s when s.Kind = Format.StructuredInstructionKind.Loop -> frame.StartTypes
+            | Format.Loop _ -> frame.StartTypes
             | _ -> frame.EndTypes
 
         member _.MarkUnreachable() =
-            // TODO: How to handle unreachable when frame is empty? Skip validation of rest of instructions?
+            if controlFrameStack.IsEmpty then raise(ControlFrameStackUnderflowException())
             let frame = controlFrameStack.LastRef()
-            controlFrameStack.ResizeWithDefault(int32 frame.StartHeight)
+            valueTypeStack.ResizeWithDefault(int32 frame.StartHeight)
             frame.Unreachable <- true
 
-        member _.Validate(expression: ValidExpression) =
+        member this.Validate(expression: ValidExpression) =
             // Reset the validator
             valueTypeStack.Clear()
-            controlFrameStack.Clear()
+            controlFrameStack.ClearWithDefault()
             validInstructonBuilder.Clear()
 
+            // All expressions implictly define a block
+            controlFrameStack.Add
+                { ControlFrame.Instruction =
+                    match expression.ResultTypes.Length with
+                    | 0 -> Format.BlockType.Void
+                    | 1 -> Format.BlockType.Val expression.ResultTypes[0]
+                    | _ ->
+                        raise(System.NotSupportedException "TODO: Multiple return values for expressions are not yet supported")
+                    |> Format.Block
+                  StartTypes = ImmutableArray.Empty
+                  EndTypes = expression.ResultTypes
+                  StartHeight = 0u
+                  Unreachable = false }
+
             for instruction in expression.Source do
+                let mutable poppedTypes = ImmutableArray.Empty
+                let mutable pushedTypes = ImmutableArray.Empty
+
                 match instruction with
+                | Format.Nop -> ()
+                | Format.Drop ->
+                    poppedTypes <- ImmutableArray.Create(this.PopValue())
                 | _ -> failwithf "todo %A" instruction
-                |> validInstructonBuilder.Add
+                
+                validInstructonBuilder.Add
+                    { ValidInstruction.Instruction = instruction
+                      PoppedTypes = poppedTypes
+                      PushedTypes = pushedTypes
+                      Unreachable = controlFrameStack.LastRef().Unreachable }
 
             expression.SetInstructions(validInstructonBuilder.CopyToImmutableArray())
 
@@ -408,7 +435,7 @@ module Validate =
                 let glbl = moduleGlobalDefinitions[i]
                 globals[i] <-
                     { Global.Type = glbl.Type
-                      Global.Value = ValidExpression glbl.Expression }
+                      Global.Value = ValidExpression(glbl.Expression, ImmutableArray.Create glbl.Type.Type) }
             Unsafe.Array.toImmutable globals
 
         let functions =
@@ -430,10 +457,12 @@ module Validate =
                     for i = 0 to int local.Count - 1 do
                         localTypesBuilder.Add local.Type
                 
+                let functionType = types[moduleFunctionTypes[i] |> Checked.int32]
+
                 moduleFunctionDefinitions.Add
-                    { Function.Type = types[moduleFunctionTypes[i] |> Checked.int32]
+                    { Function.Type = functionType
                       LocalTypes = localTypesBuilder.ToImmutableArray()
-                      Body = ValidExpression body.Body }
+                      Body = ValidExpression(body.Body, functionType.Results) }
 
             moduleFunctionDefinitions.ToImmutableArray()
 
@@ -456,7 +485,7 @@ module Validate =
                         | Format.DataMode.Active(memory, offset) ->
                             ValueSome
                                 { ValidActiveData.Memory = Checked.int32 memory
-                                  ValidActiveData.Offset = ValidExpression offset } }
+                                  ValidActiveData.Offset = ValidExpression(offset, OperandTypes.oneI32) } }
             Unsafe.Array.toImmutable segments
 
         let exports =
