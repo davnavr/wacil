@@ -31,9 +31,17 @@ type RefType = FuncRef | ExternRef
 [<Struct>]
 type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 
+module ValType =
+    let singleI32 = ImmutableArray.Create(item = Num I32)
+
 type ResultType = ImmutableArray<ValType>
 
 type FuncType = { Parameters: ResultType; Results: ResultType }
+
+module FuncType =
+    let empty = { Parameters = ImmutableArray.Empty; Results = ImmutableArray.Empty }
+
+    let ofReturnType returnType = { Parameters = ImmutableArray.Empty; Results = ImmutableArray.Create(item = returnType) }
 
 type Opcode =
     | Unreachable = 0uy

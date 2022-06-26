@@ -34,10 +34,22 @@ type RefType = FuncRef | ExternRef
 [<RequireQualifiedAccess; IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 
+[<RequireQualifiedAccess>]
+module ValType =
+    val singleI32 : ImmutableArray<ValType>
+
 type ResultType = ImmutableArray<ValType>
 
 [<NoComparison; StructuralEquality>]
-type FuncType = { Parameters: ResultType; Results: ResultType }
+type FuncType =
+    { Parameters: ResultType
+      Results: ResultType }
+
+[<RequireQualifiedAccess>]
+module FuncType =
+    val empty : FuncType
+
+    val ofReturnType: returnType: ValType -> FuncType
 
 type Index = uint32
 

@@ -73,6 +73,15 @@ type OperandTypeMismatchException =
 [<Sealed; Class>]
 type ControlFrameStackUnderflowException = inherit ValidationException
 
+[<Sealed; Class>]
+type ElseInstructionMismatchException =
+    inherit ValidationException
+
+    /// <summary>The index of the <c>else</c> instruction.</summary>
+    member Index: int
+
+    member PreviousStructuredInstruction: Format.Instruction
+
 [<RequireQualifiedAccess>]
 module Validate =
     /// <summary>Performs validation on a WebAssembly module containing the given <paramref name="sections"/>.</summary>

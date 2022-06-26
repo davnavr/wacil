@@ -73,6 +73,9 @@ module OperandType =
         | ValType(ValType.Ref _) | UnknownType -> true
         | ValType(ValType.Num _ | ValType.Vec _) -> false
 
+    let i32 = ValType(ValType.Num I32)
+    let singleI32 = ImmutableArray.Create i32
+
 type ValidInstruction =
     { Instruction: Instruction
       PoppedTypes: ImmutableArray<OperandType>

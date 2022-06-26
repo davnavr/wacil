@@ -44,11 +44,15 @@ type OperandType =
     | ValType of Format.ValType
     | UnknownType
 
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
 module OperandType =
     val (|IsNumType|): OperandType -> bool
     val (|IsVecType|): OperandType -> bool
     val (|IsRefType|): OperandType -> bool
+
+    val i32: OperandType
+
+    val singleI32: ImmutableArray<OperandType>
 
 [<NoComparison; StructuralEquality>]
 type ValidInstruction =

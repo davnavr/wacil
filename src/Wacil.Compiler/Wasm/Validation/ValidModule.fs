@@ -96,6 +96,15 @@ type OperandTypeMismatchException (expected: OperandType, actual: OperandType) =
 type ControlFrameStackUnderflowException () =
     inherit ValidationException(sprintf "The control frame stack was unexpectedly empty")
 
+[<Sealed>]
+type ElseInstructionMismatchException (index: int, previous: Format.Instruction) =
+    inherit ValidationException(
+        sprintf "Expected matching if instruction for this else instruction at index %i, but got %A" index previous
+    )
+
+    member _.Index = index
+    member _.PreviousStructuredInstruction = previous
+
 module Validate =
     let errwith format = Printf.kprintf (fun msg -> raise(ValidationException msg)) format
 
@@ -159,12 +168,14 @@ module Validate =
           StartHeight: uint32
           mutable Unreachable: bool }
 
-    module OperandTypes =
-        let oneI32 = ImmutableArray.Create(Format.ValType.Num Format.I32)
+    let mapToOperandTypes (types: ImmutableArray<Format.ValType>) =
+        let mapped = Array.zeroCreate types.Length
+        for i = 0 to types.Length - 1 do mapped[i] <- ValType types[i]
+        Unsafe.Array.toImmutable mapped
 
     /// Implementation of the WebAssembly instruction validation algorithm.
     [<Sealed>]
-    type InstructionValidator () =
+    type InstructionValidator (types: ImmutableArray<Format.FuncType>) =
         let mutable valueTypeStack = ArrayBuilder<OperandType>.Create()
         let mutable controlFrameStack = ArrayBuilder<ControlFrame>.Create()
         let mutable validInstructonBuilder = ArrayBuilder<ValidInstruction>.Create()
@@ -221,13 +232,28 @@ module Validate =
         member _.LabelTypes frame =
             match frame.Instruction with
             | Format.Loop _ -> frame.StartTypes
-            | _ -> frame.EndTypes
+            | Format.Block _ | Format.If _ | Format.Else _ -> frame.EndTypes
+            | bad -> failwithf "TODO: Error for not %A is not a valid structured instruction" bad
 
         member _.MarkUnreachable() =
             if controlFrameStack.IsEmpty then raise(ControlFrameStackUnderflowException())
             let frame = controlFrameStack.LastRef()
             valueTypeStack.ResizeWithDefault(int32 frame.StartHeight)
             frame.Unreachable <- true
+
+        member _.CheckBranchTarget(target: Format.Index) =
+            if uint32 controlFrameStack.Length < target then
+                failwithf
+                    "TODO: Add exception type for bad branch target (length = %i, target = %i)"
+                    controlFrameStack.Length
+                    target
+            Checked.int32 target
+
+        member _.GetBlockType ty =
+            match ty with
+            | Format.BlockType.Void -> Format.FuncType.empty
+            | Format.BlockType.Val rt -> Format.FuncType.ofReturnType rt
+            | Format.BlockType.Index i -> types[Checked.int32 i]
 
         member this.Validate(expression: ValidExpression) =
             // Reset the validator
@@ -249,12 +275,37 @@ module Validate =
                   StartHeight = 0u
                   Unreachable = false }
 
-            for instruction in expression.Source do
+            for index = 0 to expression.Source.Length - 1 do
+                let instruction = expression.Source[index]
                 let mutable poppedTypes = ImmutableArray.Empty
                 let mutable pushedTypes = ImmutableArray.Empty
 
                 match instruction with
+                | Format.Unreachable -> this.MarkUnreachable()
                 | Format.Nop -> ()
+                | Format.Br target ->
+                    let target' = this.CheckBranchTarget target
+                    poppedTypes <- mapToOperandTypes(this.LabelTypes(controlFrameStack.ItemFromEnd target'))
+                    this.MarkUnreachable()
+                //| Format.BrIf
+                | Format.Block ty | Format.Loop ty ->
+                    let ty' = this.GetBlockType ty
+                    poppedTypes <- this.PopManyValues ty'.Parameters
+                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
+                | Format.If ty ->
+                    let ty' = this.GetBlockType ty
+                    this.PopValue OperandType.i32 |> ignore
+                    poppedTypes <- OperandType.singleI32.AddRange(this.PopManyValues ty'.Parameters)
+                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
+                | Format.Else ->
+                    let frame = this.PopControlFrame()
+                    match frame.Instruction with
+                    | Format.If _ -> this.PushControlFrame(instruction, frame.StartTypes, frame.EndTypes)
+                    | _ -> raise(ElseInstructionMismatchException(index, frame.Instruction))
+                | Format.End ->
+                    let frame = this.PopControlFrame()
+                    this.PushManyValues frame.EndTypes
+                    poppedTypes <- mapToOperandTypes frame.EndTypes
                 | Format.Drop ->
                     poppedTypes <- ImmutableArray.Create(this.PopValue())
                 | _ -> failwithf "todo %A" instruction
@@ -485,7 +536,7 @@ module Validate =
                         | Format.DataMode.Active(memory, offset) ->
                             ValueSome
                                 { ValidActiveData.Memory = Checked.int32 memory
-                                  ValidActiveData.Offset = ValidExpression(offset, OperandTypes.oneI32) } }
+                                  ValidActiveData.Offset = ValidExpression(offset, Format.ValType.singleI32) } }
             Unsafe.Array.toImmutable segments
 
         let exports =
@@ -516,7 +567,7 @@ module Validate =
                             ModuleExport.Global
             ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
 
-        let instructionSequenceValidator = InstructionValidator()
+        let instructionSequenceValidator = InstructionValidator types
 
         for func in functions do instructionSequenceValidator.Validate func.Body
 
