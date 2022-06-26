@@ -370,6 +370,10 @@ module Validate =
                 | Format.I64Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeI64
                 | Format.F32Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeF32
                 | Format.F64Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeF64
+                | Format.I32Add | Format.I32Sub | Format.I32Mul ->
+                    poppedTypes <- this.PopManyValues Format.ValType.tupleI32
+                    this.PushValue OperandType.i32
+                    pushedTypes <- OperandType.singleI32
                 | _ -> failwithf "todo %A" instruction
                 
                 validInstructonBuilder.Add
