@@ -53,9 +53,6 @@ type ModuleImportLookup internal
         member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = lookup.GetEnumerator() :> System.Collections.IEnumerator
 
-[<Struct>]
-type Unreachable = Unreachable | Reachable
-
 type OperandType =
     | ValType of ValType
     | UnknownType
@@ -80,7 +77,7 @@ type ValidInstruction =
     { Instruction: Instruction
       PoppedTypes: ImmutableArray<OperandType>
       PushedTypes: ImmutableArray<OperandType>
-      Unreachable: Unreachable }
+      Unreachable: bool }
 
 [<Sealed>]
 type ValidExpression =
@@ -98,6 +95,7 @@ type ValidExpression =
         if items.IsDefault then invalidOp "expression was not set"
         items
 
+    member expr.Source = expr.source
     member expr.Instructions = ValidExpression.EnsureNotDefault expr.instructions
     member expr.ResultTypes = ValidExpression.EnsureNotDefault expr.resultTypes
 

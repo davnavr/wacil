@@ -12,12 +12,12 @@ open Wacil.Compiler.Wasm.Validation.Table
 [<Sealed>]
 type ValidModule
     (
-        custom: ImmutableArray<Custom>,
-        types: ImmutableArray<FuncType>,
+        custom: ImmutableArray<Format.Custom>,
+        types: ImmutableArray<Format.FuncType>,
         functions: ImmutableArray<Function>,
-        tables: ImmutableArray<TableType>,
+        tables: ImmutableArray<Format.TableType>,
         imports: ModuleImportLookup,
-        memories: ImmutableArray<Limits>,
+        memories: ImmutableArray<Format.Limits>,
         globals: ImmutableArray<Global>,
         exports: ModuleExportLookup,
         start: Table.Index voption,
@@ -40,17 +40,20 @@ type ValidationException =
 
     new (message: string) = { inherit System.Exception(message) }
 
+[<Sealed>]
 type DuplicateSectionException (section: Format.SectionId) =
     inherit ValidationException(sprintf "The %O section already exists" section)
 
     member _.Section = section
 
+[<Sealed>]
 type InvalidSectionOrderException (current: Format.SectionId, next: Format.SectionId) =
     inherit ValidationException(sprintf "The %O section must be placed before the %O section" current next)
 
     member _.CurrentSection = current
     member _.NextSection = next
 
+[<Sealed>]
 type FunctionSectionCountException (section: Format.SectionId, expected: int, actual: int) =
     inherit
         ValidationException(
@@ -62,17 +65,36 @@ type FunctionSectionCountException (section: Format.SectionId, expected: int, ac
         )
 
     member _.Section = section
+    member _.ExpectedCount = expected
+    member _.ActualCount = actual
 
+[<Sealed>]
 type DataSegmentCountException (expected: int, actual: int) =
     inherit ValidationException(sprintf "Expected %i data segments but got %i" expected actual)
 
     member _.Expected = expected
     member _.Actual = actual
 
+[<Sealed>]
 type DuplicateExportException (name: string) =
     inherit ValidationException(sprintf "An export corresponding to the name \"%s\" already exists" name)
 
     member _.Name = name
+
+[<Sealed>]
+type OperandStackUnderflowException () =
+    inherit ValidationException(sprintf "The operand stack was unexpectedly empty")
+
+[<Sealed>]
+type OperandTypeMismatchException (expected: OperandType, actual: OperandType) =
+    inherit ValidationException(sprintf "Expected type %O but got %O" expected actual)
+
+    member _.Expected = expected
+    member _.Actual = actual
+
+[<Sealed>]
+type ControlFrameStackUnderflowException () =
+    inherit ValidationException(sprintf "The control frame stack was unexpectedly empty")
 
 module Validate =
     let errwith format = Printf.kprintf (fun msg -> raise(ValidationException msg)) format
@@ -127,6 +149,92 @@ module Validate =
           mutable Code: ImmutableArray<Format.Code> voption
           mutable DataCount: uint32 voption
           mutable Data: ImmutableArray<Format.Data> voption }
+
+    [<NoComparison; ReferenceEquality>]
+    type ControlFrame =
+        { Instruction: Format.Instruction
+          /// The types at the top of the operand stack when the block is entered.
+          StartTypes: ImmutableArray<Format.ValType>
+          EndTypes: ImmutableArray<Format.ValType>
+          StartHeight: uint32
+          mutable Unreachable: bool }
+
+    /// Implementation of the WebAssembly instruction validation algorithm.
+    [<Sealed>]
+    type InstructionValidator () =
+        // TODO: Ensure no struct copying occurs here
+        let mutable valueTypeStack = ArrayBuilder<OperandType>.Create()
+        let mutable controlFrameStack = ArrayBuilder<ControlFrame>.Create()
+
+        member _.GetCurrentValueTypes() = valueTypeStack.CopyToImmutableArray()
+
+        member _.PushValue ty = valueTypeStack.Add ty
+
+        member this.PushManyValues(types: ImmutableArray<_>) =
+            for t in types do this.PushValue(ValType t)
+
+        member _.PopValue() = 
+            if controlFrameStack.IsEmpty then
+                if valueTypeStack.IsEmpty then raise(OperandStackUnderflowException())
+                let popped = valueTypeStack.Pop()
+                popped
+            else
+                let frame = controlFrameStack.LastRef()
+                if uint32 valueTypeStack.Length = frame.StartHeight then
+                    if not frame.Unreachable then raise(OperandStackUnderflowException())
+                    UnknownType
+                else
+                    let popped = valueTypeStack.Pop()
+                    popped
+
+        member this.PopValue expected =
+            let actual = this.PopValue()
+            if actual <> expected && actual <> UnknownType && expected <> UnknownType then
+                raise(OperandTypeMismatchException(expected, actual))
+            actual
+
+        member this.PopManyValues(expected: ImmutableArray<_>) =
+            let mutable popped = Array.zeroCreate expected.Length
+            for i = expected.Length - 1 to 0 do
+                popped[i] <- this.PopValue(ValType expected.[i])
+            Unsafe.Array.toImmutable popped
+
+        member this.PushControlFrame(instruction, input, output) =
+            controlFrameStack.Add
+                { ControlFrame.Instruction = instruction
+                  StartTypes = input
+                  EndTypes = output
+                  StartHeight = uint32 valueTypeStack.Length
+                  Unreachable = false }
+            this.PushManyValues input
+
+        member this.PopControlFrame() =
+            if controlFrameStack.IsEmpty then raise(ControlFrameStackUnderflowException())
+            let frame = controlFrameStack.Pop()
+            this.PopManyValues frame.EndTypes |> ignore // Could avoid allocation of popped types array here
+            if uint32 valueTypeStack.Length <> frame.StartHeight then raise(OperandStackUnderflowException())
+            frame
+
+        member _.LabelTypes frame =
+            match frame.Instruction with
+            | Format.Instruction.Structured s when s.Kind = Format.StructuredInstructionKind.Loop -> frame.StartTypes
+            | _ -> frame.EndTypes
+
+        member _.MarkUnreachable() =
+            // TODO: How to handle unreachable when frame is empty? Skip validation of rest of instructions?
+            let frame = controlFrameStack.LastRef()
+            controlFrameStack.ResizeWithDefault(int32 frame.StartHeight)
+            frame.Unreachable <- true
+
+        member _.Validate(expression: ValidExpression) =
+            let source = expression.Source
+
+            // Reset the validator
+            valueTypeStack.Clear()
+            controlFrameStack.Clear()
+
+
+            failwith "todo"
 
     let fromModuleSections (sections: ImmutableArray<Format.Section>) =
         let mutable contents =
@@ -375,7 +483,9 @@ module Validate =
                             ModuleExport.Global
             ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
 
-        // TODO: Validate expressions
+        let instructionSequenceValidator = InstructionValidator()
+
+        failwith "TODO: Validate instrs"
 
         ValidModule(
             custom = contents.CustomSections.ToImmutableArray(),

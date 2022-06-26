@@ -108,11 +108,13 @@ type ValidActiveData =
       /// An expression that evaluates to an offset that the data is copied to.
       Offset: ValidExpression }
 
+[<System.Obsolete>]
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type ValidData =
     { Bytes: ImmutableArray<byte>
       Mode: ValidActiveData voption }
 
+[<System.Obsolete>]
 [<Sealed>]
 type ValidModule =
     member CustomSections: ImmutableArray<Format.Custom>
@@ -126,6 +128,7 @@ type ValidModule =
     member Start: int voption
     member Data: ImmutableArray<ValidData>
 
+[<System.Obsolete>]
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type Error =
     | MultiMemoryNotSupported
@@ -135,6 +138,7 @@ type Error =
 
     override ToString: unit -> string
 
+[<System.Obsolete>]
 [<RequireQualifiedAccess>]
 module Validate =
     val fromModuleSections: sections: ImmutableArray<Format.Section> -> Result<ValidModule, Error>

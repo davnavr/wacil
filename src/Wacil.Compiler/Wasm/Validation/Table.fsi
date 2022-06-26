@@ -39,9 +39,6 @@ type ModuleImportLookup =
 
     interface IReadOnlyDictionary<string, ModuleImports>
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type Unreachable = Unreachable | Reachable
-
 [<NoComparison; StructuralEquality>]
 type OperandType =
     | ValType of Format.ValType
@@ -58,7 +55,7 @@ type ValidInstruction =
     { Instruction: Format.Instruction
       PoppedTypes: ImmutableArray<OperandType>
       PushedTypes: ImmutableArray<OperandType>
-      Unreachable: Unreachable }
+      Unreachable: bool }
 
 [<Sealed>]
 type ValidExpression =

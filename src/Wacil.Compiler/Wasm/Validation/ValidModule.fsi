@@ -60,6 +60,19 @@ type DuplicateExportException =
 
     member Name: string
 
+[<Sealed; Class>]
+type OperandStackUnderflowException = inherit ValidationException
+
+[<Sealed; Class>]
+type OperandTypeMismatchException =
+    inherit ValidationException
+
+    member Expected: Table.OperandType
+    member Actual: Table.OperandType
+
+[<Sealed; Class>]
+type ControlFrameStackUnderflowException = inherit ValidationException
+
 [<RequireQualifiedAccess>]
 module Validate =
     /// <summary>Performs validation on a WebAssembly module containing the given <paramref name="sections"/>.</summary>
