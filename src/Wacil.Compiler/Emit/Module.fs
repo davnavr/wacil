@@ -1216,7 +1216,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         for i = 0 to wasm.Length - 1 do
             match wasm[i].Instruction with
-            | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
+            | Nop | Else | End -> il.Add(CilInstruction CilOpCodes.Nop)
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with
@@ -1261,7 +1261,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
 
-        if wasm.Length >= 2 && false (*wasm[wasm.Length - 2] <> Instruction.Return*) then
+        if wasm.Length >= 2 && true (*wasm[wasm.Length - 2] <> Instruction.Return*) then
             il.Add(CilInstruction CilOpCodes.Ret)
 
     do
