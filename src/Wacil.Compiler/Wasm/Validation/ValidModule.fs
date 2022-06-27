@@ -346,7 +346,7 @@ module Validate =
 
                     let ty = ValType glbl.Type.Type
                     poppedTypes <- ImmutableArray.Create(this.PopValue ty)
-                | Format.I32Load _ ->
+                | Format.I32Load _ | Format.MemoryGrow ->
                     this.PopValue OperandType.i32 |> ignore
                     this.PushValue OperandType.i32
                     poppedTypes <- OperandType.singleI32
