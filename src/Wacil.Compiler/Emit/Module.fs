@@ -4,8 +4,6 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
-open Microsoft.FSharp.Core.Printf
-
 open AsmResolver
 open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
 
@@ -79,11 +77,6 @@ type RuntimeLibraryReference =
 type LocalIndex =
     | Arg of a: int32
     | Loc of int32
-
-[<NoComparison; NoEquality>]
-type InstructionBlockBuilder =
-    { mutable Instructions: System.ReadOnlyMemory<ValidInstruction>
-      Labels: IntroducedLabelLookup }
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type TranslatedGlobal =
@@ -710,7 +703,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             instructions.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.MemoryConstructor))
             instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
 
-            match input.Exports.GetMemoryName(Checked.uint32 i) with
+            match input.Exports.GetMemoryName i with
             | true, name ->
                 let memoryFieldGetter =
                     MethodDefinition(
@@ -764,7 +757,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             classDefinition.Fields.Add generatedTableField
             
-            match input.Exports.GetTableName(Checked.uint32 i) with
+            match input.Exports.GetTableName i with
             | true, name ->
                 let tableFieldGetter =
                     MethodDefinition(
@@ -823,7 +816,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let func = input.Functions[i]
 
             let generatedFunctionName, generatedFunctionAccess =
-                match input.Exports.GetFunctionName(Checked.uint32(i + input.Imports.Functions.Length)) with
+                match input.Exports.GetFunctionName(i + input.Imports.Functions.Length) with
                 | true, existing -> existing, MethodAttributes.Public
                 | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
 
@@ -1196,33 +1189,22 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     // TODO: Figure out if more efficient to have an explicit "this" parameter be the last parameter?
     let emitExpressionCode
-        (instructionBlockStack: ArrayBuilder<_> ref)
-        (instructionOffsetBuilder: ResizeArray<_>)
-        (parameterCount: int32)
-        (localVariableTypes: ImmutableArray<ValType>)
-        (expression: ValidExpression)
+        (expression: Table.ValidExpression)
         (body: CilMethodBody)
         =
-        let (|LocalIndex|) (index: Index) =
+        let (|LocalIndex|) index =
             let i = Checked.int32 index
-            if i < parameterCount then
+            if i < expression.ParameterTypes.Length then
                 // Increment offsets by one, as local index 0 refers to `this`
                 Arg(i + 1)
             else
-                Loc(i - parameterCount)
+                Loc(i - expression.ParameterTypes.Length)
 
-        for ty in localVariableTypes do
+        for ty in expression.LocalTypes do
             body.LocalVariables.Add(CilLocalVariable(getValTypeSignature ty))
 
-        let mutable instructionBlockStack: byref<_> = &instructionBlockStack.contents
         let il = body.Instructions
-
-        instructionBlockStack.Clear()
-        instructionBlockStack.Add { Instructions = expression.Expression.AsMemory(); Labels = IntroducedLabelLookup.Empty }
-
-        instructionOffsetBuilder.Clear()
-
-        let mutable hasExplicitReturn = false
+        let wasm = expression.Instructions
 
         let inline pushMemoryField i =
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
@@ -1232,118 +1214,74 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
-        /// Maps indices that refer to WASM instructions to CIL labels.
-        let labels = Dictionary<int, CilInstructionLabel>(expression.LabelIndices.Length)
-        for index in expression.LabelIndices do labels.Add(index, CilInstructionLabel())
+        for i = 0 to wasm.Length - 1 do
+            match wasm[i].Instruction with
+            | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
+            | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
+            | LocalGet(LocalIndex index) ->
+                match index with
+                | Arg i -> il.Add(CilInstruction.CreateLdarg i)
+                | Loc i -> il.Add(CilInstruction.CreateLdloc i)
+            | LocalSet(LocalIndex index) ->
+                match index with
+                | Arg i -> il.Add(CilInstruction.CreateStarg i)
+                | Loc i -> il.Add(CilInstruction.CreateStloc i)
+            | GlobalGet index ->
+                // TODO: Check for imported globals
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Ldfld, translatedModuleGlobals[Checked.int32 index].Field))
+            | GlobalSet index ->
+                // TODO: Check for imported globals
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Call, translatedModuleGlobals[Checked.int32 index].Setter.Value))
+            | I32Load arg ->
+                // Top of stack is address to load, which is first parameter
+                pushMemoryField 0
+                pushMemArg arg
+                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
+            | I32Store arg ->
+                // Stack contains the value to store on top of the address
+                pushMemoryField 0
+                pushMemArg arg
+                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
+            | MemoryGrow ->
+                // Top of the stack is the size delta
+                pushMemoryField 0
+                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
+            | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
+            | I64Const value ->
+                if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
+                    il.Add(CilInstruction.CreateLdcI4(int32 value))
+                    il.Add(CilInstruction CilOpCodes.Conv_I8)
+                else
+                    il.Add(CilInstruction(CilOpCodes.Ldc_I8, value))
+            | F32Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R4, value))
+            | F64Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R8, value))
+            | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
+            | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
+            | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
 
-        while not instructionBlockStack.IsEmpty do
-            let block = instructionBlockStack.LastRef()
-            if block.Instructions.IsEmpty then
-                let _ = instructionBlockStack.Pop()
-                ()
-            else
-                let instruction = block.Instructions.Span[0]
-
-                match instruction.Instruction with
-                | Instruction.Normal normal ->
-                    match normal with
-                    | Br label ->
-                        il.Add(CilInstruction(CilOpCodes.Br, labels[block.Labels.GetLabel(label).Index]))
-                    | Call callee ->
-                        // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Call, getIndexedCallee callee))
-                    | CallIndirect(ty, tableIndex) ->
-                        let helper: MethodDefinition = generateDynamicInvocationHelper tableIndex input.Types[Checked.int32 ty]
-                        // Parameters are already on the stack in the correct order, including the table index
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Call, helper))
-                    | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
-                    | LocalGet(LocalIndex index) ->
-                        match index with
-                        | Arg i -> il.Add(CilInstruction.CreateLdarg i)
-                        | Loc i -> il.Add(CilInstruction.CreateLdloc i)
-                    | LocalSet(LocalIndex index) ->
-                        match index with
-                        | Arg i -> il.Add(CilInstruction.CreateStarg i)
-                        | Loc i -> il.Add(CilInstruction.CreateStloc i)
-                    | GlobalGet index ->
-                        // TODO: Check for imported globals
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Ldfld, translatedModuleGlobals[Checked.int32 index].Field))
-                    | GlobalSet index ->
-                        // TODO: Check for imported globals
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Call, translatedModuleGlobals[Checked.int32 index].Setter.Value))
-                    | I32Load arg ->
-                        // Top of stack is address to load, which is first parameter
-                        pushMemoryField 0
-                        pushMemArg arg
-                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
-                    | I32Store arg ->
-                        // Stack contains the value to store on top of the address
-                        pushMemoryField 0
-                        pushMemArg arg
-                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
-                    | MemoryGrow ->
-                        // Top of the stack is the size delta
-                        pushMemoryField 0
-                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
-                    | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
-                    | I64Const value ->
-                        if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
-                            il.Add(CilInstruction.CreateLdcI4(int32 value))
-                            il.Add(CilInstruction CilOpCodes.Conv_I8)
-                        else
-                            il.Add(CilInstruction(CilOpCodes.Ldc_I8, value))
-                    | F32Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R4, value))
-                    | F64Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R8, value))
-                    | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
-                    | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
-                    | bad -> failwithf "Compilation of %A not yet supported" bad
-                | Instruction.Structured structured ->
-                    match instruction.Kind with
-                    | Structured(labels, body) ->
-                        match structured.Kind with
-                        | Block ->
-                            assert(body.Length = 1)
-                            instructionBlockStack.Add { Instructions = body[0].AsMemory(); Labels = labels }
-                        | bad -> failwithf "Unsupported structured kind compile fix later %A" bad
-                    | Normal -> failwithf "%A should not be marked as a normal isntruction" instruction
-
-                match labels.TryGetValue instruction.Index with
-                | false, _ -> ()
-                | true, label ->
-                    let nop = CilInstruction CilOpCodes.Nop
-                    il.Add nop
-                    label.Instruction <- nop
-
-                block.Instructions <- block.Instructions.Slice(1)
-
-        if not hasExplicitReturn then
-            // TODO: Implicit return could be a branch target, but does the above code already cover that case?
+        if wasm.Length >= 2 && false (*wasm[wasm.Length - 2] <> Instruction.Return*) then
             il.Add(CilInstruction CilOpCodes.Ret)
 
     do
-        let instructionBlockStack = ArrayBuilder<_>.Create() |> ref
-        let instructionOffsetBuilder = ResizeArray()
         for i = 0 to input.Functions.Length - 1 do
             let func = input.Functions[i]
             let definition = generatedClassFunctions[i]
             let body = CilMethodBody definition
-            emitExpressionCode instructionBlockStack instructionOffsetBuilder func.Type.Parameters.Length func.LocalTypes func.Body body
+            emitExpressionCode func.Body body
             definition.CilMethodBody <- body
 
         for i = 0 to translatedModuleGlobals.Length - 1 do
             let translated = translatedModuleGlobals[i]
             let original = input.Globals[i]
             let body = CilMethodBody translated.Initializer
-            emitExpressionCode instructionBlockStack instructionOffsetBuilder 0 ImmutableArray.Empty original.Value body
+            emitExpressionCode original.Value body
             translated.Initializer.CilMethodBody <- body
 
         for (expression, helper) in activeDataSegments do
             let body = CilMethodBody helper
-            emitExpressionCode instructionBlockStack instructionOffsetBuilder 0 ImmutableArray.Empty expression body
+            emitExpressionCode expression body
             helper.CilMethodBody <- body
 
     match input.Start with
