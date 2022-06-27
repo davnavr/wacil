@@ -1225,7 +1225,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
-        // To get the branch target, use ItemFromEnd
         let mutable branchTargetStack = { Targets = ArrayBuilder.Create expression.MaximumIntroducedBlockCount }
 
         // Note that WASM functions implicitly introduce a block
@@ -1237,13 +1236,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target ->
                 il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
-            | Block _ | If _ ->
+            | Block _ ->
                 branchTargetStack.Push null
             | Loop _ ->
                 let start = CilInstruction CilOpCodes.Nop
                 il.Add start
                 branchTargetStack.Push start
-            // TODO: How to handle else?
+            //| If _ -> // TODO: Check for condition in If
+            //| Else -> // TODO: How to handle else? Could get label of If portion by doing branchTargetStack.GetLabel 0 followed by a Pop then a Push
             | End ->
                 let label = branchTargetStack.Pop()
                 if isNull label.Instruction then
