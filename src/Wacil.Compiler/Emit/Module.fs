@@ -108,7 +108,7 @@ type BranchTargetStack =
     { mutable Targets: ArrayBuilder<CilInstructionLabel> }
 
     member this.Push instruction =
-        this.Targets.Add(CilInstructionLabel instruction)
+        this.Targets.Add(if isNull instruction then CilInstructionLabel() else CilInstructionLabel instruction)
 
     member this.Pop() =
         let target = this.Targets.Pop()
