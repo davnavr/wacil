@@ -226,7 +226,7 @@ module Validate =
 
         member this.PopManyValues(expected: ImmutableArray<_>) =
             let mutable popped = Array.zeroCreate expected.Length
-            for i = expected.Length - 1 to 0 do
+            for i = expected.Length - 1 downto 0 do
                 popped[i] <- this.PopValue(ValType expected.[i])
             Unsafe.Array.toImmutable popped
 
