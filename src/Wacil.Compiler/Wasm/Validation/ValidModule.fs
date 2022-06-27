@@ -392,7 +392,10 @@ module Validate =
                     { ValidInstruction.Instruction = instruction
                       PoppedTypes = poppedTypes
                       PushedTypes = pushedTypes
-                      Unreachable = controlFrameStack.LastRef().Unreachable }
+                      Unreachable =
+                        if not controlFrameStack.IsEmpty
+                        then controlFrameStack.LastRef().Unreachable
+                        else false }
 
             expression.SetInstructions(validInstructonBuilder.CopyToImmutableArray())
 
