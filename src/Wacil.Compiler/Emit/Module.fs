@@ -103,19 +103,36 @@ type ModuleImport =
       Field: FieldDefinition
       FunctionLookup: SortedList<string, TranslatedFunctionImport> }
 
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type BranchTarget =
+    | Loop of CilInstructionLabel
+    | Block of CilInstructionLabel
+    | If of elseBranchLabel: CilInstructionLabel * endBranchLabel: CilInstructionLabel
+
 [<IsByRefLike; Struct; NoComparison; NoEquality>]
 type BranchTargetStack =
-    { mutable Targets: ArrayBuilder<CilInstructionLabel> }
+    { mutable Targets: ArrayBuilder<BranchTarget> }
 
-    member this.Push instruction =
-        this.Targets.Add(if isNull instruction then CilInstructionLabel() else CilInstructionLabel instruction)
+    member this.PushBlock() =
+        this.Targets.Add(BranchTarget.Block(CilInstructionLabel()))
+
+    member this.PushLoop start =
+        this.Targets.Add(BranchTarget.Loop(CilInstructionLabel start))
+
+    member this.PushIf() =
+        let elseBranchTarget = CilInstructionLabel()
+        this.Targets.Add(BranchTarget.If(elseBranchTarget, CilInstructionLabel()))
+        elseBranchTarget
 
     member this.Pop() =
         let target = this.Targets.Pop()
         target
 
     member this.GetLabel (target: Wacil.Compiler.Wasm.Format.Index) =
-        this.Targets.ItemFromEnd(Checked.int32 target)
+        match this.Targets.ItemFromEnd(Checked.int32 target) with
+        | BranchTarget.Block label
+        | BranchTarget.Loop label
+        | BranchTarget.If(_, label) -> label
 
 let methodImplAggressiveInlining: MethodImplAttributes = LanguagePrimitives.EnumOfValue 256us
 
@@ -1228,27 +1245,37 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let mutable branchTargetStack = { Targets = ArrayBuilder.Create expression.MaximumIntroducedBlockCount }
 
         // Note that WASM functions implicitly introduce a block
-        branchTargetStack.Push null
+        branchTargetStack.PushBlock()
 
         for i = 0 to wasm.Length - 1 do
             match wasm[i].Instruction with
             //| Unreachable
             | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
-            | Br target ->
-                il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
-            | Block _ ->
-                branchTargetStack.Push null
+            | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
+            | Block _ -> branchTargetStack.PushBlock()
             | Loop _ ->
                 let start = CilInstruction CilOpCodes.Nop
                 il.Add start
-                branchTargetStack.Push start
-            //| If _ -> // TODO: Check for condition in If
-            //| Else -> // TODO: How to handle else? Could get label of If portion by doing branchTargetStack.GetLabel 0 followed by a Pop then a Push
+                branchTargetStack.PushLoop start
+            | If _ -> il.Add(CilInstruction(CilOpCodes.Brfalse, branchTargetStack.PushIf()))
+            | Else ->
+                match branchTargetStack.Targets.ItemFromEnd 0 with
+                | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
+                    il.Add(CilInstruction(CilOpCodes.Br, endBranchLabel))
+                    let elseBranchInstruction = CilInstruction CilOpCodes.Nop
+                    elseBranchLabel.Instruction <- elseBranchInstruction
+                    il.Add elseBranchInstruction
+                | _ -> invalidOp "unpairsed else instruction"
             | End ->
-                let label = branchTargetStack.Pop()
-                if isNull label.Instruction then
+                match branchTargetStack.Pop() with
+                | BranchTarget.Loop start -> assert(start.Instruction <> null)
+                | BranchTarget.Block label ->
                     label.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add label.Instruction
+                | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
+                    let endBranchInstruction = CilInstruction CilOpCodes.Nop
+                    endBranchLabel.Instruction <- endBranchInstruction
+                    if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchInstruction
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with
