@@ -196,6 +196,7 @@ module Validate =
         let mutable valueTypeStack = ArrayBuilder<OperandType>.Create()
         let mutable controlFrameStack = ArrayBuilder<ControlFrame>.Create()
         let mutable validInstructonBuilder = ArrayBuilder<ValidInstruction>.Create()
+        let mutable maximumIntroducedBlockCount = 0
 
         member _.GetCurrentValueTypes() = valueTypeStack.CopyToImmutableArray()
 
@@ -237,7 +238,11 @@ module Validate =
                   EndTypes = output
                   StartHeight = uint32 valueTypeStack.Length
                   Unreachable = false }
+
             this.PushManyValues input
+
+            if controlFrameStack.Length > maximumIntroducedBlockCount then
+                maximumIntroducedBlockCount <- controlFrameStack.Length
 
         member this.PopControlFrame() =
             if controlFrameStack.IsEmpty then raise(ControlFrameStackUnderflowException())
@@ -277,6 +282,7 @@ module Validate =
             valueTypeStack.Clear()
             controlFrameStack.ClearWithDefault()
             validInstructonBuilder.Clear()
+            maximumIntroducedBlockCount <- 0
 
             // All expressions implictly define a block
             controlFrameStack.Add
@@ -398,6 +404,7 @@ module Validate =
                         else false }
 
             expression.SetInstructions(validInstructonBuilder.CopyToImmutableArray())
+            expression.SetMaximumIntroducedBlockCount maximumIntroducedBlockCount
 
     let fromModuleSections (sections: ImmutableArray<Format.Section>) =
         let mutable contents =

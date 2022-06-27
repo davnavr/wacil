@@ -103,6 +103,20 @@ type ModuleImport =
       Field: FieldDefinition
       FunctionLookup: SortedList<string, TranslatedFunctionImport> }
 
+[<IsByRefLike; Struct; NoComparison; NoEquality>]
+type BranchTargetStack =
+    { mutable Targets: ArrayBuilder<CilInstructionLabel> }
+
+    member this.Push instruction =
+        this.Targets.Add(CilInstructionLabel instruction)
+
+    member this.Pop() =
+        let target = this.Targets.Pop()
+        target
+
+    member this.GetLabel (target: Wacil.Compiler.Wasm.Format.Index) =
+        this.Targets.ItemFromEnd(Checked.int32 target)
+
 let methodImplAggressiveInlining: MethodImplAttributes = LanguagePrimitives.EnumOfValue 256us
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
@@ -1188,10 +1202,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     //let getIndexedTable (index: Index): TranslatedTable
 
     // TODO: Figure out if more efficient to have an explicit "this" parameter be the last parameter?
-    let emitExpressionCode
-        (expression: Table.ValidExpression)
-        (body: CilMethodBody)
-        =
+    let emitExpressionCode (expression: Table.ValidExpression) (body: CilMethodBody) =
         let (|LocalIndex|) index =
             let i = Checked.int32 index
             if i < expression.ParameterTypes.Length then
@@ -1214,9 +1225,30 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
+        // To get the branch target, use ItemFromEnd
+        let mutable branchTargetStack = { Targets = ArrayBuilder.Create expression.MaximumIntroducedBlockCount }
+
+        // Note that WASM functions implicitly introduce a block
+        branchTargetStack.Push null
+
         for i = 0 to wasm.Length - 1 do
             match wasm[i].Instruction with
-            | Nop | Else | End -> il.Add(CilInstruction CilOpCodes.Nop)
+            //| Unreachable
+            | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
+            | Br target ->
+                il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
+            | Block _ | If _ ->
+                branchTargetStack.Push null
+            | Loop _ ->
+                let start = CilInstruction CilOpCodes.Nop
+                il.Add start
+                branchTargetStack.Push start
+            // TODO: How to handle else?
+            | End ->
+                let label = branchTargetStack.Pop()
+                if isNull label.Instruction then
+                    label.Instruction <- CilInstruction CilOpCodes.Nop
+                    il.Add label.Instruction
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with
@@ -1261,7 +1293,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
 
-        if wasm.Length >= 2 && true (*wasm[wasm.Length - 2] <> Instruction.Return*) then
+        if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
             il.Add(CilInstruction CilOpCodes.Ret)
 
     do

@@ -76,13 +76,16 @@ type ValidExpression =
         resultTypes: ImmutableArray<Format.ValType> -> ValidExpression
 
     member internal SetInstructions: ImmutableArray<ValidInstruction> -> unit
+    member internal SetMaximumIntroducedBlockCount: int32 -> unit
 
     member Source: ImmutableArray<Format.Instruction>
     member Instructions: ImmutableArray<ValidInstruction>
     member ParameterTypes: ImmutableArray<Format.ValType>
+    /// The types of the local variables used in the expression.
     member LocalTypes: ImmutableArray<Format.ValType>
     member ResultTypes: ImmutableArray<Format.ValType>
-    //member BranchTargets: ImmutableArray<> // TODO: May not be necessary. Perhaps the labels can be kept track of during translation?
+    /// The maximum number of blocks that are ever introduced in the expression.
+    member MaximumIntroducedBlockCount: int32
 
     member TryGetLocal: index: int32 * variableType: outref<Format.ValType> -> bool
 

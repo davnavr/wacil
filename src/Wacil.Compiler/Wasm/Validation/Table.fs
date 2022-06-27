@@ -95,15 +95,18 @@ type ValidExpression =
     val private localTypes: ImmutableArray<ValType>
     val private resultTypes: ImmutableArray<ValType>
     val mutable private instructions: ImmutableArray<ValidInstruction>
+    val mutable private maximumIntroducedBlockCount: int32
 
     internal new(source, parameterTypes, localTypes, resultTypes) =
         { source = source
           instructions = Unchecked.defaultof<_>
           parameterTypes = parameterTypes
           localTypes = localTypes
-          resultTypes = resultTypes }
+          resultTypes = resultTypes
+          maximumIntroducedBlockCount = 0 }
 
     member expr.SetInstructions instructions = expr.instructions <- instructions
+    member expr.SetMaximumIntroducedBlockCount maximum = expr.maximumIntroducedBlockCount <- maximum
 
     static member inline private EnsureNotDefault(items: ImmutableArray<'a>) =
         if items.IsDefault then invalidOp "expression was not set"
@@ -114,6 +117,7 @@ type ValidExpression =
     member expr.ParameterTypes = expr.parameterTypes
     member expr.LocalTypes = expr.localTypes
     member expr.ResultTypes = expr.resultTypes
+    member expr.MaximumIntroducedBlockCount = expr.maximumIntroducedBlockCount
 
     member expr.TryGetLocal(index, variableType: outref<_>) =
         if index < expr.parameterTypes.Length then
