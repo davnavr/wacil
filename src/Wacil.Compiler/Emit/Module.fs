@@ -4,8 +4,6 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
-open Microsoft.FSharp.Core.Printf
-
 open AsmResolver
 open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
 
@@ -29,8 +27,9 @@ type CilInstruction with
         | 1 -> CilInstruction CilOpCodes.Ldloc_1
         | 2 -> CilInstruction CilOpCodes.Ldloc_2
         | 3 -> CilInstruction CilOpCodes.Ldloc_3
-        | _ when index <= 255 -> CilInstruction(CilOpCodes.Ldloc_S, index)
-        | _ -> CilInstruction(CilOpCodes.Ldloc, index)
+        | _ when index < 0 -> raise(System.ArgumentOutOfRangeException(nameof index))
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Ldloc_S, uint8 index)
+        | _ -> CilInstruction(CilOpCodes.Ldloc, Checked.uint16 index)
 
     static member CreateLdarg index =
         match index with
@@ -38,8 +37,9 @@ type CilInstruction with
         | 1 -> CilInstruction CilOpCodes.Ldarg_1
         | 2 -> CilInstruction CilOpCodes.Ldarg_2
         | 3 -> CilInstruction CilOpCodes.Ldarg_3
-        | _ when index <= 255 -> CilInstruction(CilOpCodes.Ldarg_S, index)
-        | _ -> CilInstruction(CilOpCodes.Ldarg, index)
+        | _ when index < 0 -> raise(System.ArgumentOutOfRangeException(nameof index))
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Ldarg_S, uint8 index)
+        | _ -> CilInstruction(CilOpCodes.Ldarg, Checked.uint16 index)
 
     static member CreateStloc index =
         match index with
@@ -47,13 +47,15 @@ type CilInstruction with
         | 1 -> CilInstruction CilOpCodes.Stloc_1
         | 2 -> CilInstruction CilOpCodes.Stloc_2
         | 3 -> CilInstruction CilOpCodes.Stloc_3
-        | _ when index <= 255 -> CilInstruction(CilOpCodes.Stloc_S, index)
-        | _ -> CilInstruction(CilOpCodes.Stloc, index)
+        | _ when index < 0 -> raise(System.ArgumentOutOfRangeException(nameof index))
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Stloc_S, uint8 index)
+        | _ -> CilInstruction(CilOpCodes.Stloc, Checked.uint16 index)
 
     static member CreateStarg index =
         match index with
-        | _ when index <= 255 -> CilInstruction(CilOpCodes.Starg_S, index)
-        | _ -> CilInstruction(CilOpCodes.Starg, index)
+        | _ when index < 0 -> raise(System.ArgumentOutOfRangeException(nameof index))
+        | _ when index <= 255 -> CilInstruction(CilOpCodes.Starg_S, uint8 index)
+        | _ -> CilInstruction(CilOpCodes.Starg, Checked.uint16 index)
 
 [<NoComparison; NoEquality>]
 type RuntimeLibraryTable =
@@ -80,11 +82,6 @@ type LocalIndex =
     | Arg of a: int32
     | Loc of int32
 
-[<NoComparison; NoEquality>]
-type InstructionBlockBuilder =
-    { mutable Instructions: System.ReadOnlyMemory<ValidInstruction>
-      Labels: IntroducedLabelLookup }
-
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type TranslatedGlobal =
     { Field: FieldDefinition
@@ -109,6 +106,37 @@ type ModuleImport =
       Signature: TypeDefOrRefSignature
       Field: FieldDefinition
       FunctionLookup: SortedList<string, TranslatedFunctionImport> }
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type BranchTarget =
+    | Loop of CilInstructionLabel
+    | Block of CilInstructionLabel
+    | If of elseBranchLabel: CilInstructionLabel * endBranchLabel: CilInstructionLabel
+
+[<IsByRefLike; Struct; NoComparison; NoEquality>]
+type BranchTargetStack =
+    { mutable Targets: ArrayBuilder<BranchTarget> }
+
+    member this.PushBlock() =
+        this.Targets.Add(BranchTarget.Block(CilInstructionLabel()))
+
+    member this.PushLoop start =
+        this.Targets.Add(BranchTarget.Loop(CilInstructionLabel start))
+
+    member this.PushIf(): CilInstructionLabel =
+        let elseBranchTarget = CilInstructionLabel()
+        this.Targets.Add(BranchTarget.If(elseBranchTarget, CilInstructionLabel()))
+        elseBranchTarget
+
+    member this.Pop() =
+        let target = this.Targets.Pop()
+        target
+
+    member this.GetLabel (target: Wacil.Compiler.Wasm.Format.Index): CilInstructionLabel =
+        match this.Targets.ItemFromEnd(Checked.int32 target) with
+        | BranchTarget.Block label
+        | BranchTarget.Loop label
+        | BranchTarget.If(_, label) -> label
 
 let methodImplAggressiveInlining: MethodImplAttributes = LanguagePrimitives.EnumOfValue 256us
 
@@ -710,7 +738,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             instructions.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.MemoryConstructor))
             instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
 
-            match input.Exports.GetMemoryName(Checked.uint32 i) with
+            match input.Exports.GetMemoryName i with
             | true, name ->
                 let memoryFieldGetter =
                     MethodDefinition(
@@ -764,7 +792,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             classDefinition.Fields.Add generatedTableField
             
-            match input.Exports.GetTableName(Checked.uint32 i) with
+            match input.Exports.GetTableName i with
             | true, name ->
                 let tableFieldGetter =
                     MethodDefinition(
@@ -823,7 +851,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let func = input.Functions[i]
 
             let generatedFunctionName, generatedFunctionAccess =
-                match input.Exports.GetFunctionName(Checked.uint32(i + input.Imports.Functions.Length)) with
+                match input.Exports.GetFunctionName(i + input.Imports.Functions.Length) with
                 | true, existing -> existing, MethodAttributes.Public
                 | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
 
@@ -1195,34 +1223,20 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     //let getIndexedTable (index: Index): TranslatedTable
 
     // TODO: Figure out if more efficient to have an explicit "this" parameter be the last parameter?
-    let emitExpressionCode
-        (instructionBlockStack: ArrayBuilder<_> ref)
-        (instructionOffsetBuilder: ResizeArray<_>)
-        (parameterCount: int32)
-        (localVariableTypes: ImmutableArray<ValType>)
-        (expression: ValidExpression)
-        (body: CilMethodBody)
-        =
-        let (|LocalIndex|) (index: Index) =
+    let emitExpressionCode (expression: Table.ValidExpression) (body: CilMethodBody) =
+        let (|LocalIndex|) index =
             let i = Checked.int32 index
-            if i < parameterCount then
+            if i < expression.ParameterTypes.Length then
                 // Increment offsets by one, as local index 0 refers to `this`
                 Arg(i + 1)
             else
-                Loc(i - parameterCount)
+                Loc(i - expression.ParameterTypes.Length)
 
-        for ty in localVariableTypes do
+        for ty in expression.LocalTypes do
             body.LocalVariables.Add(CilLocalVariable(getValTypeSignature ty))
 
-        let mutable instructionBlockStack: byref<_> = &instructionBlockStack.contents
         let il = body.Instructions
-
-        instructionBlockStack.Clear()
-        instructionBlockStack.Add { Instructions = expression.Expression.AsMemory(); Labels = IntroducedLabelLookup.Empty }
-
-        instructionOffsetBuilder.Clear()
-
-        let mutable hasExplicitReturn = false
+        let wasm = expression.Instructions
 
         let inline pushMemoryField i =
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
@@ -1232,118 +1246,144 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
-        /// Maps indices that refer to WASM instructions to CIL labels.
-        let labels = Dictionary<int, CilInstructionLabel>(expression.LabelIndices.Length)
-        for index in expression.LabelIndices do labels.Add(index, CilInstructionLabel())
+        let inline pushComplexComparison comparison =
+            let trueBranchLabel = CilInstructionLabel()
+            let endBranchLabel = CilInstructionLabel()
+            il.Add(CilInstruction(comparison, trueBranchLabel))
+            il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+            il.Add(CilInstruction(CilOpCodes.Br_S, trueBranchLabel))
+            trueBranchLabel.Instruction <- CilInstruction CilOpCodes.Ldc_I4_1
+            endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
+            il.Add trueBranchLabel.Instruction
+            il.Add endBranchLabel.Instruction
 
-        while not instructionBlockStack.IsEmpty do
-            let block = instructionBlockStack.LastRef()
-            if block.Instructions.IsEmpty then
-                let _ = instructionBlockStack.Pop()
-                ()
-            else
-                let instruction = block.Instructions.Span[0]
+        let mutable branchTargetStack = { Targets = ArrayBuilder.Create expression.MaximumIntroducedBlockCount }
 
-                match instruction.Instruction with
-                | Instruction.Normal normal ->
-                    match normal with
-                    | Br label ->
-                        il.Add(CilInstruction(CilOpCodes.Br, labels[block.Labels.GetLabel(label).Index]))
-                    | Call callee ->
-                        // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Call, getIndexedCallee callee))
-                    | CallIndirect(ty, tableIndex) ->
-                        let helper: MethodDefinition = generateDynamicInvocationHelper tableIndex input.Types[Checked.int32 ty]
-                        // Parameters are already on the stack in the correct order, including the table index
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Call, helper))
-                    | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
-                    | LocalGet(LocalIndex index) ->
-                        match index with
-                        | Arg i -> il.Add(CilInstruction.CreateLdarg i)
-                        | Loc i -> il.Add(CilInstruction.CreateLdloc i)
-                    | LocalSet(LocalIndex index) ->
-                        match index with
-                        | Arg i -> il.Add(CilInstruction.CreateStarg i)
-                        | Loc i -> il.Add(CilInstruction.CreateStloc i)
-                    | GlobalGet index ->
-                        // TODO: Check for imported globals
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Ldfld, translatedModuleGlobals[Checked.int32 index].Field))
-                    | GlobalSet index ->
-                        // TODO: Check for imported globals
-                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                        il.Add(CilInstruction(CilOpCodes.Call, translatedModuleGlobals[Checked.int32 index].Setter.Value))
-                    | I32Load arg ->
-                        // Top of stack is address to load, which is first parameter
-                        pushMemoryField 0
-                        pushMemArg arg
-                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
-                    | I32Store arg ->
-                        // Stack contains the value to store on top of the address
-                        pushMemoryField 0
-                        pushMemArg arg
-                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
-                    | MemoryGrow ->
-                        // Top of the stack is the size delta
-                        pushMemoryField 0
-                        il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
-                    | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
-                    | I64Const value ->
-                        if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
-                            il.Add(CilInstruction.CreateLdcI4(int32 value))
-                            il.Add(CilInstruction CilOpCodes.Conv_I8)
-                        else
-                            il.Add(CilInstruction(CilOpCodes.Ldc_I8, value))
-                    | F32Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R4, value))
-                    | F64Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R8, value))
-                    | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
-                    | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
-                    | bad -> failwithf "Compilation of %A not yet supported" bad
-                | Instruction.Structured structured ->
-                    match instruction.Kind with
-                    | Structured(labels, body) ->
-                        match structured.Kind with
-                        | Block ->
-                            assert(body.Length = 1)
-                            instructionBlockStack.Add { Instructions = body[0].AsMemory(); Labels = labels }
-                        | bad -> failwithf "Unsupported structured kind compile fix later %A" bad
-                    | Normal -> failwithf "%A should not be marked as a normal isntruction" instruction
+        // Note that WASM functions implicitly introduce a block
+        branchTargetStack.PushBlock()
 
-                match labels.TryGetValue instruction.Index with
-                | false, _ -> ()
-                | true, label ->
-                    let nop = CilInstruction CilOpCodes.Nop
-                    il.Add nop
-                    label.Instruction <- nop
+        for i = 0 to wasm.Length - 1 do
+            match wasm[i].Instruction with
+            //| Unreachable
+            | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
+            | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
+            | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
+            | Return ->
+                // TODO: Return will need to be changed when multiple return values are involved (make helper that is used here and in the implicit return added later)
+                il.Add(CilInstruction CilOpCodes.Ret)
+            | Block _ -> branchTargetStack.PushBlock()
+            | Loop _ ->
+                let start = CilInstruction CilOpCodes.Nop
+                il.Add start
+                branchTargetStack.PushLoop start
+            | If _ -> il.Add(CilInstruction(CilOpCodes.Brfalse, branchTargetStack.PushIf()))
+            | Else ->
+                match branchTargetStack.Targets.ItemFromEnd 0 with
+                | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
+                    il.Add(CilInstruction(CilOpCodes.Br, endBranchLabel))
+                    elseBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
+                    il.Add elseBranchLabel.Instruction
+                | _ -> invalidOp "unpairsed else instruction"
+            | End ->
+                match branchTargetStack.Pop() with
+                | BranchTarget.Loop start -> assert(start.Instruction <> null)
+                | BranchTarget.Block label ->
+                    label.Instruction <- CilInstruction CilOpCodes.Nop
+                    il.Add label.Instruction
+                | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
+                    endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
+                    il.Add endBranchLabel.Instruction
+                    if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchLabel.Instruction
+            | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
+            | LocalGet(LocalIndex index) ->
+                match index with
+                | Arg i -> il.Add(CilInstruction.CreateLdarg i)
+                | Loc i -> il.Add(CilInstruction.CreateLdloc i)
+            | LocalSet(LocalIndex index) ->
+                match index with
+                | Arg i -> il.Add(CilInstruction.CreateStarg i)
+                | Loc i -> il.Add(CilInstruction.CreateStloc i)
+            | GlobalGet index ->
+                // TODO: Check for imported globals
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Ldfld, translatedModuleGlobals[Checked.int32 index].Field))
+            | GlobalSet index ->
+                // TODO: Check for imported globals
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Call, translatedModuleGlobals[Checked.int32 index].Setter.Value))
+            | I32Load arg ->
+                // Top of stack is address to load, which is first parameter
+                pushMemoryField 0
+                pushMemArg arg
+                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
+            | I32Store arg ->
+                // Stack contains the value to store on top of the address
+                pushMemoryField 0
+                pushMemArg arg
+                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
+            | MemoryGrow ->
+                // Top of the stack is the size delta
+                pushMemoryField 0
+                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
+            | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
+            | I64Const value ->
+                if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
+                    il.Add(CilInstruction.CreateLdcI4(int32 value))
+                    il.Add(CilInstruction CilOpCodes.Conv_I8)
+                else
+                    il.Add(CilInstruction(CilOpCodes.Ldc_I8, value))
+            | F32Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R4, value))
+            | F64Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R8, value))
+            | I32Eqz ->
+                il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                il.Add(CilInstruction CilOpCodes.Ceq)
+            | I64Eqz ->
+                il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                il.Add(CilInstruction CilOpCodes.Conv_I8)
+                il.Add(CilInstruction CilOpCodes.Ceq)
+            | I32Eq | I64Eq -> il.Add(CilInstruction CilOpCodes.Ceq)
+            | I32Ne | I64Ne ->
+                il.Add(CilInstruction CilOpCodes.Ceq)
+                il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                il.Add(CilInstruction CilOpCodes.Ceq)
+            // TODO: Make sure that the direction of the comparison operation is actually correct
+            | I32LtS | I64LtS -> il.Add(CilInstruction CilOpCodes.Clt)
+            | I32LtU | I64LtU -> il.Add(CilInstruction CilOpCodes.Clt_Un)
+            | I32GtS | I64GtS -> il.Add(CilInstruction CilOpCodes.Cgt)
+            | I32GtU | I64GtU -> il.Add(CilInstruction CilOpCodes.Cgt_Un)
+            | I32LeS | I64LeS -> pushComplexComparison CilOpCodes.Ble_S
+            | I32LeU | I64LeU -> pushComplexComparison CilOpCodes.Ble_Un_S
+            | I32GeS | I64GeS -> pushComplexComparison CilOpCodes.Bge_S
+            | I32GeU | I64GeU -> pushComplexComparison CilOpCodes.Bge_Un_S
+            | I32Add | I64Add -> il.Add(CilInstruction CilOpCodes.Add)
+            | I32Sub | I64Sub -> il.Add(CilInstruction CilOpCodes.Sub)
+            | I32Mul | I64Mul -> il.Add(CilInstruction CilOpCodes.Mul)
+            | I32DivS | I64DivS -> il.Add(CilInstruction CilOpCodes.Div)
+            | I32DivU | I64DivU -> il.Add(CilInstruction CilOpCodes.Div_Un)
+            | I32And -> il.Add(CilInstruction CilOpCodes.And)
+            | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
 
-                block.Instructions <- block.Instructions.Slice(1)
-
-        if not hasExplicitReturn then
-            // TODO: Implicit return could be a branch target, but does the above code already cover that case?
+        if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
             il.Add(CilInstruction CilOpCodes.Ret)
 
     do
-        let instructionBlockStack = ArrayBuilder<_>.Create() |> ref
-        let instructionOffsetBuilder = ResizeArray()
         for i = 0 to input.Functions.Length - 1 do
             let func = input.Functions[i]
             let definition = generatedClassFunctions[i]
             let body = CilMethodBody definition
-            emitExpressionCode instructionBlockStack instructionOffsetBuilder func.Type.Parameters.Length func.LocalTypes func.Body body
+            emitExpressionCode func.Body body
             definition.CilMethodBody <- body
 
         for i = 0 to translatedModuleGlobals.Length - 1 do
             let translated = translatedModuleGlobals[i]
             let original = input.Globals[i]
             let body = CilMethodBody translated.Initializer
-            emitExpressionCode instructionBlockStack instructionOffsetBuilder 0 ImmutableArray.Empty original.Value body
+            emitExpressionCode original.Value body
             translated.Initializer.CilMethodBody <- body
 
         for (expression, helper) in activeDataSegments do
             let body = CilMethodBody helper
-            emitExpressionCode instructionBlockStack instructionOffsetBuilder 0 ImmutableArray.Empty expression body
+            emitExpressionCode expression body
             helper.CilMethodBody <- body
 
     match input.Start with

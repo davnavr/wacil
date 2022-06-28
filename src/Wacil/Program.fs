@@ -60,32 +60,29 @@ let main argv =
             use reader = input.OpenRead()
             Compiler.Wasm.Parser.parseFromStream reader
 
-        match Compiler.Wasm.Validation.Validate.fromModuleSections input' with
-        | Ok input'' ->
-            if args.Contains <@ Debug_Disassemble @> then
-                Compiler.Wasm.Disassemble.disassembleToWriter input'' Console.Out
+        let input'' = Compiler.Wasm.Validation.Validate.fromModuleSections input'
+        
+        if args.Contains <@ Debug_Disassemble @> then
+            Compiler.Wasm.Disassemble.disassembleToWriter input'' Console.Out
 
-            let output =
-                getFileArgument args <@ Out @> <| fun() -> FileInfo(Path.ChangeExtension(input.FullName, ".dll"))
+        let output =
+            getFileArgument args <@ Out @> <| fun() -> FileInfo(Path.ChangeExtension(input.FullName, ".dll"))
 
-            let oname = Path.GetFileNameWithoutExtension output.Name
+        let oname = Path.GetFileNameWithoutExtension output.Name
 
-            use writer = output.OpenWrite()
+        use writer = output.OpenWrite()
 
-            Module.compileToStream
-                { TargetFramework = args.GetResult(<@ Framework @>, defaultValue = TargetFramework.Net6)
-                  OutputType = args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
-                  Name = oname
-                  Version = Version(0, 0, 0, 0)
-                  RuntimeVersion = Version(1, 0, 0, 0)
-                  Namespace = "" }
-                input''
-                writer
+        Module.compileToStream
+            { TargetFramework = args.GetResult(<@ Framework @>, defaultValue = TargetFramework.Net6)
+              OutputType = args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
+              Name = oname
+              Version = Version(0, 0, 0, 0)
+              RuntimeVersion = Version(1, 0, 0, 0)
+              Namespace = "" }
+            input''
+            writer
 
-            0
-        | Error e ->
-            eprintfn "%O" e
-            -1
+        0
     with
     | :? ArguException as ex ->
         stderr.WriteLine ex.Message

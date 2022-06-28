@@ -17,8 +17,10 @@
     <Compile Include="Wasm\Format.fs" />
     <Compile Include="Wasm\Parser.fsi" />
     <Compile Include="Wasm\Parser.fs" />
-    <Compile Include="Wasm\Validation.fsi" />
-    <Compile Include="Wasm\Validation.fs" />
+    <Compile Include="Wasm\Validation\Table.fsi" />
+    <Compile Include="Wasm\Validation\Table.fs" />
+    <Compile Include="Wasm\Validation\ValidModule.fsi" />
+    <Compile Include="Wasm\Validation\ValidModule.fs" />
     <Compile Include="Wasm\Disassemble.fsi" />
     <Compile Include="Wasm\Disassemble.fs" />
 

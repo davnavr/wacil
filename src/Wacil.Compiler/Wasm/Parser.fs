@@ -220,116 +220,248 @@ type InstructionBuilderCache =
 
     member this.Return buffer = this.Builders.Add buffer
 
-let parseExpression (reader: Reader) (instructionBuilderCache: byref<InstructionBuilderCache>): Expression =
-    let mutable body = ImmutableArray.Empty
-    let mutable blockInstructionStack = ArrayBuilder<BlockBuilder>.Create()
+let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instruction>>): Expression =
+    let mutable nestedBlockLevel = 0
 
-    blockInstructionStack.Add
-        { BlockBuilder.Instructions = instructionBuilderCache.Rent()
-          State = BlockBuilderState.Finish }
+    instructions.Clear()
 
-    while not blockInstructionStack.IsEmpty do
-        let mutable block = &blockInstructionStack.LastRef().Instructions
-
+    while nestedBlockLevel > -1 do
         match LanguagePrimitives.EnumOfValue(reader.ReadByte()) with
-        | Opcode.Unreachable -> block.Add(Instruction.Normal Unreachable)
-        | Opcode.Nop -> block.Add(Instruction.Normal Nop)
+        | Opcode.Unreachable -> instructions.Add Unreachable
+        | Opcode.Nop -> instructions.Add Nop
         | Opcode.Block ->
-            blockInstructionStack.Add
-                { BlockBuilder.Instructions = instructionBuilderCache.Rent()
-                  State = BlockBuilderState.Block(reader.ReadBlockType()) }
+            nestedBlockLevel <- Checked.(+) nestedBlockLevel 1
+            instructions.Add(Block(reader.ReadBlockType()))
         | Opcode.Loop ->
-            blockInstructionStack.Add
-                { BlockBuilder.Instructions = instructionBuilderCache.Rent()
-                  State = BlockBuilderState.Loop(reader.ReadBlockType()) }
+            nestedBlockLevel <- Checked.(+) nestedBlockLevel 1
+            instructions.Add(Loop(reader.ReadBlockType()))
         | Opcode.If ->
-            blockInstructionStack.Add
-                { BlockBuilder.Instructions = instructionBuilderCache.Rent()
-                  State = BlockBuilderState.If(reader.ReadBlockType()) }
-        //| Opcode.Else ->
+            nestedBlockLevel <- Checked.(+) nestedBlockLevel 1
+            instructions.Add(If(reader.ReadBlockType()))
+        | Opcode.Else -> instructions.Add Else
         | Opcode.End ->
-            let mutable popped = Unchecked.defaultof<BlockBuilder>
-            blockInstructionStack.Pop(&popped)
-            let instructions = popped.Instructions.ToImmutableArray()
-
-            match popped.State with
-            | BlockBuilderState.Finish -> body <- instructions
-            | BlockBuilderState.Block ty ->
-                let mutable block = &blockInstructionStack.LastRef().Instructions
-                block.Add(Instruction.Structured { StructuredInstruction.Kind = Block; Type = ty; Instructions = instructions })
-            | BlockBuilderState.Loop ty ->
-                let mutable block = &blockInstructionStack.LastRef().Instructions
-                block.Add(Instruction.Structured { StructuredInstruction.Kind = Loop; Type = ty; Instructions = instructions })
-            | BlockBuilderState.If ty ->
-                let mutable block = &blockInstructionStack.LastRef().Instructions
-                block.Add(Instruction.Structured { Kind = IfElse ImmutableArray.Empty; Type = ty; Instructions = instructions })
-            | BlockBuilderState.IfElse(ty, branch) ->
-                let mutable block = &blockInstructionStack.LastRef().Instructions
-                block.Add(Instruction.Structured { Kind = IfElse instructions; Type = ty; Instructions = branch })
-
-            instructionBuilderCache.Return popped.Instructions
-        | Opcode.Br -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Br |> Instruction.Normal)
-        | Opcode.Call -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Call |> Instruction.Normal)
+            nestedBlockLevel <- Checked.(-) nestedBlockLevel 1
+            instructions.Add End
+        | Opcode.Br -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Br)
+        | Opcode.BrIf -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> BrIf)
+        | Opcode.BrTable ->
+            let mutable targetLabels = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+            for i = 0 to targetLabels.Length - 1 do targetLabels[i] <- reader.ReadUnsignedInteger() |> Checked.uint32
+            let defaultLabel = reader.ReadUnsignedInteger() |> Checked.uint32
+            instructions.Add(BrTable(Unsafe.Array.toImmutable targetLabels, defaultLabel))
+        | Opcode.Return -> instructions.Add Return
+        | Opcode.Call -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Call)
         | Opcode.CallIndirect ->
             let instruction =
                 (reader.ReadUnsignedInteger() |> Checked.uint32, reader.ReadUnsignedInteger() |> Checked.uint32)
                 |> CallIndirect
-                |> Instruction.Normal
-            block.Add instruction
-        | Opcode.Drop -> block.Add(Instruction.Normal Drop)
-        | Opcode.LocalGet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet |> Instruction.Normal)
-        | Opcode.LocalSet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet |> Instruction.Normal)
-        | Opcode.LocalTee -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalTee |> Instruction.Normal)
-        | Opcode.GlobalGet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalGet |> Instruction.Normal)
-        | Opcode.GlobalSet -> block.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalSet |> Instruction.Normal)
-        | Opcode.I32Load -> block.Add(parseMemArg reader |> I32Load |> Instruction.Normal)
-        | Opcode.I64Load -> block.Add(parseMemArg reader |> I64Load |> Instruction.Normal)
-        | Opcode.F32Load -> block.Add(parseMemArg reader |> F32Load |> Instruction.Normal)
-        | Opcode.F64Load -> block.Add(parseMemArg reader |> F64Load |> Instruction.Normal)
-        | Opcode.I32Store -> block.Add(parseMemArg reader |> I32Store |> Instruction.Normal)
-        | Opcode.I64Store -> block.Add(parseMemArg reader |> I64Store |> Instruction.Normal)
-        | Opcode.F32Store -> block.Add(parseMemArg reader |> F32Store |> Instruction.Normal)
-        | Opcode.F64Store -> block.Add(parseMemArg reader |> F64Store |> Instruction.Normal)
+            instructions.Add instruction
+        | Opcode.Drop -> instructions.Add Drop
+        | Opcode.Select -> instructions.Add Select
+        | Opcode.SelectMany -> raise(NotSupportedException "select instruction that uses multiple values not yet suppoprted")
+        | Opcode.LocalGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet)
+        | Opcode.LocalSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet)
+        | Opcode.LocalTee -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalTee)
+        | Opcode.GlobalGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalGet)
+        | Opcode.GlobalSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalSet)
+        | Opcode.TableGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableGet)
+        | Opcode.TableSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableSet)
+        | Opcode.I32Load -> instructions.Add(parseMemArg reader |> I32Load)
+        | Opcode.I64Load -> instructions.Add(parseMemArg reader |> I64Load)
+        | Opcode.F32Load -> instructions.Add(parseMemArg reader |> F32Load)
+        | Opcode.F64Load -> instructions.Add(parseMemArg reader |> F64Load)
+        | Opcode.I32Load8S -> instructions.Add(parseMemArg reader |> I32Load8S)
+        | Opcode.I32Load8U -> instructions.Add(parseMemArg reader |> I32Load8U)
+        | Opcode.I32Load16S -> instructions.Add(parseMemArg reader |> I32Load16S)
+        | Opcode.I32Load16U -> instructions.Add(parseMemArg reader |> I32Load16U)
+        | Opcode.I64Load8S -> instructions.Add(parseMemArg reader |> I64Load8S)
+        | Opcode.I64Load8U -> instructions.Add(parseMemArg reader |> I64Load8U)
+        | Opcode.I64Load16S -> instructions.Add(parseMemArg reader |> I64Load16S)
+        | Opcode.I64Load16U -> instructions.Add(parseMemArg reader |> I64Load16U)
+        | Opcode.I64Load32S -> instructions.Add(parseMemArg reader |> I64Load32S)
+        | Opcode.I64Load32U -> instructions.Add(parseMemArg reader |> I64Load32U)
+        | Opcode.I32Store -> instructions.Add(parseMemArg reader |> I32Store)
+        | Opcode.I64Store -> instructions.Add(parseMemArg reader |> I64Store)
+        | Opcode.F32Store -> instructions.Add(parseMemArg reader |> F32Store)
+        | Opcode.F64Store -> instructions.Add(parseMemArg reader |> F64Store)
+        | Opcode.I32Store8 -> instructions.Add(parseMemArg reader |> I32Store8)
+        | Opcode.I32Store16 -> instructions.Add(parseMemArg reader |> I32Store16)
+        | Opcode.I64Store8 -> instructions.Add(parseMemArg reader |> I64Store8)
+        | Opcode.I64Store16 -> instructions.Add(parseMemArg reader |> I64Store16)
+        | Opcode.I64Store32 -> instructions.Add(parseMemArg reader |> I64Store32)
         | Opcode.MemoryGrow ->
             parseMemoryIndex reader
-            block.Add(Instruction.Normal MemoryGrow)
-        | Opcode.I32Const -> block.Add(reader.ReadSignedInteger() |> Checked.int32 |> I32Const |> Instruction.Normal)
-        | Opcode.I64Const -> block.Add(reader.ReadSignedInteger() |> I64Const |> Instruction.Normal)
-        | Opcode.F32Const -> block.Add(reader.ReadFloat32() |> F32Const |> Instruction.Normal)
-        | Opcode.F64Const -> block.Add(reader.ReadFloat64() |> F64Const |> Instruction.Normal)
-        | Opcode.I32Eqz -> block.Add(Instruction.Normal I32Eqz)
-        | Opcode.I32Eq -> block.Add(Instruction.Normal I32Eq)
-        | Opcode.I32Ne -> block.Add(Instruction.Normal I32Ne)
-        | Opcode.I32LtS -> block.Add(Instruction.Normal I32LtS)
-        | Opcode.I32LtU -> block.Add(Instruction.Normal I32LtU)
-        | Opcode.I32GtS -> block.Add(Instruction.Normal I32GtS)
-        | Opcode.I32GtU -> block.Add(Instruction.Normal I32GtU)
-        | Opcode.I32LeS -> block.Add(Instruction.Normal I32LeS)
-        | Opcode.I32LeU -> block.Add(Instruction.Normal I32LeU)
-        | Opcode.I32GeS -> block.Add(Instruction.Normal I32GeS)
-        | Opcode.I32GeU -> block.Add(Instruction.Normal I32GeU)
-        | Opcode.I64Eqz -> block.Add(Instruction.Normal I64Eqz)
-        | Opcode.I64Eq -> block.Add(Instruction.Normal I64Eq)
-        | Opcode.I64Ne -> block.Add(Instruction.Normal I64Ne)
-        | Opcode.I64LtS -> block.Add(Instruction.Normal I64LtS)
-        | Opcode.I64LtU -> block.Add(Instruction.Normal I64LtU)
-        | Opcode.I64GtS -> block.Add(Instruction.Normal I64GtS)
-        | Opcode.I64GtU -> block.Add(Instruction.Normal I64GtU)
-        | Opcode.I64LeS -> block.Add(Instruction.Normal I64LeS)
-        | Opcode.I64LeU -> block.Add(Instruction.Normal I64LeU)
-        | Opcode.I64GeS -> block.Add(Instruction.Normal I64GeS)
-        | Opcode.I64GeU -> block.Add(Instruction.Normal I64GeU)
-        | Opcode.I32Add -> block.Add(Instruction.Normal I32Add)
-        | Opcode.I32Sub -> block.Add(Instruction.Normal I32Sub)
-        | Opcode.I32Mul -> block.Add(Instruction.Normal I32Mul)
-        | Opcode.I32And -> block.Add(Instruction.Normal I32And)
-        | Opcode.I64Sub -> block.Add(Instruction.Normal I64Sub)
-        | Opcode.I64Mul -> block.Add(Instruction.Normal I64Mul)
+            instructions.Add MemoryGrow
+        | Opcode.I32Const -> instructions.Add(reader.ReadSignedInteger() |> Checked.int32 |> I32Const)
+        | Opcode.I64Const -> instructions.Add(reader.ReadSignedInteger() |> I64Const)
+        | Opcode.F32Const -> instructions.Add(reader.ReadFloat32() |> F32Const)
+        | Opcode.F64Const -> instructions.Add(reader.ReadFloat64() |> F64Const)
+        | Opcode.I32Eqz -> instructions.Add I32Eqz
+        | Opcode.I32Eq -> instructions.Add I32Eq
+        | Opcode.I32Ne -> instructions.Add I32Ne
+        | Opcode.I32LtS -> instructions.Add I32LtS
+        | Opcode.I32LtU -> instructions.Add I32LtU
+        | Opcode.I32GtS -> instructions.Add I32GtS
+        | Opcode.I32GtU -> instructions.Add I32GtU
+        | Opcode.I32LeS -> instructions.Add I32LeS
+        | Opcode.I32LeU -> instructions.Add I32LeU
+        | Opcode.I32GeS -> instructions.Add I32GeS
+        | Opcode.I32GeU -> instructions.Add I32GeU
+        | Opcode.I64Eqz -> instructions.Add I64Eqz
+        | Opcode.I64Eq -> instructions.Add I64Eq
+        | Opcode.I64Ne -> instructions.Add I64Ne
+        | Opcode.I64LtS -> instructions.Add I64LtS
+        | Opcode.I64LtU -> instructions.Add I64LtU
+        | Opcode.I64GtS -> instructions.Add I64GtS
+        | Opcode.I64GtU -> instructions.Add I64GtU
+        | Opcode.I64LeS -> instructions.Add I64LeS
+        | Opcode.I64LeU -> instructions.Add I64LeU
+        | Opcode.I64GeS -> instructions.Add I64GeS
+        | Opcode.I64GeU -> instructions.Add I64GeU
+        | Opcode.F32Eq -> instructions.Add F32Eq
+        | Opcode.F32Ne -> instructions.Add F32Ne
+        | Opcode.F32Lt -> instructions.Add F32Lt
+        | Opcode.F32Gt -> instructions.Add F32Gt
+        | Opcode.F32Le -> instructions.Add F32Le
+        | Opcode.F32Ge -> instructions.Add F32Ge
+        | Opcode.F64Eq -> instructions.Add F64Eq
+        | Opcode.F64Ne -> instructions.Add F64Ne
+        | Opcode.F64Lt -> instructions.Add F64Lt
+        | Opcode.F64Gt -> instructions.Add F64Gt
+        | Opcode.F64Le -> instructions.Add F64Le
+        | Opcode.F64Ge -> instructions.Add F64Ge
+        | Opcode.I32Clz -> instructions.Add I32Clz
+        | Opcode.I32Ctz -> instructions.Add I32Ctz
+        | Opcode.I32Popcnt -> instructions.Add I32Popcnt
+        | Opcode.I32Add -> instructions.Add I32Add
+        | Opcode.I32Sub -> instructions.Add I32Sub
+        | Opcode.I32Mul -> instructions.Add I32Mul
+        | Opcode.I32DivS -> instructions.Add I32DivS
+        | Opcode.I32DivU -> instructions.Add I32DivU
+        | Opcode.I32RemS -> instructions.Add I32RemS
+        | Opcode.I32RemU -> instructions.Add I32RemU
+        | Opcode.I32And -> instructions.Add I32And
+        | Opcode.I32Or -> instructions.Add I32Or
+        | Opcode.I32Xor -> instructions.Add I32Xor
+        | Opcode.I32Shl -> instructions.Add I32Shl
+        | Opcode.I32ShrS -> instructions.Add I32ShrS
+        | Opcode.I32ShrU -> instructions.Add I32ShrU
+        | Opcode.I32Rotl -> instructions.Add I32Rotl
+        | Opcode.I32Rotr -> instructions.Add I32Rotr
+        | Opcode.I64Clz -> instructions.Add I64Clz
+        | Opcode.I64Ctz -> instructions.Add I64Ctz
+        | Opcode.I64Popcnt -> instructions.Add I64Popcnt
+        | Opcode.I64Add -> instructions.Add I64Add
+        | Opcode.I64Sub -> instructions.Add I64Sub
+        | Opcode.I64Mul -> instructions.Add I64Mul
+        | Opcode.I64DivS -> instructions.Add I64DivS
+        | Opcode.I64DivU -> instructions.Add I64DivU
+        | Opcode.I64RemS -> instructions.Add I64RemS
+        | Opcode.I64RemU -> instructions.Add I64RemU
+        | Opcode.I64And -> instructions.Add I64And
+        | Opcode.I64Or -> instructions.Add I64Or
+        | Opcode.I64Xor -> instructions.Add I64Xor
+        | Opcode.I64Shl -> instructions.Add I64Shl
+        | Opcode.I64ShrS -> instructions.Add I64ShrS
+        | Opcode.I64ShrU -> instructions.Add I64ShrU
+        | Opcode.I64Rotl -> instructions.Add I64Rotl
+        | Opcode.I64Rotr -> instructions.Add I64Rotr
+        | Opcode.F32Abs -> instructions.Add F32Abs
+        | Opcode.F32Neg -> instructions.Add F32Neg
+        | Opcode.F32Ceil -> instructions.Add F32Ceil
+        | Opcode.F32Floor -> instructions.Add F32Floor
+        | Opcode.F32Trunc -> instructions.Add F32Trunc
+        | Opcode.F32Nearest -> instructions.Add F32Nearest
+        | Opcode.F32Sqrt -> instructions.Add F32Sqrt
+        | Opcode.F32Add -> instructions.Add F32Add
+        | Opcode.F32Sub -> instructions.Add F32Sub
+        | Opcode.F32Mul -> instructions.Add F32Mul
+        | Opcode.F32Div -> instructions.Add F32Div
+        | Opcode.F32Min -> instructions.Add F32Min
+        | Opcode.F32Max -> instructions.Add F32Max
+        | Opcode.F32Copysign -> instructions.Add F32Copysign
+        | Opcode.F64Abs -> instructions.Add F64Abs
+        | Opcode.F64Neg -> instructions.Add F64Neg
+        | Opcode.F64Ceil -> instructions.Add F64Ceil
+        | Opcode.F64Floor -> instructions.Add F64Floor
+        | Opcode.F64Trunc -> instructions.Add F64Trunc
+        | Opcode.F64Nearest -> instructions.Add F64Nearest
+        | Opcode.F64Sqrt -> instructions.Add F64Sqrt
+        | Opcode.F64Add -> instructions.Add F64Add
+        | Opcode.F64Sub -> instructions.Add F64Sub
+        | Opcode.F64Mul -> instructions.Add F64Mul
+        | Opcode.F64Div -> instructions.Add F64Div
+        | Opcode.F64Min -> instructions.Add F64Min
+        | Opcode.F64Max -> instructions.Add F64Max
+        | Opcode.F64Copysign -> instructions.Add F64Copysign
+        | Opcode.I32WrapI64 -> instructions.Add I32WrapI64
+        | Opcode.I32TruncF32S -> instructions.Add I32TruncF32S
+        | Opcode.I32TruncF32U -> instructions.Add I32TruncF32U
+        | Opcode.I32TruncF64S -> instructions.Add I32TruncF64S
+        | Opcode.I32TruncF64U -> instructions.Add I32TruncF64U
+        | Opcode.I64ExtendI32S -> instructions.Add I64ExtendI32S
+        | Opcode.I64ExtendI32U -> instructions.Add I64ExtendI32U
+        | Opcode.I64TruncF32S -> instructions.Add I64TruncF32S
+        | Opcode.I64TruncF32U -> instructions.Add I64TruncF32U
+        | Opcode.I64TruncF64S -> instructions.Add I64TruncF64S
+        | Opcode.I64TruncF64U -> instructions.Add I64TruncF64U
+        | Opcode.F32ConvertI32S -> instructions.Add F32ConvertI32S
+        | Opcode.F32ConvertI32U -> instructions.Add F32ConvertI32U
+        | Opcode.F32ConvertI64S -> instructions.Add F32ConvertI64S
+        | Opcode.F32ConvertI64U -> instructions.Add F32ConvertI64U
+        | Opcode.F32DemoteF64 -> instructions.Add F32DemoteF64
+        | Opcode.F64ConvertI32S -> instructions.Add F64ConvertI32S
+        | Opcode.F64ConvertI32U -> instructions.Add F64ConvertI32U
+        | Opcode.F64ConvertI64S -> instructions.Add F64ConvertI64S
+        | Opcode.F64ConvertI64U -> instructions.Add F64ConvertI64U
+        | Opcode.F64PromoteF32 -> instructions.Add F64PromoteF32
+        | Opcode.I32ReinterpretF32 -> instructions.Add I32ReinterpretF32
+        | Opcode.I64ReinterpretF64 -> instructions.Add I64ReinterpretF64
+        | Opcode.F32ReinterpretI32 -> instructions.Add F32ReinterpretI32
+        | Opcode.F64ReinterpretI64 -> instructions.Add F64ReinterpretI64
+        | Opcode.I32Extend8S -> instructions.Add I32Extend8S
+        | Opcode.I32Extend16S -> instructions.Add I32Extend16S
+        | Opcode.I64Extend8S -> instructions.Add I64Extend8S
+        | Opcode.I64Extend32S -> instructions.Add I64Extend32S
+        | Opcode.I64Extend16S -> instructions.Add I64Extend16S
+        | Opcode.RefNull ->
+            match reader.ReadValType() with
+            | ValType.Ref r -> instructions.Add(RefNull r)
+            | bad -> failwithf "%A is not a ref type" bad
+        | Opcode.RefIsNull -> instructions.Add RefIsNull
+        | Opcode.RefFunc -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> RefFunc)
+        | Opcode.PrefixFC ->
+            match reader.ReadUnsignedInteger() with
+            | 0UL -> instructions.Add I32TruncSatF32S
+            | 1UL -> instructions.Add I32TruncSatF32U
+            | 2UL -> instructions.Add I32TruncSatF64S
+            | 3UL -> instructions.Add I32TruncSatF64U
+            | 4UL -> instructions.Add I64TruncSatF32S
+            | 5UL -> instructions.Add I64TruncSatF32U
+            | 6UL -> instructions.Add I64TruncSatF64S
+            | 7UL -> instructions.Add I64TruncSatF64U
+            //| 8UL -> 
+            | 9UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> DataDrop)
+            //| 10UL ->
+            //| 11UL ->
+            | 12UL ->
+                let element = reader.ReadUnsignedInteger() |> Checked.uint32
+                let table = reader.ReadUnsignedInteger() |> Checked.uint32
+                instructions.Add(TableInit(element, table))
+            | 13UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> ElemDrop)
+            | 14UL ->
+                let table1 = reader.ReadUnsignedInteger() |> Checked.uint32
+                let table2 = reader.ReadUnsignedInteger() |> Checked.uint32
+                instructions.Add(TableCopy(table1, table2))
+            | 15UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableGrow)
+            | 16UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableSize)
+            | 17UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableFill)
+            | bad -> failwithf "Invalid prefixed instruction 0xFC 0x%02X" bad
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
-    body
+    instructions.CopyToImmutableArray()
 
-let parseCodeEntry (reader: Reader) (instructionBuilderCache: byref<InstructionBuilderCache>) =
+let parseCodeEntry (reader: Reader) (instructions: byref<ArrayBuilder<_>>) =
     let expectedFunctionSize = reader.ReadUnsignedInteger() |> Checked.int32
     let functionStartOffset = reader.Offset
 
@@ -339,9 +471,7 @@ let parseCodeEntry (reader: Reader) (instructionBuilderCache: byref<InstructionB
             { Local.Count = reader.ReadUnsignedInteger() |> Checked.uint32
               Local.Type = reader.ReadValType() }
 
-    let code =
-        { Code.Locals = Unsafe.Array.toImmutable locals
-          Body = parseExpression reader &instructionBuilderCache }
+    let code = { Code.Locals = Unsafe.Array.toImmutable locals; Body = parseExpression reader &instructions }
 
     let actualFunctionSize = reader.Offset - functionStartOffset
     if actualFunctionSize <> expectedFunctionSize then
@@ -369,7 +499,7 @@ let parseFromStream (stream: Stream) =
             failwithf "Invalid WebAssembly format version"
 
         let mutable sections = ArrayBuilder<Section>.Create()
-        let mutable instructionBuilderCache = { InstructionBuilderCache.Builders = ArrayBuilder<_>.Create() }
+        let mutable instructionSequenceBuilder = ArrayBuilder<_>.Create()
         let sectionTagBuffer = magicNumberBuffer.Slice(0, 1)
         //use sectionContentBuffer = new MemoryStream();
         //let sectionContentReader = Reader(sectionContentBuffer, ArrayPool.Shared)
@@ -431,7 +561,7 @@ let parseFromStream (stream: Stream) =
                                 | 0uy -> Mutability.Const
                                 | 1uy -> Mutability.Var
                                 | bad -> failwithf "0x%02X is not a valid global mutability value" bad }
-                          Global.Expression = parseExpression reader &instructionBuilderCache }
+                          Global.Expression = parseExpression reader &instructionSequenceBuilder }
                 sections.Add(Section.Global(Unsafe.Array.toImmutable glbls))
             | SectionId.Export ->
                 let exports = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
@@ -451,7 +581,7 @@ let parseFromStream (stream: Stream) =
             | SectionId.Start -> sections.Add(Section.Start(reader.ReadUnsignedInteger() |> Checked.uint32))
             | SectionId.Code ->
                 let code = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionBuilderCache
+                for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionSequenceBuilder
                 sections.Add(Section.Code(Unsafe.Array.toImmutable code))
             | SectionId.Data ->
                 let data = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
@@ -459,7 +589,7 @@ let parseFromStream (stream: Stream) =
                     data[i] <-
                         match reader.ReadUnsignedInteger() |> Checked.uint32 with
                         | 0u ->
-                            let expression = parseExpression reader &instructionBuilderCache
+                            let expression = parseExpression reader &instructionSequenceBuilder
                             let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                             reader.ReadAll(Span bytes)
                             { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(0u, expression) }
@@ -469,7 +599,7 @@ let parseFromStream (stream: Stream) =
                             { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Passive }
                         | 2u ->
                             let index = reader.ReadUnsignedInteger() |> Checked.uint32
-                            let expression = parseExpression reader &instructionBuilderCache
+                            let expression = parseExpression reader &instructionSequenceBuilder
                             let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                             reader.ReadAll(Span bytes)
                             { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(index, expression) }
