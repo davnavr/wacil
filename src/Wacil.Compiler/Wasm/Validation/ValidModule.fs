@@ -362,7 +362,8 @@ module Validate =
                 | Format.F32Const _ -> this.PushValue OperandType.f32
                 | Format.F64Const _ -> this.PushValue OperandType.f64
                 | Format.I32Eq | Format.I32Ne | Format.I32LtS | Format.I32LtU | Format.I32GtS | Format.I32GtU | Format.I32LeS
-                | Format.I32LeU | Format.I32GeS | Format.I32GeU | Format.I32Add | Format.I32Sub | Format.I32Mul ->
+                | Format.I32LeU | Format.I32GeS | Format.I32GeU | Format.I32Add | Format.I32Sub | Format.I32Mul
+                | Format.I32And ->
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i32
