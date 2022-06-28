@@ -82,10 +82,25 @@ type Opcode =
     | I64Load = 0x29uy
     | F32Load = 0x2Auy
     | F64Load = 0x2Buy
+    | I32Load8S = 0x2Cuy
+    | I32Load8U = 0x2Duy
+    | I32Load16S = 0x2Euy
+    | I32Load16U = 0x2Fuy
+    | I64Load8S = 0x30uy
+    | I64Load8U = 0x31uy
+    | I64Load16S = 0x32uy
+    | I64Load16U = 0x33uy
+    | I64Load32S = 0x34uy
+    | I64Load32U = 0x35uy
     | I32Store = 0x36uy
     | I64Store = 0x37uy
     | F32Store = 0x38uy
     | F64Store = 0x39uy
+    | I32Store8 = 0x3Auy
+    | I32Store16 = 0x3Buy
+    | I64Store8 = 0x3Cuy
+    | I64Store16 = 0x3Duy
+    | I64Store32 = 0x3Euy
     | MemoryGrow = 0x40uy
     | I32Const = 0x41uy
     | I64Const = 0x42uy
@@ -179,10 +194,25 @@ type Instruction =
     | I64Load of MemArg
     | F32Load of MemArg
     | F64Load of MemArg
+    | I32Load8S of MemArg
+    | I32Load8U of MemArg
+    | I32Load16S of MemArg
+    | I32Load16U of MemArg
+    | I64Load8S of MemArg
+    | I64Load8U of MemArg
+    | I64Load16S of MemArg
+    | I64Load16U of MemArg
+    | I64Load32S of MemArg
+    | I64Load32U of MemArg
     | I32Store of MemArg
     | I64Store of MemArg
     | F32Store of MemArg
     | F64Store of MemArg
+    | I32Store8 of MemArg
+    | I32Store16 of MemArg
+    | I64Store8 of MemArg
+    | I64Store16 of MemArg
+    | I64Store32 of MemArg
     | MemoryGrow
     | I32Const of int32
     | I64Const of int64

@@ -415,10 +415,12 @@ module Validate =
                 | Format.TableSet table ->
                     this.PopValue(OperandType.fromRefType(this.GetTableType table))
                     this.PopValue OperandType.i32
-                | Format.I32Load _ | Format.MemoryGrow | Format.I32Eqz ->
+                | Format.I32Load _ | Format.I32Load8S _ | Format.I32Load8U _ | Format.I32Load16S _ | Format.I32Load16U _
+                | Format.MemoryGrow | Format.I32Eqz ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i32
-                | Format.I64Load _ ->
+                | Format.I64Load _ | Format.I64Load8S _ | Format.I64Load8U _ | Format.I64Load16S _ | Format.I64Load16U _
+                | Format.I64Load32S _ | Format.I64Load32U _ ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i64
                 | Format.F32Load _ ->
@@ -427,10 +429,10 @@ module Validate =
                 | Format.F64Load _ ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.f64
-                | Format.I32Store _ ->
+                | Format.I32Store _ | Format.I32Store8 _ | Format.I32Store16 _ ->
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
-                | Format.I64Store _ ->
+                | Format.I64Store _ | Format.I64Store8 _ | Format.I64Store16 _ | Format.I64Store32 _ ->
                     this.PopValue OperandType.i64
                     this.PopValue OperandType.i32
                 | Format.F32Store _ ->
