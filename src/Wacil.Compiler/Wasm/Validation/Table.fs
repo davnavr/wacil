@@ -77,6 +77,13 @@ module OperandType =
     let i64 = ValType(ValType.Num I64)
     let f32 = ValType(ValType.Num F32)
     let f64 = ValType(ValType.Num F64)
+    let funcref = ValType(ValType.Ref FuncRef)
+    let externref = ValType(ValType.Ref ExternRef)
+
+    let fromRefType ty =
+        match ty with
+        | FuncRef -> funcref
+        | ExternRef -> externref
 
 type ValidInstruction = { Instruction: Instruction; Unreachable: bool }
 

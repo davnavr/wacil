@@ -76,6 +76,8 @@ type Opcode =
     | LocalTee = 0x22uy
     | GlobalGet = 0x23uy
     | GlobalSet = 0x24uy
+    | TableGet = 0x25uy
+    | TableSet = 0x26uy
     | I32Load = 0x28uy
     | I64Load = 0x29uy
     | F32Load = 0x2Auy
@@ -171,6 +173,8 @@ type Instruction =
     | LocalTee of Index
     | GlobalGet of Index
     | GlobalSet of Index
+    | TableGet of Index
+    | TableSet of Index
     | I32Load of MemArg
     | I64Load of MemArg
     | F32Load of MemArg

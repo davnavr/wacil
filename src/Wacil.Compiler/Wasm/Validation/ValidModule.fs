@@ -306,8 +306,12 @@ module Validate =
             this.PopManyValues(this.LabelTypes(controlFrameStack.ItemFromEnd target))
             this.MarkUnreachable()
 
-        member _.CheckTableType(index: Format.Index, expected) =
-            let tableElementType = mdle.Tables[Checked.int32 index].ElementType
+        member _.GetTableType(index: Format.Index) =
+            // TODO: Check table imports as well
+            mdle.Tables[Checked.int32 index].ElementType
+
+        member this.CheckTableType(index, expected) =
+            let tableElementType = this.GetTableType index
             if tableElementType <> expected then
                 raise(TableElementTypeMismatchException(index, expected, tableElementType))
 
@@ -405,6 +409,12 @@ module Validate =
                     let glbl = mdle.Globals[Checked.int32 i]
                     if glbl.Type.Mutability <> Format.Mutability.Var then raise(GlobalIsNotMutableException i)
                     this.PopValue(ValType glbl.Type.Type)
+                | Format.TableGet table ->
+                    this.PopValue OperandType.i32
+                    this.PushValue(OperandType.fromRefType(this.GetTableType table))
+                | Format.TableSet table ->
+                    this.PopValue(OperandType.fromRefType(this.GetTableType table))
+                    this.PopValue OperandType.i32
                 | Format.I32Load _ | Format.MemoryGrow | Format.I32Eqz ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i32

@@ -54,6 +54,10 @@ module OperandType =
     val i64: OperandType
     val f32: OperandType
     val f64: OperandType
+    val funcref: OperandType
+    val externref: OperandType
+
+    val fromRefType: Format.RefType -> OperandType
 
 [<NoComparison; StructuralEquality>]
 type ValidInstruction = { Instruction: Format.Instruction; Unreachable: bool }

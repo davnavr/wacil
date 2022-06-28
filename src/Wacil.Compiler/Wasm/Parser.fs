@@ -264,6 +264,8 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.LocalTee -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalTee)
         | Opcode.GlobalGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalGet)
         | Opcode.GlobalSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalSet)
+        | Opcode.TableGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableGet)
+        | Opcode.TableSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableSet)
         | Opcode.I32Load -> instructions.Add(parseMemArg reader |> I32Load)
         | Opcode.I64Load -> instructions.Add(parseMemArg reader |> I64Load)
         | Opcode.F32Load -> instructions.Add(parseMemArg reader |> F32Load)
