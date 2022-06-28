@@ -424,6 +424,12 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.I64Extend8S -> instructions.Add I64Extend8S
         | Opcode.I64Extend32S -> instructions.Add I64Extend32S
         | Opcode.I64Extend16S -> instructions.Add I64Extend16S
+        | Opcode.RefNull ->
+            match reader.ReadValType() with
+            | ValType.Ref r -> instructions.Add(RefNull r)
+            | bad -> failwithf "%A is not a ref type" bad
+        | Opcode.RefIsNull -> instructions.Add RefIsNull
+        | Opcode.RefFunc -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> RefFunc)
         | Opcode.PrefixFC ->
             match reader.ReadUnsignedInteger() with
             | 0UL -> instructions.Add I32TruncSatF32S

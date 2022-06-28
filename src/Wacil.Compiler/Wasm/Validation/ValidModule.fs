@@ -529,6 +529,12 @@ module Validate =
                 | Format.F64PromoteF32 ->
                     this.PopValue OperandType.f32
                     this.PushValue OperandType.f64
+                | Format.RefNull rtype -> this.PushValue(OperandType.fromRefType rtype)
+                | Format.RefIsNull ->
+                    let popped = this.PopValue()
+                    if not(OperandType.isRefType popped) then failwithf "%A is not a ref type" popped
+                    this.PushValue OperandType.i32
+                | Format.RefFunc _ -> this.PushValue OperandType.funcref
                 | Format.MemoryInit data ->
                     match mdle.Data[Checked.int32 data].Mode with
                     | ValueSome _ -> raise(ExpectedPassiveDataSegmentException data) 

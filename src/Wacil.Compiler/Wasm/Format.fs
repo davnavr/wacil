@@ -225,6 +225,9 @@ type Opcode =
     | I64Extend8S = 0xC2uy
     | I64Extend16S = 0xC3uy
     | I64Extend32S = 0xC4uy
+    | RefNull = 0xD0uy
+    | RefIsNull = 0xD1uy
+    | RefFunc = 0xD2uy
     | PrefixFC = 0xFCuy
 
 [<Struct>]
@@ -426,6 +429,9 @@ type Instruction =
     | I64Extend8S
     | I64Extend16S
     | I64Extend32S
+    | RefNull of RefType
+    | RefIsNull
+    | RefFunc of func: Index
     | I32TruncSatF32S
     | I32TruncSatF32U
     | I32TruncSatF64S
