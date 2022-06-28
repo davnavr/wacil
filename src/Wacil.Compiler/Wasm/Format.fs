@@ -444,6 +444,12 @@ type Instruction =
     | DataDrop of Index
     | MemoryCopy
     | MemoryFill
+    | TableInit of element: Index * table: Index
+    | ElemDrop of element: Index
+    | TableCopy of table1: Index * table2: Index
+    | TableGrow of table: Index
+    | TableSize of table: Index
+    | TableFill of table: Index
 
 type Name = string
 

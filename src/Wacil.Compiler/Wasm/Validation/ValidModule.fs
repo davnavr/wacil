@@ -347,7 +347,7 @@ module Validate =
 
                 match instruction with
                 | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
-                | Format.Nop | Format.DataDrop _ -> ()
+                | Format.Nop | Format.DataDrop _ | Format.ElemDrop _ -> ()
                 | Format.Block ty | Format.Loop ty ->
                     let ty' = this.GetBlockType ty
                     this.PopManyValues ty'.Parameters
@@ -448,7 +448,7 @@ module Validate =
                 | Format.F64Store _ ->
                     this.PopValue OperandType.f64
                     this.PopValue OperandType.i32
-                | Format.I32Const _ | Format.MemorySize -> this.PushValue OperandType.i32
+                | Format.I32Const _ | Format.MemorySize | Format.TableSize _ -> this.PushValue OperandType.i32
                 | Format.I64Const _ -> this.PushValue OperandType.i64
                 | Format.F32Const _ -> this.PushValue OperandType.f32
                 | Format.F64Const _ -> this.PushValue OperandType.f64
@@ -543,9 +543,24 @@ module Validate =
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
-                | Format.MemoryCopy | Format.MemoryFill ->
+                | Format.MemoryCopy | Format.MemoryFill | Format.TableCopy _ ->
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                | Format.TableInit(element, _) ->
+                    //mdle.Elements
+                    // TODO: Check that element type is correct
+
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                | Format.TableGrow table ->
+                    this.PopValue OperandType.i32
+                    this.PopValue(OperandType.fromRefType(this.GetTableType table))
+                    this.PushValue OperandType.i32
+                | Format.TableFill table ->
+                    this.PopValue OperandType.i32
+                    this.PopValue(OperandType.fromRefType(this.GetTableType table))
                     this.PopValue OperandType.i32
 
                 validInstructonBuilder.Add

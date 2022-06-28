@@ -441,9 +441,21 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             | 6UL -> instructions.Add I64TruncSatF64S
             | 7UL -> instructions.Add I64TruncSatF64U
             //| 8UL -> 
-            | 9UL -> instructions.Add(reader.ReadSignedInteger() |> Checked.uint32 |> DataDrop)
+            | 9UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> DataDrop)
             //| 10UL ->
             //| 11UL ->
+            | 12UL ->
+                let element = reader.ReadUnsignedInteger() |> Checked.uint32
+                let table = reader.ReadUnsignedInteger() |> Checked.uint32
+                instructions.Add(TableInit(element, table))
+            | 13UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> ElemDrop)
+            | 14UL ->
+                let table1 = reader.ReadUnsignedInteger() |> Checked.uint32
+                let table2 = reader.ReadUnsignedInteger() |> Checked.uint32
+                instructions.Add(TableCopy(table1, table2))
+            | 15UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableGrow)
+            | 16UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableSize)
+            | 17UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableFill)
             | bad -> failwithf "Invalid prefixed instruction 0xFC 0x%02X" bad
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
