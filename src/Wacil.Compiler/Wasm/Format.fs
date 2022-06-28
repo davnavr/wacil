@@ -59,6 +59,8 @@ type Opcode =
     | Call = 0x10uy
     | CallIndirect = 0x11uy
     | Drop = 0x1Auy
+    | Select = 0x1Buy
+    | SelectMany = 0x1Cuy
     | LocalGet = 0x20uy
     | LocalSet = 0x21uy
     | LocalTee = 0x22uy
@@ -137,18 +139,18 @@ type BlockType =
 type Instruction =
     | Unreachable
     | Nop
-    | Br of label: Index
-    | BrIf of label: Index
-    | BrTable of targetLabels: ImmutableArray<Index> * defaultLabel: Index
-    | Return
     | Block of BlockType
     | Loop of BlockType
     | If of BlockType
     | Else
     | End
-    | Drop
+    | Br of label: Index
+    | BrIf of label: Index
+    | BrTable of targetLabels: ImmutableArray<Index> * defaultLabel: Index
+    | Return
     | Call of callee: Index
     | CallIndirect of functionType: Index * table: Index
+    | Drop
     | LocalGet of Index
     | LocalSet of Index
     | LocalTee of Index

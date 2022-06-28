@@ -94,6 +94,14 @@ type GlobalIsNotMutableException =
     /// <summary>The index of the global.</summary>
     member Index: Format.Index
 
+[<Sealed; Class>]
+type TableElementTypeMismatchException =
+    inherit ValidationException
+
+    member Table: Format.Index
+    member Expected: Format.RefType
+    member Actual: Format.RefType
+
 [<RequireQualifiedAccess>]
 module Validate =
     /// <summary>Performs validation on a WebAssembly module containing the given <paramref name="sections"/>.</summary>

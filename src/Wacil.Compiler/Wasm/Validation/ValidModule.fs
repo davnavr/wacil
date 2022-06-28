@@ -10,7 +10,14 @@ open Wacil.Compiler.Wasm
 open Wacil.Compiler.Wasm.Validation.Table
 
 [<RequireQualifiedAccess>]
-type AnyFunction = Definition of int * Table.Function | Import of Table.FunctionImport
+type AnyFunction =
+    | Definition of int * Table.Function
+    | Import of Table.FunctionImport
+
+    member this.Type =
+        match this with
+        | Definition(_, f) -> f.Type
+        | Import f -> f.Type
 
 [<Sealed>]
 type ValidModule
@@ -53,7 +60,6 @@ type ValidModule
                     AnyFunction.Definition(index', functions[index'])
             anyFunctionLookup[index] <- ValueSome f
             f
-
 
 type ValidationException =
     inherit System.Exception
@@ -131,6 +137,14 @@ type GlobalIsNotMutableException (index: Format.Index) =
 
     member _.Index = index
 
+[<Sealed>]
+type TableElementTypeMismatchException (table: Format.Index, expected: Format.RefType, actual: Format.RefType) =
+    inherit ValidationException(sprintf "Expected table %i to contain elements of type %O but got %O" table expected actual)
+
+    member _.Table = table
+    member _.Expected = expected
+    member _.Actual = actual
+
 module Validate =
     let errwith format = Printf.kprintf (fun msg -> raise(ValidationException msg)) format
 
@@ -206,13 +220,7 @@ module Validate =
 
     /// Implementation of the WebAssembly instruction validation algorithm.
     [<Sealed>]
-    type InstructionValidator
-        (
-            types: ImmutableArray<Format.FuncType>,
-            memories: ImmutableArray<_>,
-            globals: ImmutableArray<Global>
-        )
-        =
+    type InstructionValidator (mdle: ValidModule) =
         let mutable valueTypeStack = ArrayBuilder<OperandType>.Create()
         let mutable controlFrameStack = ArrayBuilder<ControlFrame>.Create()
         let mutable validInstructonBuilder = ArrayBuilder<ValidInstruction>.Create()
@@ -292,11 +300,16 @@ module Validate =
             match ty with
             | Format.BlockType.Void -> Format.FuncType.empty
             | Format.BlockType.Val rt -> Format.FuncType.ofReturnType rt
-            | Format.BlockType.Index i -> types[Checked.int32 i]
+            | Format.BlockType.Index i -> mdle.Types[Checked.int32 i]
 
         member this.CheckUnconditionalBranch target =
             this.PopManyValues(this.LabelTypes(controlFrameStack.ItemFromEnd target))
             this.MarkUnreachable()
+
+        member _.CheckTableType(index: Format.Index, expected) =
+            let tableElementType = mdle.Tables[Checked.int32 index].ElementType
+            if tableElementType <> expected then
+                raise(TableElementTypeMismatchException(index, expected, tableElementType))
 
         member this.Validate(expression: ValidExpression) =
             // Reset the validator
@@ -325,6 +338,21 @@ module Validate =
                 match instruction with
                 | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
                 | Format.Nop -> ()
+                | Format.Block ty | Format.Loop ty ->
+                    let ty' = this.GetBlockType ty
+                    this.PopManyValues ty'.Parameters
+                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
+                | Format.If ty ->
+                    let ty' = this.GetBlockType ty
+                    this.PopValue OperandType.i32
+                    this.PopManyValues ty'.Parameters
+                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
+                | Format.Else ->
+                    let frame = this.PopControlFrame()
+                    match frame.Instruction with
+                    | Format.If _ -> this.PushControlFrame(instruction, frame.StartTypes, frame.EndTypes)
+                    | _ -> raise(ElseInstructionMismatchException(index, frame.Instruction))
+                | Format.End -> this.PushManyValues(this.PopControlFrame().EndTypes)
                 | Format.Br target -> this.CheckUnconditionalBranch(this.CheckBranchTarget target)
                 | Format.BrIf target ->
                     let target' = this.CheckBranchTarget target
@@ -346,21 +374,16 @@ module Validate =
                     this.PopManyValues defaultTypes
                     this.MarkUnreachable()
                 | Format.Return -> this.CheckUnconditionalBranch(controlFrameStack.Length - 1) // Branch to the implicit outermost block
-                | Format.Block ty | Format.Loop ty ->
-                    let ty' = this.GetBlockType ty
-                    this.PopManyValues ty'.Parameters
-                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
-                | Format.If ty ->
-                    let ty' = this.GetBlockType ty
+                | Format.Call callee ->
+                    let ty = mdle.GetFunction(Checked.int32 callee).Type
+                    this.PopManyValues ty.Parameters
+                    this.PushManyValues ty.Results
+                | Format.CallIndirect(ty, table) ->
                     this.PopValue OperandType.i32
+                    let ty' = mdle.Types[Checked.int32 ty]
                     this.PopManyValues ty'.Parameters
-                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
-                | Format.Else ->
-                    let frame = this.PopControlFrame()
-                    match frame.Instruction with
-                    | Format.If _ -> this.PushControlFrame(instruction, frame.StartTypes, frame.EndTypes)
-                    | _ -> raise(ElseInstructionMismatchException(index, frame.Instruction))
-                | Format.End -> this.PushManyValues(this.PopControlFrame().EndTypes)
+                    this.PushManyValues ty'.Results
+                    this.CheckTableType(table, Format.FuncRef)
                 | Format.Drop -> this.PopValue() |> ignore
                 | Format.LocalGet i -> this.PushValue(getVariableType expression i)
                 | Format.LocalSet i -> this.PopValue(getVariableType expression i)
@@ -368,9 +391,9 @@ module Validate =
                     let ty = getVariableType expression i
                     this.PopValue ty
                     this.PushValue ty
-                | Format.GlobalGet i -> this.PushValue(ValType globals[Checked.int32 i].Type.Type)
+                | Format.GlobalGet i -> this.PushValue(ValType mdle.Globals[Checked.int32 i].Type.Type)
                 | Format.GlobalSet i ->
-                    let glbl = globals[Checked.int32 i]
+                    let glbl = mdle.Globals[Checked.int32 i]
                     if glbl.Type.Mutability <> Format.Mutability.Var then raise(GlobalIsNotMutableException i)
                     this.PopValue(ValType glbl.Type.Type)
                 | Format.I32Load _ | Format.MemoryGrow | Format.I32Eqz ->
@@ -695,19 +718,7 @@ module Validate =
                             ModuleExport.Global
             ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
 
-        let instructionSequenceValidator = InstructionValidator(types, memories, globals)
-
-        for func in functions do instructionSequenceValidator.Validate func.Body
-
-        // TODO: Check that expressions are "constant" in global values and data segments
-        for glbl in globals do instructionSequenceValidator.Validate glbl.Value
-
-        for segment in data do
-            match segment.Mode with
-            | ValueNone -> ()
-            | ValueSome activeDataSegment -> instructionSequenceValidator.Validate activeDataSegment.Offset
-
-        ValidModule(
+        let validated = ValidModule(
             custom = contents.CustomSections.ToImmutableArray(),
             types = types,
             imports = imports,
@@ -719,3 +730,17 @@ module Validate =
             start = ValueOption.map Checked.int32 contents.Start,
             data = data
         )
+
+        let instructionSequenceValidator = InstructionValidator validated
+
+        for func in functions do instructionSequenceValidator.Validate func.Body
+
+        // TODO: Check that expressions are "constant" in global values and data segments
+        for glbl in globals do instructionSequenceValidator.Validate glbl.Value
+
+        for segment in data do
+            match segment.Mode with
+            | ValueNone -> ()
+            | ValueSome activeDataSegment -> instructionSequenceValidator.Validate activeDataSegment.Offset
+
+        validated
