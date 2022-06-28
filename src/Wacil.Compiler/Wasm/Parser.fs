@@ -249,6 +249,7 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             for i = 0 to targetLabels.Length - 1 do targetLabels[i] <- reader.ReadUnsignedInteger() |> Checked.uint32
             let defaultLabel = reader.ReadUnsignedInteger() |> Checked.uint32
             instructions.Add(BrTable(Unsafe.Array.toImmutable targetLabels, defaultLabel))
+        | Opcode.Return -> instructions.Add Return
         | Opcode.Call -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Call)
         | Opcode.CallIndirect ->
             let instruction =

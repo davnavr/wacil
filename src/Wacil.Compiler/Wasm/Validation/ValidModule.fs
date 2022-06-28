@@ -274,6 +274,10 @@ module Validate =
             | Format.BlockType.Val rt -> Format.FuncType.ofReturnType rt
             | Format.BlockType.Index i -> types[Checked.int32 i]
 
+        member this.CheckUnconditionalBranch target =
+            this.PopManyValues(this.LabelTypes(controlFrameStack.ItemFromEnd target))
+            this.MarkUnreachable()
+
         member this.Validate(expression: ValidExpression) =
             // Reset the validator
             valueTypeStack.Clear()
@@ -301,10 +305,7 @@ module Validate =
                 match instruction with
                 | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
                 | Format.Nop -> ()
-                | Format.Br target ->
-                    let target' = this.CheckBranchTarget target
-                    this.PopManyValues(this.LabelTypes(controlFrameStack.ItemFromEnd target'))
-                    this.MarkUnreachable()
+                | Format.Br target -> this.CheckUnconditionalBranch(this.CheckBranchTarget target)
                 | Format.BrIf target ->
                     let target' = this.CheckBranchTarget target
                     this.PopValue OperandType.i32
@@ -324,6 +325,7 @@ module Validate =
                         this.PushManyValues labelTypes
                     this.PopManyValues defaultTypes
                     this.MarkUnreachable()
+                | Format.Return -> this.CheckUnconditionalBranch(controlFrameStack.Length - 1) // Branch to the implicit outermost block
                 | Format.Block ty | Format.Loop ty ->
                     let ty' = this.GetBlockType ty
                     this.PopManyValues ty'.Parameters
