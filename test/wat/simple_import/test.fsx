@@ -5,7 +5,7 @@
 open Swensen.Unquote
 
 let imported (a: int64) = a // This is not factorial
-let math = simple_import.math(simple_import.math.factorial(imported))
-let instance = simple_import(math)
+let math = simple__import.math(simple__import.math.factorial(imported))
+let instance = simple__import(math)
 
 test <@ instance.callImportedFunction() = imported 10L @>
