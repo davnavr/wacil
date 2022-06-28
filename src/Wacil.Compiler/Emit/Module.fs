@@ -67,7 +67,8 @@ type RuntimeLibraryTable =
 /// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type RuntimeLibraryReference =
-    { Memory: ITypeDefOrRef
+    { UnreachableExceptionConstructor: IMethodDefOrRef
+      Memory: ITypeDefOrRef
       MemorySignature: TypeSignature
       MemoryConstructor: IMethodDefOrRef
       MemoryI32Load: IMethodDefOrRef
@@ -336,6 +337,20 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let assembly = AssemblyReference(runtimeLibraryName, options.RuntimeVersion)
         moduleDefinition.AssemblyReferences.Add assembly
 
+        let runtimeUnreachableExceptionClass =
+            assembly.CreateTypeReference(runtimeLibraryName, "UnreachableException") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+
+        let runtimeUnreachableExceptionConstructor =
+            runtimeUnreachableExceptionClass.CreateMemberReference(
+                ".ctor",
+                new MethodSignature(
+                    CallingConventionAttributes.HasThis,
+                    moduleDefinition.CorLibTypeFactory.Void,
+                    Array.empty
+                )
+            )
+            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
+
         let runtimeMemoryClass =
             assembly.CreateTypeReference(runtimeLibraryName, "Memory") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
 
@@ -467,7 +482,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     lookup[ty] <- instantiation
                     instantiation
 
-        { Memory = runtimeMemoryClass
+        { UnreachableExceptionConstructor = runtimeUnreachableExceptionConstructor
+          Memory = runtimeMemoryClass
           MemorySignature = runtimeMemoryClassSignature
           MemoryConstructor = runtimeMemoryConstructor
           MemoryI32Load = runtimeMemoryReadInt32
@@ -1035,6 +1051,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             activeDataSegments.Add(activeDataSegment.Offset, dataOffsetHelper)
 
+    // TODO: Attach a DebuggerHiddenAttribute to all generated helpers
+
     // Maybe Wacil.Runtime could have a sealed FuncRef class that handles dynamic invocation w/ Delegate.CreateDelegate?
     let generateDynamicInvocationDelegate =
         let lookup = Dictionary<FuncType, TypeDefinition * MethodDefinition>()
@@ -1263,7 +1281,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         for i = 0 to wasm.Length - 1 do
             match wasm[i].Instruction with
-            //| Unreachable
+            | Unreachable ->
+                il.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.UnreachableExceptionConstructor))
+                il.Add(CilInstruction CilOpCodes.Throw)
             | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
             | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
