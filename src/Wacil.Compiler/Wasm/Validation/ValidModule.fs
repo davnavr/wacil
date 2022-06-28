@@ -311,6 +311,19 @@ module Validate =
                     let labelTypes = this.LabelTypes(controlFrameStack.ItemFromEnd target')
                     this.PopManyValues labelTypes
                     this.PushManyValues labelTypes
+                | Format.BrTable(targets, defaultTarget) ->
+                    this.PopValue OperandType.i32
+                    let defaultTarget' = this.CheckBranchTarget defaultTarget
+                    let defaultTypes = this.LabelTypes(controlFrameStack.ItemFromEnd defaultTarget')
+                    let arity = defaultTypes.Length
+                    for label in targets do
+                        let label' = this.CheckBranchTarget label
+                        let labelTypes = this.LabelTypes(controlFrameStack.ItemFromEnd label')
+                        if labelTypes.Length <> arity then failwith "TODO: Error for bad switch"
+                        this.PopManyValues labelTypes
+                        this.PushManyValues labelTypes
+                    this.PopManyValues defaultTypes
+                    this.MarkUnreachable()
                 | Format.Block ty | Format.Loop ty ->
                     let ty' = this.GetBlockType ty
                     this.PopManyValues ty'.Parameters

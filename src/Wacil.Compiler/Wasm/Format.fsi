@@ -153,6 +153,7 @@ type Instruction =
     | Nop
     | Br of label: Index
     | BrIf of label: Index
+    | BrTable of targetLabels: ImmutableArray<Index> * defaultLabel: Index
     | Block of BlockType
     | Loop of BlockType
     | If of BlockType
