@@ -46,9 +46,9 @@ type OperandType =
 
 [<RequireQualifiedAccess>]
 module OperandType =
-    val (|IsNumType|): OperandType -> bool
-    val (|IsVecType|): OperandType -> bool
-    val (|IsRefType|): OperandType -> bool
+    val isNumType: OperandType -> bool
+    val isVecType: OperandType -> bool
+    val isRefType: OperandType -> bool
 
     val i32: OperandType
     val i64: OperandType

@@ -151,6 +151,7 @@ type Instruction =
     | Call of callee: Index
     | CallIndirect of functionType: Index * table: Index
     | Drop
+    | Select
     | LocalGet of Index
     | LocalSet of Index
     | LocalTee of Index

@@ -385,6 +385,15 @@ module Validate =
                     this.PushManyValues ty'.Results
                     this.CheckTableType(table, Format.FuncRef)
                 | Format.Drop -> this.PopValue() |> ignore
+                | Format.Select ->
+                    this.PopValue OperandType.i32
+                    match this.PopValue(), this.PopValue() with
+                    | t1, t2 when not(OperandType.isNumType t1 && OperandType.isNumType t2) || (OperandType.isVecType t1 && OperandType.isVecType t2) ->
+                        failwithf "bad select type %A and %A" t1 t2
+                    | t1, t2 when t1 <> t2 && t1 <> UnknownType && t2 <> UnknownType ->
+                        failwithf "select type mismatch (expected %A, got %A)" t1 t2
+                    | UnknownType, t2 -> this.PushValue t2
+                    | t1, _ -> this.PushValue t1
                 | Format.LocalGet i -> this.PushValue(getVariableType expression i)
                 | Format.LocalSet i -> this.PopValue(getVariableType expression i)
                 | Format.LocalTee i ->
@@ -443,7 +452,6 @@ module Validate =
                     this.PopValue OperandType.i64
                     this.PopValue OperandType.i64
                     this.PushValue OperandType.i64
-                | _ -> failwithf "todo %A" instruction
 
                 validInstructonBuilder.Add
                     { ValidInstruction.Instruction = instruction

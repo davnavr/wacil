@@ -257,6 +257,8 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
                 |> CallIndirect
             instructions.Add instruction
         | Opcode.Drop -> instructions.Add Drop
+        | Opcode.Select -> instructions.Add Select
+        | Opcode.SelectMany -> raise(NotSupportedException "select instruction that uses multiple values not yet suppoprted")
         | Opcode.LocalGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet)
         | Opcode.LocalSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet)
         | Opcode.LocalTee -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalTee)

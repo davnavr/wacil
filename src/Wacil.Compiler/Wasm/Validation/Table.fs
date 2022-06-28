@@ -58,17 +58,17 @@ type OperandType =
     | UnknownType
 
 module OperandType =
-    let (|IsNumType|) ty =
+    let isNumType ty =
         match ty with
         | ValType(ValType.Num _) | UnknownType -> true
         | ValType(ValType.Ref _ | ValType.Vec _) -> false
 
-    let (|IsVecType|) ty =
+    let isVecType ty =
         match ty with
         | ValType(ValType.Vec _) | UnknownType -> true
         | ValType(ValType.Ref _ | ValType.Num _) -> false
 
-    let (|IsRefType|) ty =
+    let isRefType ty =
         match ty with
         | ValType(ValType.Ref _) | UnknownType -> true
         | ValType(ValType.Num _ | ValType.Vec _) -> false
