@@ -106,7 +106,7 @@ type ModuleImport =
     { Class: TypeDefinition
       Signature: TypeDefOrRefSignature
       Field: FieldDefinition
-      FunctionLookup: SortedList<string, TranslatedFunctionImport> }
+      Functions: ImmutableArray<TranslatedFunctionImport> }
 
 [<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
 type BranchTarget =
@@ -578,8 +578,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let mutable importConstructorParameterTypes = ArrayBuilder<TypeSignature>.Create()
             let mutable importConstructorParameters = ArrayBuilder<_>.Create()
 
-            let functionImportLookup = SortedList(imports.Functions.Length, System.StringComparer.Ordinal)
-            for func in imports.Functions do
+            let functionImportList = Array.zeroCreate imports.Functions.Length
+            for index = 0 to functionImportList.Length - 1 do
+                let func = imports.Functions[index]
                 let functionImportDelegate =
                     TypeDefinition(
                         String.empty,
@@ -623,7 +624,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 importConstructorParameterTypes.Add(TypeDefOrRefSignature functionImportDelegate)
                 importConstructorParameters.Add func.Name
 
-                functionImportLookup[func.Name] <-
+                functionImportList[index] <-
                     { Delegate = functionImportDelegate
                       Field = functionImportField
                       Invoke = functionImportInvoke }
@@ -654,18 +655,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 il.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
                 
                 // TODO: Figure out what kind of duplicate imports will be allowed.
-                let mutable index = 1
-                for KeyValue(name, func) in functionImportLookup do
-                    let storeFunctionImport = CilInstruction(CilOpCodes.Stfld, func.Field)
+                for index = 1 to functionImportList.Length do
+                    let functionImportField = functionImportList[index - 1].Field
+                    let storeFunctionImport = CilInstruction(CilOpCodes.Stfld, functionImportField)
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction.CreateLdarg index)
                     il.Add(CilInstruction CilOpCodes.Dup)
                     il.Add(CilInstruction(CilOpCodes.Brtrue, CilInstructionLabel storeFunctionImport))
-                    il.Add(CilInstruction(CilOpCodes.Ldstr, name))
+                    il.Add(CilInstruction(CilOpCodes.Ldstr, functionImportField.Name.ToString()))
                     il.Add(CilInstruction(CilOpCodes.Newobj, coreSystemArgumentNullExceptionConstructor))
                     il.Add(CilInstruction CilOpCodes.Throw)
                     il.Add storeFunctionImport
-                    index <- index + 1
 
                 il.Add(CilInstruction CilOpCodes.Ret)
                 importConstructorBody
@@ -674,7 +674,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 { ModuleImport.Class = importClassDefinition
                   Signature = importTypeSignature
                   Field = importFieldDefinition
-                  FunctionLookup = functionImportLookup }
+                  Functions = Unsafe.Array.toImmutable functionImportList }
 
         lookup
 
@@ -883,7 +883,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         functions.ToImmutableArray()
 
-    // TODO: A "setter" will need to be generated for global.set, since a ldarg_0 (the "this" pointer) cannot be inserted before value (which is already on the top of the stack)
     let translatedModuleGlobals =
         let mutable globals = Array.zeroCreate input.Globals.Length
         for i = 0 to globals.Length - 1 do
@@ -1201,7 +1200,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 else
                     let struct(moduleName, func) = input.Imports.Functions[index]
                     let moduleImport = translatedModuleImports[moduleName]
-                    let import = moduleImport.FunctionLookup[func.Name]
+                    let import = moduleImport.Functions[index]
                     let originalParameterTypes = import.Invoke.Signature.ParameterTypes
                     // TODO: Avoid code duplication with codegen for function definitions
                     parameterTypeBuilder.Clear()
