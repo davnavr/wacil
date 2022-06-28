@@ -102,9 +102,18 @@ type Opcode =
     | I32Add = 0x6Auy
     | I32Sub = 0x6Buy
     | I32Mul = 0x6Cuy
+    | I32DivS = 0x6Duy
+    | I32DivU = 0x6Euy
+    | I32RemS = 0x6Fuy
+    | I32RemU = 0x70uy
     | I32And = 0x71uy
+    | I64Add = 0x7Cuy
     | I64Sub = 0x7Duy
     | I64Mul = 0x7Euy
+    | I64DivS = 0x7Fuy
+    | I64DivU = 0x80uy
+    | I64RemS = 0x81uy
+    | I64RemU = 0x82uy
 
 [<Struct>]
 type MemArgAlignment =
@@ -180,9 +189,18 @@ type Instruction =
     | I32Add
     | I32Sub
     | I32Mul
+    | I32DivS
+    | I32DivU
+    | I32RemS
+    | I32RemU
     | I32And
+    | I64Add
     | I64Sub
     | I64Mul
+    | I64DivS
+    | I64DivU
+    | I64RemS
+    | I64RemU
 
 type Name = string
 

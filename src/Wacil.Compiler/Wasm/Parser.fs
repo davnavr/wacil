@@ -295,9 +295,18 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.I32Add -> instructions.Add I32Add
         | Opcode.I32Sub -> instructions.Add I32Sub
         | Opcode.I32Mul -> instructions.Add I32Mul
+        | Opcode.I32DivS -> instructions.Add I32DivS
+        | Opcode.I32DivU -> instructions.Add I32DivU
+        | Opcode.I32RemS -> instructions.Add I32RemS
+        | Opcode.I32RemU -> instructions.Add I32RemU
         | Opcode.I32And -> instructions.Add I32And
+        | Opcode.I64Add -> instructions.Add I64Add
         | Opcode.I64Sub -> instructions.Add I64Sub
         | Opcode.I64Mul -> instructions.Add I64Mul
+        | Opcode.I64DivS -> instructions.Add I64DivS
+        | Opcode.I64DivU -> instructions.Add I64DivU
+        | Opcode.I64RemS -> instructions.Add I64RemS
+        | Opcode.I64RemU -> instructions.Add I64RemU
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
     instructions.CopyToImmutableArray()

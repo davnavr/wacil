@@ -1243,11 +1243,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
         let inline pushComplexComparison comparison =
-            let trueBranchLabel = CilInstructionLabel(CilInstruction CilOpCodes.Ldc_I4_1)
-            let endBranchLabel = CilInstructionLabel(CilInstruction CilOpCodes.Nop)
+            let trueBranchLabel = CilInstructionLabel()
+            let endBranchLabel = CilInstructionLabel()
             il.Add(CilInstruction(comparison, trueBranchLabel))
             il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
             il.Add(CilInstruction(CilOpCodes.Br_S, trueBranchLabel))
+            trueBranchLabel.Instruction <- CilInstruction CilOpCodes.Ldc_I4_1
+            endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
             il.Add trueBranchLabel.Instruction
             il.Add endBranchLabel.Instruction
 
@@ -1346,8 +1348,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | I32LeU | I64LeU -> pushComplexComparison CilOpCodes.Ble_Un_S
             | I32GeS | I64GeS -> pushComplexComparison CilOpCodes.Bge_S
             | I32GeU | I64GeU -> pushComplexComparison CilOpCodes.Bge_Un_S
-            | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
-            | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
+            | I32Add | I64Add -> il.Add(CilInstruction CilOpCodes.Add)
+            | I32Sub | I64Sub -> il.Add(CilInstruction CilOpCodes.Sub)
+            | I32Mul | I64Mul -> il.Add(CilInstruction CilOpCodes.Mul)
+            | I32DivS | I64DivS -> il.Add(CilInstruction CilOpCodes.Div)
+            | I32DivU | I64DivU -> il.Add(CilInstruction CilOpCodes.Div_Un)
+            | I32And -> il.Add(CilInstruction CilOpCodes.And)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
 
         if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
