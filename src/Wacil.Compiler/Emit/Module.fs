@@ -1141,9 +1141,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 definition
 
     let generateClassFunctionDefinitionStatic =
-        let mutable statics = Array.zeroCreate generatedClassFunctions.Length
-        let parameterTypeBuilder = ImmutableArray.CreateBuilder()
         let functionImportCount = input.Imports.Functions.Length
+        let mutable statics = Array.zeroCreate(generatedClassFunctions.Length + functionImportCount)
+        let parameterTypeBuilder = ImmutableArray.CreateBuilder()
         fun index ->
             match statics[index] with
             | ValueSome existing -> existing
@@ -1222,7 +1222,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     //let getIndexedTable (index: Index): TranslatedTable
 
-    // TODO: Figure out if more efficient to have an explicit "this" parameter be the last parameter?
     let emitExpressionCode (expression: Table.ValidExpression) (body: CilMethodBody) =
         let (|LocalIndex|) index =
             let i = Checked.int32 index
@@ -1294,6 +1293,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add endBranchLabel.Instruction
                     if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchLabel.Instruction
+            | Call callee ->
+                // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Call, getIndexedCallee callee))
+            | CallIndirect(ty, tableIndex) ->
+                let helper: MethodDefinition = generateDynamicInvocationHelper tableIndex input.Types[Checked.int32 ty]
+                // Parameters are already on the stack in the correct order, including the table index
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Call, helper))
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with
