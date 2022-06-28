@@ -102,6 +102,13 @@ type TableElementTypeMismatchException =
     member Expected: Format.RefType
     member Actual: Format.RefType
 
+[<Sealed; Class>]
+type ExpectedPassiveDataSegmentException =
+    inherit ValidationException
+
+    /// <summary>The index of the data segment.</summary>
+    member Index: Format.Index
+
 [<RequireQualifiedAccess>]
 module Validate =
     /// <summary>Performs validation on a WebAssembly module containing the given <paramref name="sections"/>.</summary>

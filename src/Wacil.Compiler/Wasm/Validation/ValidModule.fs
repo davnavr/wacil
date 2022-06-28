@@ -139,11 +139,17 @@ type GlobalIsNotMutableException (index: Format.Index) =
 
 [<Sealed>]
 type TableElementTypeMismatchException (table: Format.Index, expected: Format.RefType, actual: Format.RefType) =
-    inherit ValidationException(sprintf "Expected table %i to contain elements of type %O but got %O" table expected actual)
+    inherit ValidationException(sprintf "Expected table #%i to contain elements of type %O but got %O" table expected actual)
 
     member _.Table = table
     member _.Expected = expected
     member _.Actual = actual
+
+[<Sealed>]
+type ExpectedPassiveDataSegmentException (index: Format.Index) =
+    inherit ValidationException(sprintf "Expected data segment #%i to be a passive data segment" index)
+
+    member _.Index = index
 
 module Validate =
     let errwith format = Printf.kprintf (fun msg -> raise(ValidationException msg)) format
@@ -341,7 +347,7 @@ module Validate =
 
                 match instruction with
                 | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
-                | Format.Nop -> ()
+                | Format.Nop | Format.DataDrop _ -> ()
                 | Format.Block ty | Format.Loop ty ->
                     let ty' = this.GetBlockType ty
                     this.PopManyValues ty'.Parameters
@@ -416,7 +422,7 @@ module Validate =
                     this.PopValue(OperandType.fromRefType(this.GetTableType table))
                     this.PopValue OperandType.i32
                 | Format.I32Load _ | Format.I32Load8S _ | Format.I32Load8U _ | Format.I32Load16S _ | Format.I32Load16U _
-                | Format.MemoryGrow | Format.I32Eqz ->
+                | Format.MemoryGrow | Format.I32Eqz | Format.MemoryGrow ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i32
                 | Format.I64Load _ | Format.I64Load8S _ | Format.I64Load8U _ | Format.I64Load16S _ | Format.I64Load16U _
@@ -441,7 +447,7 @@ module Validate =
                 | Format.F64Store _ ->
                     this.PopValue OperandType.f64
                     this.PopValue OperandType.i32
-                | Format.I32Const _ -> this.PushValue OperandType.i32
+                | Format.I32Const _ | Format.MemorySize -> this.PushValue OperandType.i32
                 | Format.I64Const _ -> this.PushValue OperandType.i64
                 | Format.F32Const _ -> this.PushValue OperandType.f32
                 | Format.F64Const _ -> this.PushValue OperandType.f64
@@ -464,6 +470,18 @@ module Validate =
                     this.PopValue OperandType.i64
                     this.PopValue OperandType.i64
                     this.PushValue OperandType.i64
+                | Format.MemoryInit data ->
+                    match mdle.Data[Checked.int32 data].Mode with
+                    | ValueSome _ -> raise(ExpectedPassiveDataSegmentException data) 
+                    | ValueNone -> ()
+
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                | Format.MemoryCopy | Format.MemoryFill ->
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
 
                 validInstructonBuilder.Add
                     { ValidInstruction.Instruction = instruction

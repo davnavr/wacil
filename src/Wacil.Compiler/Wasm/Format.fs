@@ -91,6 +91,7 @@ type Opcode =
     | I64Store8 = 0x3Cuy
     | I64Store16 = 0x3Duy
     | I64Store32 = 0x3Euy
+    | MemorySize = 0x3Fuy
     | MemoryGrow = 0x40uy
     | I32Const = 0x41uy
     | I64Const = 0x42uy
@@ -133,6 +134,7 @@ type Opcode =
     | I64DivU = 0x80uy
     | I64RemS = 0x81uy
     | I64RemU = 0x82uy
+    | MemoryFill = 0xFCuy
 
 [<Struct>]
 type MemArgAlignment =
@@ -199,6 +201,7 @@ type Instruction =
     | I64Store8 of MemArg
     | I64Store16 of MemArg
     | I64Store32 of MemArg
+    | MemorySize
     | MemoryGrow
     | I32Const of int32
     | I64Const of int64
@@ -241,6 +244,10 @@ type Instruction =
     | I64DivU
     | I64RemS
     | I64RemU
+    | MemoryInit of data: Index
+    | DataDrop of Index
+    | MemoryCopy
+    | MemoryFill
 
 type Name = string
 
