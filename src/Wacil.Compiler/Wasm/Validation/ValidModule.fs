@@ -305,7 +305,12 @@ module Validate =
                     let target' = this.CheckBranchTarget target
                     this.PopManyValues(this.LabelTypes(controlFrameStack.ItemFromEnd target'))
                     this.MarkUnreachable()
-                //| Format.BrIf
+                | Format.BrIf target ->
+                    let target' = this.CheckBranchTarget target
+                    this.PopValue OperandType.i32
+                    let labelTypes = this.LabelTypes(controlFrameStack.ItemFromEnd target')
+                    this.PopManyValues labelTypes
+                    this.PushManyValues labelTypes
                 | Format.Block ty | Format.Loop ty ->
                     let ty' = this.GetBlockType ty
                     this.PopManyValues ty'.Parameters

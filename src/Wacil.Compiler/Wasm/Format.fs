@@ -138,6 +138,7 @@ type Instruction =
     | Unreachable
     | Nop
     | Br of label: Index
+    | BrIf of label: Index
     | Block of BlockType
     | Loop of BlockType
     | If of BlockType

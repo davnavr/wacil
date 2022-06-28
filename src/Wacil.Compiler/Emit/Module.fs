@@ -1267,6 +1267,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             //| Unreachable
             | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
+            | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
             | Block _ -> branchTargetStack.PushBlock()
             | Loop _ ->
                 let start = CilInstruction CilOpCodes.Nop

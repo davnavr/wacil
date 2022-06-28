@@ -243,6 +243,7 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             nestedBlockLevel <- Checked.(-) nestedBlockLevel 1
             instructions.Add End
         | Opcode.Br -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Br)
+        | Opcode.BrIf -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> BrIf)
         | Opcode.Call -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Call)
         | Opcode.CallIndirect ->
             let instruction =
