@@ -1242,6 +1242,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
             il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
+        let inline pushComplexComparison comparison =
+            let trueBranchLabel = CilInstructionLabel(CilInstruction CilOpCodes.Ldc_I4_1)
+            let endBranchLabel = CilInstructionLabel(CilInstruction CilOpCodes.Nop)
+            il.Add(CilInstruction(comparison, trueBranchLabel))
+            il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+            il.Add(CilInstruction(CilOpCodes.Br_S, trueBranchLabel))
+            il.Add trueBranchLabel.Instruction
+            il.Add endBranchLabel.Instruction
+
         let mutable branchTargetStack = { Targets = ArrayBuilder.Create expression.MaximumIntroducedBlockCount }
 
         // Note that WASM functions implicitly introduce a block
@@ -1316,6 +1325,27 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     il.Add(CilInstruction(CilOpCodes.Ldc_I8, value))
             | F32Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R4, value))
             | F64Const value -> il.Add(CilInstruction(CilOpCodes.Ldc_R8, value))
+            | I32Eqz ->
+                il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                il.Add(CilInstruction CilOpCodes.Ceq)
+            | I64Eqz ->
+                il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                il.Add(CilInstruction CilOpCodes.Conv_I8)
+                il.Add(CilInstruction CilOpCodes.Ceq)
+            | I32Eq | I64Eq -> il.Add(CilInstruction CilOpCodes.Ceq)
+            | I32Ne | I64Ne ->
+                il.Add(CilInstruction CilOpCodes.Ceq)
+                il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                il.Add(CilInstruction CilOpCodes.Ceq)
+            // TODO: Make sure that the direction of the comparison operation is actually correct
+            | I32LtS | I64LtS -> il.Add(CilInstruction CilOpCodes.Clt)
+            | I32LtU | I64LtU -> il.Add(CilInstruction CilOpCodes.Clt_Un)
+            | I32GtS | I64GtS -> il.Add(CilInstruction CilOpCodes.Cgt)
+            | I32GtU | I64GtU -> il.Add(CilInstruction CilOpCodes.Cgt_Un)
+            | I32LeS | I64LeS -> pushComplexComparison CilOpCodes.Ble_S
+            | I32LeU | I64LeU -> pushComplexComparison CilOpCodes.Ble_Un_S
+            | I32GeS | I64GeS -> pushComplexComparison CilOpCodes.Bge_S
+            | I32GeU | I64GeU -> pushComplexComparison CilOpCodes.Bge_Un_S
             | I32Add -> il.Add(CilInstruction CilOpCodes.Add)
             | I32Sub -> il.Add(CilInstruction CilOpCodes.Sub)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
