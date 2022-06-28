@@ -493,6 +493,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
           Table = runtimeTableClass
           InstantiatedTable = instantiateRuntimeTable }
 
+    let getFriendlyTypeName(name: string) =
+        stringBuffer.Clear().Append(name).Replace("_", "__").Replace('.', '_').ToString()
+
     let getValTypeSignature (ty: ValType) =
         match ty with
         | ValType.Num I32 -> moduleDefinition.CorLibTypeFactory.Int32 :> TypeSignature
@@ -505,20 +508,20 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | ValType.Vec _ -> raise(System.NotImplementedException "TODO: Compilation with vectors is not yet supported")
 
     let getFuncTypeSignature cconv (ty: FuncType) =
-            // TODO: For multi-return, use out parameters
-            if ty.Results.Length > 1 then failwith "TODO: Compilation of functions with multiple return values is not yet supported"
+        // TODO: For multi-return, use out parameters
+        if ty.Results.Length > 1 then failwith "TODO: Compilation of functions with multiple return values is not yet supported"
 
-            let returnTypes =
-                if ty.Results.IsEmpty
-                then moduleDefinition.CorLibTypeFactory.Void :> TypeSignature
-                else getValTypeSignature ty.Results[0]
+        let returnTypes =
+            if ty.Results.IsEmpty
+            then moduleDefinition.CorLibTypeFactory.Void :> TypeSignature
+            else getValTypeSignature ty.Results[0]
 
-            let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
+        let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
 
-            for parameter in ty.Parameters do
-                parameterTypes.Add(getValTypeSignature parameter)
+        for parameter in ty.Parameters do
+            parameterTypes.Add(getValTypeSignature parameter)
 
-            MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
+        MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
 
     moduleDefinition.GetOrCreateModuleType().BaseType <- coreSystemObject
 
@@ -542,7 +545,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let classDefinition =
         TypeDefinition(
             String.orEmpty options.Namespace,
-            outputName,
+            getFriendlyTypeName outputName,
             TypeAttributes.Sealed ||| TypeAttributes.Public ||| TypeAttributes.SequentialLayout
         )
 
@@ -558,7 +561,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let importClassDefinition =
                 TypeDefinition (
                     String.empty,
-                    moduleName,
+                    getFriendlyTypeName moduleName,
                     TypeAttributes.Sealed ||| TypeAttributes.NestedPublic
                 )
 
@@ -568,11 +571,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let importTypeSignature = TypeDefOrRefSignature importClassDefinition
 
             let importFieldDefinition =
-                 FieldDefinition (
-                     stringBuffer.Clear().Append("import_").Append(moduleName).ToString(),
-                     FieldAttributes.InitOnly,
-                     FieldSignature importTypeSignature
-                 )
+                FieldDefinition (
+                    stringBuffer.Clear().Append("import_").Append(moduleName).ToString(),
+                    FieldAttributes.InitOnly,
+                    FieldSignature importTypeSignature
+                )
 
             classDefinition.Fields.Add importFieldDefinition
             let mutable importConstructorParameterTypes = ArrayBuilder<TypeSignature>.Create()
@@ -584,7 +587,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 let functionImportDelegate =
                     TypeDefinition(
                         String.empty,
-                        func.Name,
+                        getFriendlyTypeName func.Name,
                         TypeAttributes.NestedPublic ||| TypeAttributes.Sealed
                     )
 
