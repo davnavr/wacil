@@ -352,7 +352,7 @@ module Validate =
 
                     let ty = ValType glbl.Type.Type
                     poppedTypes <- ImmutableArray.Create(this.PopValue ty)
-                | Format.I32Load _ | Format.MemoryGrow ->
+                | Format.I32Load _ | Format.MemoryGrow | Format.I32Eqz ->
                     this.PopValue OperandType.i32 |> ignore
                     this.PushValue OperandType.i32
                     poppedTypes <- OperandType.singleI32
@@ -388,10 +388,25 @@ module Validate =
                 | Format.F64Const _ ->
                     this.PushValue OperandType.f64
                     pushedTypes <- OperandType.singleF64
-                | Format.I32Add | Format.I32Sub | Format.I32Mul ->
+                | Format.I32Eq | Format.I32Ne | Format.I32LtS | Format.I32LtU | Format.I32GtS | Format.I32GtU | Format.I32LeS
+                | Format.I32LeU | Format.I32GeS | Format.I32GeU | Format.I32Add | Format.I32Sub | Format.I32Mul ->
                     poppedTypes <- this.PopManyValues Format.ValType.tupleI32
                     this.PushValue OperandType.i32
                     pushedTypes <- OperandType.singleI32
+                | Format.I64Eq | Format.I64Ne | Format.I64LtS | Format.I64LtU | Format.I64GtS | Format.I64GtU | Format.I64LeS
+                | Format.I64Eqz ->
+                    this.PopValue OperandType.i64 |> ignore
+                    poppedTypes <- OperandType.singleI64
+                    this.PushValue OperandType.i32
+                    pushedTypes <- OperandType.singleI32
+                | Format.I64LeU | Format.I64GeS | Format.I64GeU ->
+                    poppedTypes <- this.PopManyValues Format.ValType.tupleI64
+                    this.PushValue OperandType.i32
+                    pushedTypes <- OperandType.singleI32
+                | Format.I64Sub | Format.I64Mul ->
+                    poppedTypes <- this.PopManyValues Format.ValType.tupleI64
+                    this.PushValue OperandType.i64
+                    pushedTypes <- OperandType.singleI64
                 | _ -> failwithf "todo %A" instruction
                 
                 validInstructonBuilder.Add

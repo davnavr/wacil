@@ -33,7 +33,9 @@ type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 
 module ValType =
     let singleI32 = ImmutableArray.Create(Num I32)
+    let singleI64 = ImmutableArray.Create(Num I64)
     let tupleI32 = ImmutableArray.Create(Num I32, Num I32)
+    let tupleI64 = ImmutableArray.Create(Num I64, Num I64)
     let storeI64 = ImmutableArray.Create(Num I32, Num I64)
     let storeF32 = ImmutableArray.Create(Num I32, Num F32)
     let storeF64 = ImmutableArray.Create(Num I32, Num F64)
