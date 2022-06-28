@@ -1273,9 +1273,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 match branchTargetStack.Targets.ItemFromEnd 0 with
                 | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
                     il.Add(CilInstruction(CilOpCodes.Br, endBranchLabel))
-                    let elseBranchInstruction = CilInstruction CilOpCodes.Nop
-                    elseBranchLabel.Instruction <- elseBranchInstruction
-                    il.Add elseBranchInstruction
+                    elseBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
+                    il.Add elseBranchLabel.Instruction
                 | _ -> invalidOp "unpairsed else instruction"
             | End ->
                 match branchTargetStack.Pop() with
@@ -1284,9 +1283,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     label.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add label.Instruction
                 | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
-                    let endBranchInstruction = CilInstruction CilOpCodes.Nop
-                    endBranchLabel.Instruction <- endBranchInstruction
-                    if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchInstruction
+                    endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
+                    il.Add endBranchLabel.Instruction
+                    if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchLabel.Instruction
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with
