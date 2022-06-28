@@ -322,17 +322,13 @@ module Validate =
                     | _ -> raise(ElseInstructionMismatchException(index, frame.Instruction))
                 | Format.End -> this.PushManyValues(this.PopControlFrame().EndTypes)
                 | Format.Drop -> this.PopValue() |> ignore
-                | Format.LocalGet i ->
-                    let ty = getVariableType expression i
-                    this.PushValue ty
-                | Format.LocalSet i -> this.PopValue(getVariableType expression i) |> ignore
+                | Format.LocalGet i -> this.PushValue(getVariableType expression i)
+                | Format.LocalSet i -> this.PopValue(getVariableType expression i)
                 | Format.LocalTee i ->
                     let ty = getVariableType expression i
                     this.PopValue ty
                     this.PushValue ty
-                | Format.GlobalGet i ->
-                    let ty = ValType globals[Checked.int32 i].Type.Type
-                    this.PushValue ty
+                | Format.GlobalGet i -> this.PushValue(ValType globals[Checked.int32 i].Type.Type)
                 | Format.GlobalSet i ->
                     let glbl = globals[Checked.int32 i]
                     if glbl.Type.Mutability <> Format.Mutability.Var then raise(GlobalIsNotMutableException i)
@@ -361,14 +357,10 @@ module Validate =
                 | Format.F64Store _ ->
                     this.PopValue OperandType.f64
                     this.PopValue OperandType.i32
-                | Format.I32Const _ ->
-                    this.PushValue OperandType.i32
-                | Format.I64Const _ ->
-                    this.PushValue OperandType.i64
-                | Format.F32Const _ ->
-                    this.PushValue OperandType.f32
-                | Format.F64Const _ ->
-                    this.PushValue OperandType.f64
+                | Format.I32Const _ -> this.PushValue OperandType.i32
+                | Format.I64Const _ -> this.PushValue OperandType.i64
+                | Format.F32Const _ -> this.PushValue OperandType.f32
+                | Format.F64Const _ -> this.PushValue OperandType.f64
                 | Format.I32Eq | Format.I32Ne | Format.I32LtS | Format.I32LtU | Format.I32GtS | Format.I32GtU | Format.I32LeS
                 | Format.I32LeU | Format.I32GeS | Format.I32GeU | Format.I32Add | Format.I32Sub | Format.I32Mul ->
                     this.PopValue OperandType.i32
@@ -376,6 +368,7 @@ module Validate =
                     this.PushValue OperandType.i32
                 | Format.I64Eq | Format.I64Ne | Format.I64LtS | Format.I64LtU | Format.I64GtS | Format.I64GtU | Format.I64LeS
                 | Format.I64Eqz ->
+                    this.PopValue OperandType.i64
                     this.PopValue OperandType.i64
                     this.PushValue OperandType.i32
                 | Format.I64LeU | Format.I64GeS | Format.I64GeU ->
@@ -387,7 +380,7 @@ module Validate =
                     this.PopValue OperandType.i64
                     this.PushValue OperandType.i64
                 | _ -> failwithf "todo %A" instruction
-                
+
                 validInstructonBuilder.Add
                     { ValidInstruction.Instruction = instruction
                       Unreachable =
