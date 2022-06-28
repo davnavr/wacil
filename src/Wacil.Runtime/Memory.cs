@@ -67,6 +67,14 @@ namespace Wacil.Runtime {
             return BinaryPrimitives.ReadInt32LittleEndian(buffer);
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private short ReadInt16Slow(Location location) {
+            Span<byte> buffer = stackalloc byte[2];
+            buffer[0] = ReadByte(this, location);
+            buffer[1] = ReadByte(this, location + 1);
+            return BinaryPrimitives.ReadInt16LittleEndian(buffer);
+        }
+
         /// <summary>
         /// Attempts to increase the number of pages in the given <paramref name="memory"/> instance by the specified amount.
         /// </summary>
@@ -98,7 +106,7 @@ namespace Wacil.Runtime {
         public static int ReadInt32(uint address, Memory memory, uint offset, byte alignmentPower) {
             var location = Location.FromAddress(unchecked(offset + address));
             // Is the alignment hint >= 4 bytes and is the location a multiple of 4?
-            if (alignmentPower >= 2 && (location.Offset & 0b11) != 0) {
+            if (alignmentPower >= 2 && (location.Offset & 0b11) == 0) {
                 // An aligned read can occur
                 // TODO: Could eleminate fixed boilerplate by using unmanaged buffers.
                 //unsafe {
@@ -112,6 +120,27 @@ namespace Wacil.Runtime {
                 );
             } else {
                 return memory.ReadInt32Slow(location);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static short ReadInt16(uint address, Memory memory, uint offset, byte alignmentPower) {
+            var location = Location.FromAddress(unchecked(offset + address));
+            // Is the alignment hint >= 2 bytes and is the location a multiple of 2?
+            if (alignmentPower >= 1 && (location.Offset & 1) == 0) {
+                // An aligned read can occur
+                // TODO: Could eleminate fixed boilerplate by using unmanaged buffers.
+                //unsafe {
+                //    fixed(byte* page = memory.pages[location.Page]) {
+                //        return Unsafe.Read<int>((void*)(page + location.Offset));
+                //    }
+                //}
+                // Temporary slower implementation
+                return BinaryPrimitives.ReadInt16LittleEndian(
+                    new ReadOnlySpan<byte>(memory.pages[location.Page], location.Offset, 2)
+                );
+            } else {
+                return memory.ReadInt16Slow(location);
             }
         }
 
