@@ -422,17 +422,18 @@ module Validate =
                     this.PopValue(OperandType.fromRefType(this.GetTableType table))
                     this.PopValue OperandType.i32
                 | Format.I32Load _ | Format.I32Load8S _ | Format.I32Load8U _ | Format.I32Load16S _ | Format.I32Load16U _
-                | Format.MemoryGrow | Format.I32Eqz | Format.MemoryGrow ->
+                | Format.MemoryGrow | Format.I32Eqz | Format.MemoryGrow | Format.I32Clz | Format.I32Ctz | Format.I32Popcnt
+                | Format.I32Extend8S | Format.I32Extend16S ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i32
                 | Format.I64Load _ | Format.I64Load8S _ | Format.I64Load8U _ | Format.I64Load16S _ | Format.I64Load16U _
-                | Format.I64Load32S _ | Format.I64Load32U _ ->
+                | Format.I64Load32S _ | Format.I64Load32U _ | Format.I64ExtendI32S | Format.I64ExtendI32U ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i64
-                | Format.F32Load _ ->
+                | Format.F32Load _ | Format.F32ConvertI32S | Format.F32ConvertI32U | Format.F32ReinterpretI32 ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.f32
-                | Format.F64Load _ ->
+                | Format.F64Load _ | Format.F64ConvertI32S | Format.F64ConvertI32U ->
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.f64
                 | Format.I32Store _ | Format.I32Store8 _ | Format.I32Store16 _ ->
@@ -453,23 +454,81 @@ module Validate =
                 | Format.F64Const _ -> this.PushValue OperandType.f64
                 | Format.I32Eq | Format.I32Ne | Format.I32LtS | Format.I32LtU | Format.I32GtS | Format.I32GtU | Format.I32LeS
                 | Format.I32LeU | Format.I32GeS | Format.I32GeU | Format.I32Add | Format.I32Sub | Format.I32Mul | Format.I32DivS
-                | Format.I32DivU | Format.I32RemS | Format.I32RemU | Format.I32And ->
+                | Format.I32DivU | Format.I32RemS | Format.I32RemU | Format.I32And | Format.I32Or | Format.I32Xor | Format.I32Shl
+                | Format.I32ShrS | Format.I32ShrU | Format.I32Rotl | Format.I32Rotr ->
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
+                    this.PushValue OperandType.i32
+                | Format.I64Eqz | Format.I32WrapI64 ->
+                    this.PopValue OperandType.i64
                     this.PushValue OperandType.i32
                 | Format.I64Eq | Format.I64Ne | Format.I64LtS | Format.I64LtU | Format.I64GtS | Format.I64GtU | Format.I64LeS
-                | Format.I64Eqz ->
-                    this.PopValue OperandType.i64
-                    this.PopValue OperandType.i64
-                    this.PushValue OperandType.i32
                 | Format.I64LeU | Format.I64GeS | Format.I64GeU ->
                     this.PopValue OperandType.i64
                     this.PopValue OperandType.i64
                     this.PushValue OperandType.i32
-                | Format.I64Add | Format.I64Sub | Format.I64Mul | Format.I64DivS | Format.I64DivU | Format.I64RemS | Format.I64RemU ->
+                | Format.F32Eq | Format.F32Ne | Format.F32Lt | Format.F32Gt | Format.F32Le | Format.F32Ge ->
+                    this.PopValue OperandType.f32
+                    this.PopValue OperandType.f32
+                    this.PushValue OperandType.i32
+                | Format.F64Eq | Format.F64Ne | Format.F64Lt | Format.F64Gt | Format.F64Le | Format.F64Ge ->
+                    this.PopValue OperandType.f64
+                    this.PopValue OperandType.f64
+                    this.PushValue OperandType.i32
+                | Format.I64Clz | Format.I64Ctz | Format.I64Popcnt | Format.I64Extend8S | Format.I64Extend16S
+                | Format.I64Extend32S ->
+                    this.PopValue OperandType.i64
+                    this.PushValue OperandType.i64
+                | Format.I64Add | Format.I64Sub | Format.I64Mul | Format.I64DivS | Format.I64DivU | Format.I64RemS
+                | Format.I64RemU | Format.I64And | Format.I64Or | Format.I64Xor | Format.I64Shl | Format.I64ShrS | Format.I64ShrU
+                | Format.I64Rotl | Format.I64Rotr ->
                     this.PopValue OperandType.i64
                     this.PopValue OperandType.i64
                     this.PushValue OperandType.i64
+                | Format.F32Abs | Format.F32Neg | Format.F32Ceil | Format.F32Floor | Format.F32Trunc | Format.F32Nearest
+                | Format.F32Sqrt ->
+                    this.PopValue OperandType.f32
+                    this.PushValue OperandType.f32
+                | Format.F32Add | Format.F32Sub | Format.F32Mul | Format.F32Mul | Format.F32Div | Format.F32Min | Format.F32Max
+                | Format.F32Copysign ->
+                    this.PopValue OperandType.f32
+                    this.PopValue OperandType.f32
+                    this.PushValue OperandType.f32
+                | Format.F64Abs | Format.F64Neg | Format.F64Ceil | Format.F64Floor | Format.F64Trunc | Format.F64Nearest
+                | Format.F64Sqrt ->
+                    this.PopValue OperandType.f64
+                    this.PushValue OperandType.f64
+                | Format.F64Add | Format.F64Sub | Format.F64Mul | Format.F64Mul | Format.F64Div | Format.F64Min | Format.F64Max
+                | Format.F64Copysign ->
+                    this.PopValue OperandType.f64
+                    this.PopValue OperandType.f64
+                    this.PushValue OperandType.f64
+                | Format.I32TruncF32S | Format.I32TruncF32U | Format.I32ReinterpretF32 | Format.I32TruncSatF32S
+                | Format.I32TruncSatF32U ->
+                    this.PopValue OperandType.f32
+                    this.PushValue OperandType.i32
+                | Format.I32TruncF64S | Format.I32TruncF64U | Format.I32TruncSatF64S | Format.I32TruncSatF64U ->
+                    this.PopValue OperandType.f64
+                    this.PushValue OperandType.i32
+                | Format.I64TruncF32S | Format.I64TruncF32U | Format.I64TruncSatF32S | Format.I64TruncSatF32U ->
+                    this.PopValue OperandType.f32
+                    this.PushValue OperandType.i64
+                | Format.I64TruncF64S | Format.I64TruncF64U | Format.I64ReinterpretF64 | Format.I64TruncSatF64S
+                | Format.I64TruncSatF64U ->
+                    this.PopValue OperandType.f64
+                    this.PushValue OperandType.i64
+                | Format.F32ConvertI64S | Format.F32ConvertI64U ->
+                    this.PopValue OperandType.i64
+                    this.PushValue OperandType.f32
+                | Format.F32DemoteF64 ->
+                    this.PopValue OperandType.f64
+                    this.PushValue OperandType.f32
+                | Format.F64ConvertI64S | Format.F64ConvertI64U | Format.F64ReinterpretI64 ->
+                    this.PopValue OperandType.i64
+                    this.PushValue OperandType.f64
+                | Format.F64PromoteF32 ->
+                    this.PopValue OperandType.f32
+                    this.PushValue OperandType.f64
                 | Format.MemoryInit data ->
                     match mdle.Data[Checked.int32 data].Mode with
                     | ValueSome _ -> raise(ExpectedPassiveDataSegmentException data) 

@@ -318,6 +318,21 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.I64LeU -> instructions.Add I64LeU
         | Opcode.I64GeS -> instructions.Add I64GeS
         | Opcode.I64GeU -> instructions.Add I64GeU
+        | Opcode.F32Eq -> instructions.Add F32Eq
+        | Opcode.F32Ne -> instructions.Add F32Ne
+        | Opcode.F32Lt -> instructions.Add F32Lt
+        | Opcode.F32Gt -> instructions.Add F32Gt
+        | Opcode.F32Le -> instructions.Add F32Le
+        | Opcode.F32Ge -> instructions.Add F32Ge
+        | Opcode.F64Eq -> instructions.Add F64Eq
+        | Opcode.F64Ne -> instructions.Add F64Ne
+        | Opcode.F64Lt -> instructions.Add F64Lt
+        | Opcode.F64Gt -> instructions.Add F64Gt
+        | Opcode.F64Le -> instructions.Add F64Le
+        | Opcode.F64Ge -> instructions.Add F64Ge
+        | Opcode.I32Clz -> instructions.Add I32Clz
+        | Opcode.I32Ctz -> instructions.Add I32Ctz
+        | Opcode.I32Popcnt -> instructions.Add I32Popcnt
         | Opcode.I32Add -> instructions.Add I32Add
         | Opcode.I32Sub -> instructions.Add I32Sub
         | Opcode.I32Mul -> instructions.Add I32Mul
@@ -326,6 +341,16 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.I32RemS -> instructions.Add I32RemS
         | Opcode.I32RemU -> instructions.Add I32RemU
         | Opcode.I32And -> instructions.Add I32And
+        | Opcode.I32Or -> instructions.Add I32Or
+        | Opcode.I32Xor -> instructions.Add I32Xor
+        | Opcode.I32Shl -> instructions.Add I32Shl
+        | Opcode.I32ShrS -> instructions.Add I32ShrS
+        | Opcode.I32ShrU -> instructions.Add I32ShrU
+        | Opcode.I32Rotl -> instructions.Add I32Rotl
+        | Opcode.I32Rotr -> instructions.Add I32Rotr
+        | Opcode.I64Clz -> instructions.Add I64Clz
+        | Opcode.I64Ctz -> instructions.Add I64Ctz
+        | Opcode.I64Popcnt -> instructions.Add I64Popcnt
         | Opcode.I64Add -> instructions.Add I64Add
         | Opcode.I64Sub -> instructions.Add I64Sub
         | Opcode.I64Mul -> instructions.Add I64Mul
@@ -333,6 +358,87 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.I64DivU -> instructions.Add I64DivU
         | Opcode.I64RemS -> instructions.Add I64RemS
         | Opcode.I64RemU -> instructions.Add I64RemU
+        | Opcode.I64And -> instructions.Add I64And
+        | Opcode.I64Or -> instructions.Add I64Or
+        | Opcode.I64Xor -> instructions.Add I64Xor
+        | Opcode.I64Shl -> instructions.Add I64Shl
+        | Opcode.I64ShrS -> instructions.Add I64ShrS
+        | Opcode.I64ShrU -> instructions.Add I64ShrU
+        | Opcode.I64Rotl -> instructions.Add I64Rotl
+        | Opcode.I64Rotr -> instructions.Add I64Rotr
+        | Opcode.F32Abs -> instructions.Add F32Abs
+        | Opcode.F32Neg -> instructions.Add F32Neg
+        | Opcode.F32Ceil -> instructions.Add F32Ceil
+        | Opcode.F32Floor -> instructions.Add F32Floor
+        | Opcode.F32Trunc -> instructions.Add F32Trunc
+        | Opcode.F32Nearest -> instructions.Add F32Nearest
+        | Opcode.F32Sqrt -> instructions.Add F32Sqrt
+        | Opcode.F32Add -> instructions.Add F32Add
+        | Opcode.F32Sub -> instructions.Add F32Sub
+        | Opcode.F32Mul -> instructions.Add F32Mul
+        | Opcode.F32Div -> instructions.Add F32Div
+        | Opcode.F32Min -> instructions.Add F32Min
+        | Opcode.F32Max -> instructions.Add F32Max
+        | Opcode.F32Copysign -> instructions.Add F32Copysign
+        | Opcode.F64Abs -> instructions.Add F64Abs
+        | Opcode.F64Neg -> instructions.Add F64Neg
+        | Opcode.F64Ceil -> instructions.Add F64Ceil
+        | Opcode.F64Floor -> instructions.Add F64Floor
+        | Opcode.F64Trunc -> instructions.Add F64Trunc
+        | Opcode.F64Nearest -> instructions.Add F64Nearest
+        | Opcode.F64Sqrt -> instructions.Add F64Sqrt
+        | Opcode.F64Add -> instructions.Add F64Add
+        | Opcode.F64Sub -> instructions.Add F64Sub
+        | Opcode.F64Mul -> instructions.Add F64Mul
+        | Opcode.F64Div -> instructions.Add F64Div
+        | Opcode.F64Min -> instructions.Add F64Min
+        | Opcode.F64Max -> instructions.Add F64Max
+        | Opcode.F64Copysign -> instructions.Add F64Copysign
+        | Opcode.I32WrapI64 -> instructions.Add I32WrapI64
+        | Opcode.I32TruncF32S -> instructions.Add I32TruncF32S
+        | Opcode.I32TruncF32U -> instructions.Add I32TruncF32U
+        | Opcode.I32TruncF64S -> instructions.Add I32TruncF64S
+        | Opcode.I32TruncF64U -> instructions.Add I32TruncF64U
+        | Opcode.I64ExtendI32S -> instructions.Add I64ExtendI32S
+        | Opcode.I64ExtendI32U -> instructions.Add I64ExtendI32U
+        | Opcode.I64TruncF32S -> instructions.Add I64TruncF32S
+        | Opcode.I64TruncF32U -> instructions.Add I64TruncF32U
+        | Opcode.I64TruncF64S -> instructions.Add I64TruncF64S
+        | Opcode.I64TruncF64U -> instructions.Add I64TruncF64U
+        | Opcode.F32ConvertI32S -> instructions.Add F32ConvertI32S
+        | Opcode.F32ConvertI32U -> instructions.Add F32ConvertI32U
+        | Opcode.F32ConvertI64S -> instructions.Add F32ConvertI64S
+        | Opcode.F32ConvertI64U -> instructions.Add F32ConvertI64U
+        | Opcode.F32DemoteF64 -> instructions.Add F32DemoteF64
+        | Opcode.F64ConvertI32S -> instructions.Add F64ConvertI32S
+        | Opcode.F64ConvertI32U -> instructions.Add F64ConvertI32U
+        | Opcode.F64ConvertI64S -> instructions.Add F64ConvertI64S
+        | Opcode.F64ConvertI64U -> instructions.Add F64ConvertI64U
+        | Opcode.F64PromoteF32 -> instructions.Add F64PromoteF32
+        | Opcode.I32ReinterpretF32 -> instructions.Add I32ReinterpretF32
+        | Opcode.I64ReinterpretF64 -> instructions.Add I64ReinterpretF64
+        | Opcode.F32ReinterpretI32 -> instructions.Add F32ReinterpretI32
+        | Opcode.F64ReinterpretI64 -> instructions.Add F64ReinterpretI64
+        | Opcode.I32Extend8S -> instructions.Add I32Extend8S
+        | Opcode.I32Extend16S -> instructions.Add I32Extend16S
+        | Opcode.I64Extend8S -> instructions.Add I64Extend8S
+        | Opcode.I64Extend32S -> instructions.Add I64Extend32S
+        | Opcode.I64Extend16S -> instructions.Add I64Extend16S
+        | Opcode.PrefixFC ->
+            match reader.ReadUnsignedInteger() with
+            | 0UL -> instructions.Add I32TruncSatF32S
+            | 1UL -> instructions.Add I32TruncSatF32U
+            | 2UL -> instructions.Add I32TruncSatF64S
+            | 3UL -> instructions.Add I32TruncSatF64U
+            | 4UL -> instructions.Add I64TruncSatF32S
+            | 5UL -> instructions.Add I64TruncSatF32U
+            | 6UL -> instructions.Add I64TruncSatF64S
+            | 7UL -> instructions.Add I64TruncSatF64U
+            //| 8UL -> 
+            | 9UL -> instructions.Add(reader.ReadSignedInteger() |> Checked.uint32 |> DataDrop)
+            //| 10UL ->
+            //| 11UL ->
+            | bad -> failwithf "Invalid prefixed instruction 0xFC 0x%02X" bad
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
     instructions.CopyToImmutableArray()

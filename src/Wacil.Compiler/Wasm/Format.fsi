@@ -129,6 +129,21 @@ type Opcode =
     | I64LeU = 0x58uy
     | I64GeS = 0x59uy
     | I64GeU = 0x5Auy
+    | F32Eq = 0x5Buy
+    | F32Ne = 0x5Cuy
+    | F32Lt = 0x5Duy
+    | F32Gt = 0x5Euy
+    | F32Le = 0x5Fuy
+    | F32Ge = 0x60uy
+    | F64Eq = 0x61uy
+    | F64Ne = 0x62uy
+    | F64Lt = 0x63uy
+    | F64Gt = 0x64uy
+    | F64Le = 0x65uy
+    | F64Ge = 0x66uy
+    | I32Clz = 0x67uy
+    | I32Ctz = 0x68uy
+    | I32Popcnt = 0x69uy
     | I32Add = 0x6Auy
     | I32Sub = 0x6Buy
     | I32Mul = 0x6Cuy
@@ -137,6 +152,16 @@ type Opcode =
     | I32RemS = 0x6Fuy
     | I32RemU = 0x70uy
     | I32And = 0x71uy
+    | I32Or = 0x72uy
+    | I32Xor = 0x73uy
+    | I32Shl = 0x74uy
+    | I32ShrS = 0x75uy
+    | I32ShrU = 0x76uy
+    | I32Rotl = 0x77uy
+    | I32Rotr = 0x78uy
+    | I64Clz = 0x79uy
+    | I64Ctz = 0x7Auy
+    | I64Popcnt = 0x7Buy
     | I64Add = 0x7Cuy
     | I64Sub = 0x7Duy
     | I64Mul = 0x7Euy
@@ -144,10 +169,73 @@ type Opcode =
     | I64DivU = 0x80uy
     | I64RemS = 0x81uy
     | I64RemU = 0x82uy
-    /// <summary>
-    /// Opcode used by the <c>memory.init</c>, <c>data.drop</c>, <c>memory.copy</c>, and <c>memory.fill</c> instructions.
-    /// </summary>
-    | MemoryFill = 0xFCuy
+    | I64And = 0x83uy
+    | I64Or = 0x84uy
+    | I64Xor = 0x85uy
+    | I64Shl = 0x86uy
+    | I64ShrS = 0x87uy
+    | I64ShrU = 0x88uy
+    | I64Rotl = 0x89uy
+    | I64Rotr = 0x8Auy
+    | F32Abs = 0x8Buy
+    | F32Neg = 0x8Cuy
+    | F32Ceil = 0x8Duy
+    | F32Floor = 0x8Euy
+    | F32Trunc = 0x8Fuy
+    | F32Nearest = 0x90uy
+    | F32Sqrt = 0x91uy
+    | F32Add = 0x92uy
+    | F32Sub = 0x93uy
+    | F32Mul = 0x94uy
+    | F32Div = 0x95uy
+    | F32Min = 0x96uy
+    | F32Max = 0x97uy
+    | F32Copysign = 0x98uy
+    | F64Abs = 0x99uy
+    | F64Neg = 0x9Auy
+    | F64Ceil = 0x9Buy
+    | F64Floor = 0x9Cuy
+    | F64Trunc = 0x9Duy
+    | F64Nearest = 0x9Euy
+    | F64Sqrt = 0x9Fuy
+    | F64Add = 0xA0uy
+    | F64Sub = 0xA1uy
+    | F64Mul = 0xA2uy
+    | F64Div = 0xA3uy
+    | F64Min = 0xA4uy
+    | F64Max = 0xA5uy
+    | F64Copysign = 0xA6uy
+    | I32WrapI64 = 0xA7uy
+    | I32TruncF32S = 0xA8uy
+    | I32TruncF32U = 0xA9uy
+    | I32TruncF64S = 0xAAuy
+    | I32TruncF64U = 0xABuy
+    | I64ExtendI32S = 0xACuy
+    | I64ExtendI32U = 0xADuy
+    | I64TruncF32S = 0xAEuy
+    | I64TruncF32U = 0xAFuy
+    | I64TruncF64S = 0xB0uy
+    | I64TruncF64U = 0xB1uy
+    | F32ConvertI32S = 0xB2uy
+    | F32ConvertI32U = 0xB3uy
+    | F32ConvertI64S = 0xB4uy
+    | F32ConvertI64U = 0xB5uy
+    | F32DemoteF64 = 0xB6uy
+    | F64ConvertI32S = 0xB7uy
+    | F64ConvertI32U = 0xB8uy
+    | F64ConvertI64S = 0xB9uy
+    | F64ConvertI64U = 0xBAuy
+    | F64PromoteF32 = 0xBBuy
+    | I32ReinterpretF32 = 0xBCuy
+    | I64ReinterpretF64 = 0xBDuy
+    | F32ReinterpretI32 = 0xBEuy
+    | F64ReinterpretI64 = 0xBFuy
+    | I32Extend8S = 0xC0uy
+    | I32Extend16S = 0xC1uy
+    | I64Extend8S = 0xC2uy
+    | I64Extend16S = 0xC3uy
+    | I64Extend32S = 0xC4uy
+    | PrefixFC = 0xFCuy
 
 [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type MemArgAlignment =
@@ -246,6 +334,21 @@ type Instruction =
     | I64LeU
     | I64GeS
     | I64GeU
+    | F32Eq
+    | F32Ne
+    | F32Lt
+    | F32Gt
+    | F32Le
+    | F32Ge
+    | F64Eq
+    | F64Ne
+    | F64Lt
+    | F64Gt
+    | F64Le
+    | F64Ge
+    | I32Clz
+    | I32Ctz
+    | I32Popcnt
     | I32Add
     | I32Sub
     | I32Mul
@@ -254,6 +357,16 @@ type Instruction =
     | I32RemS
     | I32RemU
     | I32And
+    | I32Or
+    | I32Xor
+    | I32Shl
+    | I32ShrS
+    | I32ShrU
+    | I32Rotl
+    | I32Rotr
+    | I64Clz
+    | I64Ctz
+    | I64Popcnt
     | I64Add
     | I64Sub
     | I64Mul
@@ -261,6 +374,80 @@ type Instruction =
     | I64DivU
     | I64RemS
     | I64RemU
+    | I64And
+    | I64Or
+    | I64Xor
+    | I64Shl
+    | I64ShrS
+    | I64ShrU
+    | I64Rotl
+    | I64Rotr
+    | F32Abs
+    | F32Neg
+    | F32Ceil
+    | F32Floor
+    | F32Trunc
+    | F32Nearest
+    | F32Sqrt
+    | F32Add
+    | F32Sub
+    | F32Mul
+    | F32Div
+    | F32Min
+    | F32Max
+    | F32Copysign
+    | F64Abs
+    | F64Neg
+    | F64Ceil
+    | F64Floor
+    | F64Trunc
+    | F64Nearest
+    | F64Sqrt
+    | F64Add
+    | F64Sub
+    | F64Mul
+    | F64Div
+    | F64Min
+    | F64Max
+    | F64Copysign
+    | I32WrapI64
+    | I32TruncF32S
+    | I32TruncF32U
+    | I32TruncF64S
+    | I32TruncF64U
+    | I64ExtendI32S
+    | I64ExtendI32U
+    | I64TruncF32S
+    | I64TruncF32U
+    | I64TruncF64S
+    | I64TruncF64U
+    | F32ConvertI32S
+    | F32ConvertI32U
+    | F32ConvertI64S
+    | F32ConvertI64U
+    | F32DemoteF64
+    | F64ConvertI32S
+    | F64ConvertI32U
+    | F64ConvertI64S
+    | F64ConvertI64U
+    | F64PromoteF32
+    | I32ReinterpretF32
+    | I64ReinterpretF64
+    | F32ReinterpretI32
+    | F64ReinterpretI64
+    | I32Extend8S
+    | I32Extend16S
+    | I64Extend8S
+    | I64Extend16S
+    | I64Extend32S
+    | I32TruncSatF32S
+    | I32TruncSatF32U
+    | I32TruncSatF64S
+    | I32TruncSatF64U
+    | I64TruncSatF32S
+    | I64TruncSatF32U
+    | I64TruncSatF64S
+    | I64TruncSatF64U
     | MemoryInit of data: Index
     | DataDrop of Index
     | MemoryCopy
