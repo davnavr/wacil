@@ -1268,6 +1268,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
             | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
+            | Return ->
+                // TODO: Return will need to be changed when multiple return values are involved (make helper that is used here and in the implicit return added later)
+                il.Add(CilInstruction CilOpCodes.Ret)
             | Block _ -> branchTargetStack.PushBlock()
             | Loop _ ->
                 let start = CilInstruction CilOpCodes.Nop
