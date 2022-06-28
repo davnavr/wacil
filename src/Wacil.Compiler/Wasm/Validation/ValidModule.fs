@@ -223,13 +223,10 @@ module Validate =
             let actual = this.PopValue()
             if actual <> expected && actual <> UnknownType && expected <> UnknownType then
                 raise(OperandTypeMismatchException(expected, actual))
-            actual
 
         member this.PopManyValues(expected: ImmutableArray<_>) =
-            let mutable popped = Array.zeroCreate expected.Length
             for i = expected.Length - 1 downto 0 do
-                popped[i] <- this.PopValue(ValType expected.[i])
-            Unsafe.Array.toImmutable popped
+                this.PopValue(ValType expected.[i])
 
         member this.PushControlFrame(instruction, input, output) =
             controlFrameStack.Add
@@ -300,119 +297,99 @@ module Validate =
 
             for index = 0 to expression.Source.Length - 1 do
                 let instruction = expression.Source[index]
-                let mutable poppedTypes = ImmutableArray.Empty
-                let mutable pushedTypes = ImmutableArray.Empty
 
                 match instruction with
                 | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
                 | Format.Nop -> ()
                 | Format.Br target ->
                     let target' = this.CheckBranchTarget target
-                    poppedTypes <- mapToOperandTypes(this.LabelTypes(controlFrameStack.ItemFromEnd target'))
+                    this.PopManyValues(this.LabelTypes(controlFrameStack.ItemFromEnd target'))
                     this.MarkUnreachable()
                 //| Format.BrIf
                 | Format.Block ty | Format.Loop ty ->
                     let ty' = this.GetBlockType ty
-                    poppedTypes <- this.PopManyValues ty'.Parameters
+                    this.PopManyValues ty'.Parameters
                     this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
                 | Format.If ty ->
                     let ty' = this.GetBlockType ty
-                    this.PopValue OperandType.i32 |> ignore
-                    poppedTypes <- OperandType.singleI32.AddRange(this.PopManyValues ty'.Parameters)
+                    this.PopValue OperandType.i32
+                    this.PopManyValues ty'.Parameters
                     this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
                 | Format.Else ->
                     let frame = this.PopControlFrame()
                     match frame.Instruction with
                     | Format.If _ -> this.PushControlFrame(instruction, frame.StartTypes, frame.EndTypes)
                     | _ -> raise(ElseInstructionMismatchException(index, frame.Instruction))
-                | Format.End ->
-                    let frame = this.PopControlFrame()
-                    this.PushManyValues frame.EndTypes
-                    poppedTypes <- mapToOperandTypes frame.EndTypes
-                | Format.Drop -> poppedTypes <- ImmutableArray.Create(this.PopValue())
+                | Format.End -> this.PushManyValues(this.PopControlFrame().EndTypes)
+                | Format.Drop -> this.PopValue() |> ignore
                 | Format.LocalGet i ->
                     let ty = getVariableType expression i
                     this.PushValue ty
-                    pushedTypes <- ImmutableArray.Create ty
-                | Format.LocalSet i ->
-                    let ty = getVariableType expression i
-                    poppedTypes <- ImmutableArray.Create(this.PopValue ty)
+                | Format.LocalSet i -> this.PopValue(getVariableType expression i) |> ignore
                 | Format.LocalTee i ->
                     let ty = getVariableType expression i
-                    poppedTypes <- ImmutableArray.Create(this.PopValue ty)
+                    this.PopValue ty
                     this.PushValue ty
-                    pushedTypes <- ImmutableArray.Create ty
                 | Format.GlobalGet i ->
                     let ty = ValType globals[Checked.int32 i].Type.Type
                     this.PushValue ty
-                    pushedTypes <- ImmutableArray.Create ty
                 | Format.GlobalSet i ->
                     let glbl = globals[Checked.int32 i]
                     if glbl.Type.Mutability <> Format.Mutability.Var then raise(GlobalIsNotMutableException i)
-
-                    let ty = ValType glbl.Type.Type
-                    poppedTypes <- ImmutableArray.Create(this.PopValue ty)
+                    this.PopValue(ValType glbl.Type.Type)
                 | Format.I32Load _ | Format.MemoryGrow | Format.I32Eqz ->
-                    this.PopValue OperandType.i32 |> ignore
+                    this.PopValue OperandType.i32
                     this.PushValue OperandType.i32
-                    poppedTypes <- OperandType.singleI32
-                    pushedTypes <- OperandType.singleI32
                 | Format.I64Load _ ->
-                    this.PopValue OperandType.i32 |> ignore
+                    this.PopValue OperandType.i32
                     this.PushValue OperandType.i64
-                    poppedTypes <- OperandType.singleI32
-                    pushedTypes <- OperandType.singleI64
                 | Format.F32Load _ ->
-                    this.PopValue OperandType.i32 |> ignore
+                    this.PopValue OperandType.i32
                     this.PushValue OperandType.f32
-                    poppedTypes <- OperandType.singleI32
-                    pushedTypes <- OperandType.singleF32
                 | Format.F64Load _ ->
-                    this.PopValue OperandType.i32 |> ignore
+                    this.PopValue OperandType.i32
                     this.PushValue OperandType.f64
-                    poppedTypes <- OperandType.singleI32
-                    pushedTypes <- OperandType.singleF64
-                | Format.I32Store _ -> poppedTypes <- this.PopManyValues Format.ValType.tupleI32
-                | Format.I64Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeI64
-                | Format.F32Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeF32
-                | Format.F64Store _ -> poppedTypes <- this.PopManyValues Format.ValType.storeF64
+                | Format.I32Store _ ->
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                | Format.I64Store _ ->
+                    this.PopValue OperandType.i64
+                    this.PopValue OperandType.i32
+                | Format.F32Store _ ->
+                    this.PopValue OperandType.f32
+                    this.PopValue OperandType.i32
+                | Format.F64Store _ ->
+                    this.PopValue OperandType.f64
+                    this.PopValue OperandType.i32
                 | Format.I32Const _ ->
                     this.PushValue OperandType.i32
-                    pushedTypes <- OperandType.singleI32
                 | Format.I64Const _ ->
                     this.PushValue OperandType.i64
-                    pushedTypes <- OperandType.singleI64
                 | Format.F32Const _ ->
                     this.PushValue OperandType.f32
-                    pushedTypes <- OperandType.singleF32
                 | Format.F64Const _ ->
                     this.PushValue OperandType.f64
-                    pushedTypes <- OperandType.singleF64
                 | Format.I32Eq | Format.I32Ne | Format.I32LtS | Format.I32LtU | Format.I32GtS | Format.I32GtU | Format.I32LeS
                 | Format.I32LeU | Format.I32GeS | Format.I32GeU | Format.I32Add | Format.I32Sub | Format.I32Mul ->
-                    poppedTypes <- this.PopManyValues Format.ValType.tupleI32
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
                     this.PushValue OperandType.i32
-                    pushedTypes <- OperandType.singleI32
                 | Format.I64Eq | Format.I64Ne | Format.I64LtS | Format.I64LtU | Format.I64GtS | Format.I64GtU | Format.I64LeS
                 | Format.I64Eqz ->
-                    this.PopValue OperandType.i64 |> ignore
-                    poppedTypes <- OperandType.singleI64
+                    this.PopValue OperandType.i64
                     this.PushValue OperandType.i32
-                    pushedTypes <- OperandType.singleI32
                 | Format.I64LeU | Format.I64GeS | Format.I64GeU ->
-                    poppedTypes <- this.PopManyValues Format.ValType.tupleI64
+                    this.PopValue OperandType.i64
+                    this.PopValue OperandType.i64
                     this.PushValue OperandType.i32
-                    pushedTypes <- OperandType.singleI32
                 | Format.I64Sub | Format.I64Mul ->
-                    poppedTypes <- this.PopManyValues Format.ValType.tupleI64
+                    this.PopValue OperandType.i64
+                    this.PopValue OperandType.i64
                     this.PushValue OperandType.i64
-                    pushedTypes <- OperandType.singleI64
                 | _ -> failwithf "todo %A" instruction
                 
                 validInstructonBuilder.Add
                     { ValidInstruction.Instruction = instruction
-                      PoppedTypes = poppedTypes
-                      PushedTypes = pushedTypes
                       Unreachable =
                         if not controlFrameStack.IsEmpty
                         then controlFrameStack.LastRef().Unreachable

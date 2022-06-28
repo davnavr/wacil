@@ -55,17 +55,8 @@ module OperandType =
     val f32: OperandType
     val f64: OperandType
 
-    val singleI32: ImmutableArray<OperandType>
-    val singleI64: ImmutableArray<OperandType>
-    val singleF32: ImmutableArray<OperandType>
-    val singleF64: ImmutableArray<OperandType>
-
 [<NoComparison; StructuralEquality>]
-type ValidInstruction =
-    { Instruction: Format.Instruction
-      PoppedTypes: ImmutableArray<OperandType>
-      PushedTypes: ImmutableArray<OperandType>
-      Unreachable: bool }
+type ValidInstruction = { Instruction: Format.Instruction; Unreachable: bool }
 
 [<Sealed>]
 type ValidExpression =

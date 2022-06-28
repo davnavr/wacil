@@ -38,11 +38,6 @@ type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 module ValType =
     val singleI32 : ImmutableArray<ValType>
     val singleI64 : ImmutableArray<ValType>
-    val tupleI32: ImmutableArray<ValType>
-    val tupleI64: ImmutableArray<ValType>
-    val storeI64: ImmutableArray<ValType>
-    val storeF32: ImmutableArray<ValType>
-    val storeF64: ImmutableArray<ValType>
 
 type ResultType = ImmutableArray<ValType>
 

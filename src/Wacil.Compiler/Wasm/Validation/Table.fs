@@ -77,16 +77,8 @@ module OperandType =
     let i64 = ValType(ValType.Num I64)
     let f32 = ValType(ValType.Num F32)
     let f64 = ValType(ValType.Num F64)
-    let singleI32 = ImmutableArray.Create i32
-    let singleI64 = ImmutableArray.Create i64
-    let singleF32 = ImmutableArray.Create f32
-    let singleF64 = ImmutableArray.Create f64
 
-type ValidInstruction =
-    { Instruction: Instruction
-      PoppedTypes: ImmutableArray<OperandType>
-      PushedTypes: ImmutableArray<OperandType>
-      Unreachable: bool }
+type ValidInstruction = { Instruction: Instruction; Unreachable: bool }
 
 [<Sealed>]
 type ValidExpression =
