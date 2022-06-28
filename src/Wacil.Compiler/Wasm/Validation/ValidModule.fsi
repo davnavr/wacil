@@ -4,6 +4,9 @@ open System.Collections.Immutable
 
 open Wacil.Compiler.Wasm
 
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyFunction = Definition of int * Table.Function | Import of Table.FunctionImport
+
 [<Sealed>]
 type ValidModule =
     member CustomSections: ImmutableArray<Format.Custom>
@@ -16,6 +19,8 @@ type ValidModule =
     member Exports: Table.ModuleExportLookup
     member Start: Table.Index voption
     member Data: ImmutableArray<Table.ValidData>
+    
+    member GetFunction: index: int -> AnyFunction
 
 /// Base class used for all errors that occur during module validation.
 [<Class>]

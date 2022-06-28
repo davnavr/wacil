@@ -9,6 +9,9 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm
 open Wacil.Compiler.Wasm.Validation.Table
 
+[<RequireQualifiedAccess>]
+type AnyFunction = Definition of int * Table.Function | Import of Table.FunctionImport
+
 [<Sealed>]
 type ValidModule
     (
@@ -24,6 +27,8 @@ type ValidModule
         data: ImmutableArray<ValidData>
     )
     =
+    let anyFunctionLookup = Array.zeroCreate<AnyFunction voption>(imports.Functions.Length + functions.Length)
+
     member _.CustomSections = custom
     member _.Types = types
     member _.Imports = imports
@@ -34,6 +39,21 @@ type ValidModule
     member _.Exports = exports
     member _.Start = start
     member _.Data = data
+
+    member _.GetFunction index =
+        match anyFunctionLookup[index] with
+        | ValueSome f -> f
+        | ValueNone ->
+            let f =
+                if index < imports.Functions.Length then
+                    let struct(_, f') = imports.Functions[index]
+                    AnyFunction.Import f'
+                else
+                    let index' = index - imports.Functions.Length
+                    AnyFunction.Definition(index', functions[index'])
+            anyFunctionLookup[index] <- ValueSome f
+            f
+
 
 type ValidationException =
     inherit System.Exception
