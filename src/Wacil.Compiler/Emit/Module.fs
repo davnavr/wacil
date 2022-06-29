@@ -1333,6 +1333,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 match index with
                 | Arg i -> il.Add(CilInstruction.CreateStarg i)
                 | Loc i -> il.Add(CilInstruction.CreateStloc i)
+            | LocalTee(LocalIndex index) ->
+                il.Add(CilInstruction CilOpCodes.Dup)
+                match index with
+                | Arg i -> il.Add(CilInstruction.CreateStarg i)
+                | Loc i -> il.Add(CilInstruction.CreateStloc i)
             | GlobalGet index ->
                 // TODO: Check for imported globals
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
@@ -1391,6 +1396,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | I32DivS | I64DivS -> il.Add(CilInstruction CilOpCodes.Div)
             | I32DivU | I64DivU -> il.Add(CilInstruction CilOpCodes.Div_Un)
             | I32And -> il.Add(CilInstruction CilOpCodes.And)
+            | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
+            | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
 
         if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
