@@ -28,12 +28,34 @@ type VecType = V128
 [<Struct>]
 type RefType = FuncRef | ExternRef
 
-[<Struct>]
+[<RequireQualifiedAccess>]
 type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 
 module ValType =
-    let singleI32 = ImmutableArray.Create(Num I32)
-    let singleI64 = ImmutableArray.Create(Num I64)
+    let i32 = ValType.Num I32
+    let i64 = ValType.Num I64
+    let f32 = ValType.Num F32
+    let f64 = ValType.Num F64
+    let v128 = ValType.Vec V128
+    let funcref = ValType.Ref FuncRef
+    let externref = ValType.Ref ExternRef
+
+    let singleI32 = ImmutableArray.Create i32 
+    let singleI64 = ImmutableArray.Create i64
+
+    let ofNumType n =
+        match n with
+        | I32 -> i32
+        | I64 -> i64
+        | F32 -> f32
+        | F64 -> f64
+
+    let ofRefType r =
+        match r with
+        | FuncRef -> funcref
+        | ExternRef -> externref
+
+    let ofVecType v = ValType.Vec v
 
 type ResultType = ImmutableArray<ValType>
 

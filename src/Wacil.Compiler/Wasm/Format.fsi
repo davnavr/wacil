@@ -31,13 +31,25 @@ type VecType = V128
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type RefType = FuncRef | ExternRef
 
-[<RequireQualifiedAccess; IsReadOnly; Struct; NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 
 [<RequireQualifiedAccess>]
 module ValType =
     val singleI32 : ImmutableArray<ValType>
     val singleI64 : ImmutableArray<ValType>
+
+    val i32 : ValType
+    val i64 : ValType
+    val f32 : ValType
+    val f64 : ValType
+    val v128 : ValType
+    val funcref : ValType
+    val externref : ValType
+
+    val ofNumType : NumType -> ValType
+    val ofVecType : VecType -> ValType
+    val ofRefType : RefType -> ValType
 
 type ResultType = ImmutableArray<ValType>
 

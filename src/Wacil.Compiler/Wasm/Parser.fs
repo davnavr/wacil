@@ -15,13 +15,13 @@ open Wacil.Compiler.Wasm.Format
 
 let getValType (value: byte) =
     match LanguagePrimitives.EnumOfValue value with
-    | Type.I32 -> ValType.Num I32
-    | Type.I64 -> ValType.Num I64
-    | Type.F32 -> ValType.Num F32
-    | Type.F64 -> ValType.Num F64
-    | Type.V128 -> ValType.Vec V128
-    | Type.ExternRef -> ValType.Ref ExternRef
-    | Type.FuncRef -> ValType.Ref FuncRef
+    | Type.I32 -> ValType.i32
+    | Type.I64 -> ValType.i64
+    | Type.F32 -> ValType.f32
+    | Type.F64 -> ValType.f64
+    | Type.V128 -> ValType.v128
+    | Type.ExternRef -> ValType.externref
+    | Type.FuncRef -> ValType.funcref
     | _ -> failwithf "bad val type 0x%02X" value
 
 [<Sealed>]
