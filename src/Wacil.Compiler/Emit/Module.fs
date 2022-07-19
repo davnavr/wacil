@@ -1238,6 +1238,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     statics[index] <- ValueSome helper
                     helper
 
+    // TODO: Omit helper generation and just generate a direct call for functions w/o arguments
     let inline getIndexedCallee (index: Index) = generateClassFunctionDefinitionStatic(Checked.int32 index)
 
     //let getIndexedTable (index: Index): TranslatedTable

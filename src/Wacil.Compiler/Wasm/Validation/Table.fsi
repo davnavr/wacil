@@ -74,6 +74,7 @@ type ValidExpression =
     member internal SetMaximumIntroducedBlockCount: int32 -> unit
 
     member Source: ImmutableArray<Format.Instruction>
+    /// <summary>The WebAssembly instructions of the expression, including the terminating <c>end</c> instruction.</summary>
     member Instructions: ImmutableArray<ValidInstruction>
     member ParameterTypes: ImmutableArray<Format.ValType>
     /// The types of the local variables used in the expression.
