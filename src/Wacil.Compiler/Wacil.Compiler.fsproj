@@ -25,6 +25,9 @@
     <Compile Include="Wasm\Disassemble.fs" />
 
     <Compile Include="Emit\Options.fs" />
+    <Compile Include="Emit\ImportHelpers.fs" />
+    <Compile Include="Emit\SystemLibrary.fs" />
+    <Compile Include="Emit\RuntimeLibrary.fs" />
     <Compile Include="Emit\Module.fsi" />
     <Compile Include="Emit\Module.fs" />
   </ItemGroup>
