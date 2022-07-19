@@ -10,7 +10,7 @@ open AsmResolver.DotNet.Signatures.Types
 
 /// <summary>Represents an instantiation of the <c>Wacil.Runtime.Table</c> class.</summary>
 [<NoComparison; NoEquality>]
-type TableClass =
+type TableInstantiation =
     { Instantiation: GenericInstanceTypeSignature
       Specification: TypeSpecification
       Constructor: IMethodDefOrRef
@@ -33,7 +33,7 @@ type References =
       Memory: MemoryClass
       Table: ITypeDefOrRef
       /// <summary>Instantiates the <c>Wacil.Runtime.Table</c> class for a given element type.</summary>
-      InstantiatedTable: Wasm.Format.RefType -> TableClass }
+      InstantiatedTable: Wasm.Format.RefType -> TableInstantiation }
 
 let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrary.References) (mdle: ModuleDefinition) =
     let name = "Wacil.Runtime"

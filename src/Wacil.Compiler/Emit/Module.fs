@@ -57,27 +57,6 @@ type CilInstruction with
         | _ when index <= 255 -> CilInstruction(CilOpCodes.Starg_S, uint8 index)
         | _ -> CilInstruction(CilOpCodes.Starg, Checked.uint16 index)
 
-[<NoComparison; NoEquality>]
-type RuntimeLibraryTable =
-    { Instantiation: GenericInstanceTypeSignature
-      Specification: TypeSpecification
-      Constructor: IMethodDefOrRef
-      Get: IMethodDefOrRef }
-
-/// <summary>Represents the references to the Wacil runtime library (<c>Wacil.Runtime.dll</c>).</summary>
-[<NoComparison; NoEquality>]
-type RuntimeLibraryReference =
-    { UnreachableExceptionConstructor: IMethodDefOrRef
-      Memory: ITypeDefOrRef
-      MemorySignature: TypeSignature
-      MemoryConstructor: IMethodDefOrRef
-      MemoryI32Load: IMethodDefOrRef
-      MemoryI32Store: IMethodDefOrRef
-      MemoryGrow: IMethodDefOrRef
-      MemoryWriteArray: IMethodDefOrRef
-      Table: ITypeDefOrRef
-      InstantiatedTable: RefType -> RuntimeLibraryTable }
-
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type LocalIndex =
     | Arg of a: int32
@@ -93,7 +72,7 @@ type TranslatedGlobal =
 type TranslatedTable =
     { ElementType: RefType
       Field: FieldDefinition
-      Operations: RuntimeLibraryTable }
+      Operations: RuntimeLibrary.TableInstantiation }
 
 [<NoComparison; NoEquality>]
 type TranslatedFunctionImport =
@@ -142,187 +121,35 @@ type BranchTargetStack =
 let methodImplAggressiveInlining: MethodImplAttributes = LanguagePrimitives.EnumOfValue 256us
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
-    let coreLibraryReference =
+    let mscorlib =
         match options.TargetFramework with
         | TargetFramework.Net6 -> KnownCorLibs.SystemRuntime_v6_0_0_0
 
-    let stringBuffer = System.Text.StringBuilder()
-    let outputName = String.defaultValue "module" options.Name
-    let moduleDefinition = new ModuleDefinition(outputName + ".dll", coreLibraryReference)
+    let strbuf = System.Text.StringBuilder()
+    let outputModuleName = String.defaultValue "module" options.Name
+    let mdle = new ModuleDefinition(outputModuleName + ".dll", mscorlib)
 
-    let coreSystemObject =
-        coreLibraryReference.CreateTypeReference("System", "Object") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
+    let syslib = SystemLibrary.importTypes mscorlib mdle
 
-    let coreSystemValueType =
-        coreLibraryReference.CreateTypeReference("System", "ValueType") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-    
-    let coreSystemObjectSignature = TypeDefOrRefSignature coreSystemObject
-
-    let coreSystemObjectConstructor =
-        coreSystemObject.CreateMemberReference(
-            ".ctor",
-            new MethodSignature(
-                CallingConventionAttributes.HasThis,
-                moduleDefinition.CorLibTypeFactory.Void,
-                Array.empty
-            )
-        )
-        |> moduleDefinition.DefaultImporter.ImportMethod
-
-    let coreSystemArgumentNullException =
-        coreLibraryReference.CreateTypeReference("System", "ArgumentNullException")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemArgumentNullExceptionConstructor =
-        coreSystemArgumentNullException.CreateMemberReference(
-            ".ctor",
-            new MethodSignature(
-                CallingConventionAttributes.HasThis,
-                moduleDefinition.CorLibTypeFactory.Void,
-                [| moduleDefinition.CorLibTypeFactory.String |]
-            )
-        )
-        |> moduleDefinition.DefaultImporter.ImportMethod
-
-    // Imported in order to utilize helper static methods in System.Delegate
-    let coreSystemDelegate =
-        coreLibraryReference.CreateTypeReference("System", "Delegate") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemDelegateSignature = TypeDefOrRefSignature coreSystemDelegate
-
-    let coreSystemDelegateGetTarget =
-        coreSystemDelegate.CreateMemberReference(
-            "get_Target",
-            new MethodSignature(
-                CallingConventionAttributes.HasThis,
-                moduleDefinition.CorLibTypeFactory.Object,
-                Array.empty
-            )
-        )
-        |> moduleDefinition.DefaultImporter.ImportMethod
-
-    let coreSystemType =
-        coreLibraryReference.CreateTypeReference("System", "Type") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemTypeSignature = TypeDefOrRefSignature coreSystemType
-
-    let coreSystemReflectionMethodInfoSignature =
-        coreLibraryReference.CreateTypeReference("System.Reflection", "MethodInfo")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-        |> TypeDefOrRefSignature
-
-    let coreSystemDelegateGetMethod =
-        coreSystemDelegate.CreateMemberReference(
-            "get_Method",
-            new MethodSignature(
-                CallingConventionAttributes.HasThis,
-                coreSystemReflectionMethodInfoSignature,
-                Array.empty
-            )
-        )
-        |> moduleDefinition.DefaultImporter.ImportMethod
-
-    let coreSystemDelegateCreate =
-        coreSystemDelegate.CreateMemberReference(
-            "CreateDelegate",
-            new MethodSignature(
-                CallingConventionAttributes.Default,
-                coreSystemDelegateSignature,
-                [|
-                    coreSystemTypeSignature
-                    moduleDefinition.CorLibTypeFactory.Object
-                    coreSystemReflectionMethodInfoSignature
-                |]
-            )
-        )
-        |> moduleDefinition.DefaultImporter.ImportMethod
-
-    // The MulticastDelegate base class is imported here to serve as the base class for any delegate classes generated later
-    let coreSystemMulticastDelegate =
-        coreLibraryReference.CreateTypeReference("System", "MulticastDelegate")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemMulticastDelegateSignature = TypeDefOrRefSignature coreSystemMulticastDelegate
-
-    let coreSystemRuntimeTypeHandle =
-        coreLibraryReference.CreateTypeReference("System", "RuntimeTypeHandle")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemRuntimeFieldHandle =
-        coreLibraryReference.CreateTypeReference("System", "RuntimeFieldHandle")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemGetTypeFromHandle =
-        coreSystemType.CreateMemberReference(
-            "GetTypeFromHandle",
-            new MethodSignature(
-                CallingConventionAttributes.Default,
-                coreSystemTypeSignature,
-                [| TypeDefOrRefSignature coreSystemRuntimeTypeHandle |]
-            )
-        )
-        |> moduleDefinition.DefaultImporter.ImportMethod
-
-    let coreSystemRuntimeHelpers =
-        coreLibraryReference.CreateTypeReference("System.Runtime.CompilerServices", "RuntimeHelpers")
-        |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemArray =
-        coreLibraryReference.CreateTypeReference("System", "Array") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-    let coreSystemRuntimeHelpersInitializeArray =
-        coreSystemRuntimeHelpers.CreateMemberReference(
-            "InitializeArray",
-            new MethodSignature(
-                CallingConventionAttributes.Default,
-                moduleDefinition.CorLibTypeFactory.Void,
-                [|
-                    TypeDefOrRefSignature coreSystemArray
-                    TypeDefOrRefSignature coreSystemRuntimeFieldHandle
-                |]
-            )
-        )
-        |> moduleDefinition.DefaultImporter.ImportMethod
-
-    let byteArraySignature = SzArrayTypeSignature moduleDefinition.CorLibTypeFactory.Byte
-
-    let assemblyDefinition =
+    let assembly =
         match options.OutputType with
         | OutputType.Assembly ->
-            let assembly = new AssemblyDefinition(outputName, options.Version)
-            assembly.Modules.Add moduleDefinition
-
-            let tfmAttributeClass =
-                coreLibraryReference.CreateTypeReference(
-                    "System.Runtime.Versioning",
-                    "TargetFrameworkAttribute"
-                )
-                |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-            let tfmAttributeConstructor =
-                tfmAttributeClass.CreateMemberReference(
-                    ".ctor",
-                    new MethodSignature(
-                        CallingConventionAttributes.HasThis,
-                        moduleDefinition.CorLibTypeFactory.Void,
-                        [| moduleDefinition.CorLibTypeFactory.String |]
-                    )
-                )
-                |> moduleDefinition.DefaultImporter.ImportMethod
+            let assembly = new AssemblyDefinition(outputModuleName, options.Version)
+            assembly.Modules.Add mdle
 
             assembly.CustomAttributes.Add(
                 CustomAttribute(
-                    tfmAttributeConstructor :?> ICustomAttributeType,
+                    syslib.TargetFrameworkAttributeConstructor,
                     CustomAttributeSignature(
                         Array.singleton(CustomAttributeArgument(
-                            moduleDefinition.CorLibTypeFactory.String,
+                            mdle.CorLibTypeFactory.String,
                             options.TargetFramework.FrameworkName
                         )),
                         Array.singleton(CustomAttributeNamedArgument(
                             CustomAttributeArgumentMemberType.Field,
                             Utf8String "FrameworkDisplayName",
-                            moduleDefinition.CorLibTypeFactory.String,
-                            CustomAttributeArgument(moduleDefinition.CorLibTypeFactory.String, String.empty)
+                            mdle.CorLibTypeFactory.String,
+                            CustomAttributeArgument(mdle.CorLibTypeFactory.String, String.empty)
                         ))
                     )
                 )
@@ -332,180 +159,16 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | OutputType.Module ->
             ValueNone
 
-    let runtimeLibraryReference =
-        let runtimeLibraryName = "Wacil.Runtime"
-        let assembly = AssemblyReference(runtimeLibraryName, options.RuntimeVersion)
-        moduleDefinition.AssemblyReferences.Add assembly
-
-        let runtimeUnreachableExceptionClass =
-            assembly.CreateTypeReference(runtimeLibraryName, "UnreachableException") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-        let runtimeUnreachableExceptionConstructor =
-            runtimeUnreachableExceptionClass.CreateMemberReference(
-                ".ctor",
-                new MethodSignature(
-                    CallingConventionAttributes.HasThis,
-                    moduleDefinition.CorLibTypeFactory.Void,
-                    Array.empty
-                )
-            )
-            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
-
-        let runtimeMemoryClass =
-            assembly.CreateTypeReference(runtimeLibraryName, "Memory") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-        let runtimeMemoryClassSignature = TypeDefOrRefSignature runtimeMemoryClass
-
-        let runtimeMemoryConstructor =
-            runtimeMemoryClass.CreateMemberReference(
-                ".ctor",
-                new MethodSignature(
-                    CallingConventionAttributes.HasThis,
-                    moduleDefinition.CorLibTypeFactory.Void,
-                    [|
-                        moduleDefinition.CorLibTypeFactory.Int32
-                        moduleDefinition.CorLibTypeFactory.Int32
-                    |]
-                )
-            )
-            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
-
-        let runtimeMemoryReadInt32 =
-            runtimeMemoryClass.CreateMemberReference(
-                "ReadInt32",
-                new MethodSignature(
-                    CallingConventionAttributes.Default,
-                    moduleDefinition.CorLibTypeFactory.Int32,
-                    [|
-                        moduleDefinition.CorLibTypeFactory.UInt32
-                        runtimeMemoryClassSignature
-                        moduleDefinition.CorLibTypeFactory.UInt32
-                        moduleDefinition.CorLibTypeFactory.Byte
-                    |]
-                )
-            )
-            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
-
-        let runtimeMemoryWriteInt32 =
-            runtimeMemoryClass.CreateMemberReference(
-                "WriteInt32",
-                new MethodSignature(
-                    CallingConventionAttributes.Default,
-                    moduleDefinition.CorLibTypeFactory.Void,
-                    [|
-                        moduleDefinition.CorLibTypeFactory.UInt32
-                        moduleDefinition.CorLibTypeFactory.Int32
-                        runtimeMemoryClassSignature
-                        moduleDefinition.CorLibTypeFactory.UInt32
-                        moduleDefinition.CorLibTypeFactory.Byte
-                    |]
-                )
-            )
-            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
-
-        let runtimeMemoryGrow =
-            runtimeMemoryClass.CreateMemberReference(
-                "Grow",
-                new MethodSignature(
-                    CallingConventionAttributes.Default,
-                    moduleDefinition.CorLibTypeFactory.Int32,
-                    [| moduleDefinition.CorLibTypeFactory.Int32; runtimeMemoryClassSignature |]
-                )
-            )
-            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
-
-        let runtimeMemoryWriteArray =
-            runtimeMemoryClass.CreateMemberReference(
-                "Write",
-                new MethodSignature(
-                    CallingConventionAttributes.HasThis,
-                    moduleDefinition.CorLibTypeFactory.Void,
-                    [| moduleDefinition.CorLibTypeFactory.UInt32; byteArraySignature |]
-                )
-            )
-            |> moduleDefinition.DefaultImporter.ImportMethodOrNull
-
-        let runtimeTableClass =
-            assembly.CreateTypeReference(runtimeLibraryName, "Table`1") |> moduleDefinition.DefaultImporter.ImportTypeOrNull
-
-        let instantiateRuntimeTable =
-            let lookup = Dictionary<RefType, _>(capacity = 2)
-            fun ty ->
-                match lookup.TryGetValue ty with
-                | true, existing -> existing
-                | false, _ ->
-                    let instantiation =
-                        let tableElementType =
-                            match ty with
-                            | FuncRef -> coreSystemMulticastDelegateSignature
-                            | ExternRef -> coreSystemObjectSignature
-                        runtimeTableClass.MakeGenericInstanceType tableElementType
-
-                    let elementTypeParameter = GenericParameterSignature(GenericParameterType.Type, 0)
-                    let selfTableClass = runtimeTableClass.MakeGenericInstanceType elementTypeParameter
-                    let specification = TypeSpecification instantiation
-
-                    let constructor =
-                        MemberReference(
-                            specification,
-                            ".ctor",
-                            MethodSignature(
-                                CallingConventionAttributes.HasThis,
-                                moduleDefinition.CorLibTypeFactory.Void,
-                                [| 
-                                    moduleDefinition.CorLibTypeFactory.Int32
-                                    moduleDefinition.CorLibTypeFactory.Int32
-                                |]
-                            )
-                        )
-
-                    let getter =
-                        MemberReference(
-                            specification,
-                            "Get",
-                            MethodSignature(
-                                CallingConventionAttributes.Default,
-                                elementTypeParameter,
-                                [|
-                                    moduleDefinition.CorLibTypeFactory.Int32
-                                    selfTableClass
-                                |]
-                            )
-                        )
-
-                    let instantiation =
-                        { RuntimeLibraryTable.Instantiation = instantiation
-                          Specification = specification
-                          Constructor = constructor
-                          Get = getter }
-
-                    lookup[ty] <- instantiation
-                    instantiation
-
-        { UnreachableExceptionConstructor = runtimeUnreachableExceptionConstructor
-          Memory = runtimeMemoryClass
-          MemorySignature = runtimeMemoryClassSignature
-          MemoryConstructor = runtimeMemoryConstructor
-          MemoryI32Load = runtimeMemoryReadInt32
-          MemoryI32Store = runtimeMemoryWriteInt32
-          MemoryGrow = runtimeMemoryGrow
-          MemoryWriteArray = runtimeMemoryWriteArray
-          Table = runtimeTableClass
-          InstantiatedTable = instantiateRuntimeTable }
-
-    let getFriendlyTypeName(name: string) =
-        stringBuffer.Clear().Append(name).Replace("_", "__").Replace('.', '_').ToString()
-
-    let getValTypeSignature (ty: ValType) =
-        match ty with
-        | ValType.Num I32 -> moduleDefinition.CorLibTypeFactory.Int32 :> TypeSignature
-        | ValType.Num I64 -> moduleDefinition.CorLibTypeFactory.Int64
-        | ValType.Num F32 -> moduleDefinition.CorLibTypeFactory.Single
-        | ValType.Num F64 -> moduleDefinition.CorLibTypeFactory.Double
-        | ValType.Ref ExternRef -> moduleDefinition.CorLibTypeFactory.Object
-        | ValType.Ref FuncRef -> coreSystemMulticastDelegateSignature
-        // System.Runtime.Intrinsics.Vector128
-        | ValType.Vec _ -> raise(System.NotImplementedException "TODO: Compilation with vectors is not yet supported")
+    let translateValType =
+        let coreLibraryTypes = mdle.CorLibTypeFactory
+        function
+        | ValType.Num I32 -> coreLibraryTypes.Int32 :> TypeSignature
+        | ValType.Num I64 -> coreLibraryTypes.Int64
+        | ValType.Num F32 -> coreLibraryTypes.Single
+        | ValType.Num F64 -> coreLibraryTypes.Double
+        | ValType.Ref ExternRef -> coreLibraryTypes.Object
+        | ValType.Ref FuncRef -> syslib.MulticastDelegate.Signature
+        | ValType.Vec _ -> raise(System.NotImplementedException "TODO: conversion of vectors to System.Runtime.Intrinsics.Vector128")
 
     let getFuncTypeSignature cconv (ty: FuncType) =
         // TODO: For multi-return, use out parameters
@@ -523,7 +186,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
 
-    moduleDefinition.GetOrCreateModuleType().BaseType <- coreSystemObject
+    let rtlib = RuntimeLibrary.importTypes options.RuntimeVersion translateValType syslib mdle
+
+    mdle.GetOrCreateModuleType().BaseType <- TypeSpecification mdle.CorLibTypeFactory.Object
+
+    let getFriendlyTypeName(name: string) =
+        strbuf.Clear().Append(name).Replace("_", "__").Replace('.', '_').ToString()
 
     let implementationDetailsDefinition =
         TypeDefinition(

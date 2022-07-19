@@ -13,7 +13,7 @@ open AsmResolver.DotNet.Signatures.Types
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MulticastDelegateClass =
     { Type: ITypeDefOrRef
-      TypeSignature: TypeDefOrRefSignature }
+      Signature: TypeDefOrRefSignature }
 
 [<NoComparison; NoEquality>]
 type DelegateClass =
@@ -43,7 +43,8 @@ type References =
       MulticastDelegate: MulticastDelegateClass
       Type: TypeClass
       ArgumentNullExceptionConstructor: IMethodDefOrRef
-      RuntimeHelpers: RuntimeHelpersClass }
+      RuntimeHelpers: RuntimeHelpersClass
+      TargetFrameworkAttributeConstructor: ICustomAttributeType }
 
 let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
     let importCoreType = ImportHelpers.importType mdle.DefaultImporter assembly
@@ -93,7 +94,7 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 tyDelegate }
       MulticastDelegate =
         { MulticastDelegateClass.Type = tyMulticastDelegate
-          MulticastDelegateClass.TypeSignature = sigMulticastDelegate }
+          MulticastDelegateClass.Signature = sigMulticastDelegate }
       Type =
         { Type = tyType
           GetTypeFromHandle =
@@ -116,4 +117,8 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                     TypeDefOrRefSignature(importSystemType "RuntimeFieldHandle")
                 |]
                 "InitializeArray"
-                tyRuntimeHelpers } }
+                tyRuntimeHelpers }
+      TargetFrameworkAttributeConstructor =
+        importCoreType "System.Runtime.Versioning" "TargetFrameworkAttribute"
+        |> ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String |]
+        :?> ICustomAttributeType }
