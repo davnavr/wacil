@@ -1,6 +1,6 @@
 /// <summary>Module for generating references to classes in the <c>System.Runtime</c> assembly.</summary>
 [<RequireQualifiedAccess>]
-module internal Wacil.Compiler.Emit.RuntimeLibrary
+module internal Wacil.Compiler.Emit.SystemLibrary
 
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
@@ -24,12 +24,12 @@ type DelegateClass =
 
 /// <summary>Represents a reference to the <see cref="T:System.Type"/> class.</summary>
 [<NoComparison; NoEquality>]
-type Type =
+type TypeClass =
     { Type: ITypeDefOrRef
       GetTypeFromHandle: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
-type RuntimeHelpers =
+type RuntimeHelpersClass =
     { InitalizeArray: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
@@ -41,11 +41,11 @@ type References =
       ObjectConstructor: IMethodDefOrRef
       Delegate: DelegateClass
       MulticastDelegate: MulticastDelegateClass
-      Type: Type
+      Type: TypeClass
       ArgumentNullExceptionConstructor: IMethodDefOrRef
-      RuntimeHelpers: RuntimeHelpers }
+      RuntimeHelpers: RuntimeHelpersClass }
 
-let withSystemAssembly (assembly: AssemblyReference) (mdle: ModuleDefinition) =
+let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
     let importCoreType = ImportHelpers.importType mdle.DefaultImporter assembly
     let importSystemType = importCoreType "System"
 
