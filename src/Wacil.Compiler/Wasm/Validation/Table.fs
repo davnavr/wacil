@@ -6,8 +6,6 @@ open System.Collections.Generic
 open Wacil.Compiler.Wasm
 open Wacil.Compiler.Wasm.Format
 
-type Index = int
-
 [<RequireQualifiedAccess>]
 type FunctionImport = { Name: string; Type: FuncType }
 
@@ -118,7 +116,7 @@ type ValidExpression =
     member expr.ResultTypes = expr.resultTypes
     member expr.MaximumIntroducedBlockCount = expr.maximumIntroducedBlockCount
 
-    member expr.TryGetLocal(index, variableType: outref<_>) =
+    member expr.TryGetLocal(LocalIdx index, variableType: outref<_>) =
         if index < expr.parameterTypes.Length then
             variableType <- expr.parameterTypes[index]
             true
@@ -137,15 +135,15 @@ type Global = { Type: GlobalType; Value: ValidExpression }
 type ModuleExport =
     | Function of Function
     | Table
-    | Memory of Index
+    | Memory of MemIdx
     | Global
 
 [<Sealed>]
 type ModuleExportLookup internal
     (
-        memories: Dictionary<Index, string>,
-        functions: Dictionary<Index, string>,
-        tables: Dictionary<Index, string>,
+        memories: Dictionary<MemIdx, string>,
+        functions: Dictionary<FuncIdx, string>,
+        tables: Dictionary<TableIdx, string>,
         lookup: Dictionary<string, ModuleExport>
     )
     =
@@ -155,7 +153,7 @@ type ModuleExportLookup internal
     member _.Item with get name = lookup[name]
 
 [<RequireQualifiedAccess>]
-type ValidActiveData = { Memory: Index; Offset: ValidExpression }
+type ValidActiveData = { Memory: MemIdx; Offset: ValidExpression }
 
 [<RequireQualifiedAccess>]
 type ValidData = { Bytes: ImmutableArray<byte>; Mode: ValidActiveData voption }
