@@ -648,79 +648,64 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             definition.CilMethodBody <- CilMethodBody definition
             definition
 
+    let constantBytesFactory = ConstantBytes.createFieldFactory implementationDetailsDefinition syslib
+
     let passiveDataSegments = Array.zeroCreate input.Data.Length
     let activeDataSegments = ResizeArray(capacity = input.Data.Length)
     for i = 0 to input.Data.Length - 1 do
         let data = input.Data[i]
 
-        let dataContentsDefinition =
-            TypeDefinition(
-                String.empty,
-                strbuf.Clear().Append("value$data#").Append(i).ToString(),
-                TypeAttributes.NestedAssembly ||| TypeAttributes.ExplicitLayout ||| TypeAttributes.Sealed
-            )
+        if not data.Bytes.IsDefaultOrEmpty then
+            let dataFieldName = strbuf.Clear().Append("bytes$data#").Append(i).ToString()
+            let dataContentsField = constantBytesFactory (data.Bytes.AsSpan().ToArray()) dataFieldName
 
-        dataContentsDefinition.BaseType <- syslib.ValueType
-        implementationDetailsDefinition.NestedTypes.Add dataContentsDefinition
-        dataContentsDefinition.ClassLayout <- ClassLayout(1us, uint32 data.Bytes.Length)
-
-        let dataContentsField =
-            FieldDefinition(
-                strbuf.Clear().Append("bytes$data#").Append(i).ToString(),
-                FieldAttributes.Assembly ||| FieldAttributes.Static ||| FieldAttributes.InitOnly ||| FieldAttributes.HasFieldRva,
-                FieldSignature(TypeDefOrRefSignature dataContentsDefinition)
-            )
-
-        implementationDetailsDefinition.Fields.Add dataContentsField
-        dataContentsField.FieldRva <- DataSegment(data.Bytes.AsSpan().ToArray())
-
-        let dataBytesField =
-            FieldDefinition(
-                dataContentsField.Name,
-                FieldAttributes.Static ||| FieldAttributes.InitOnly,
-                SzArrayTypeSignature mdle.CorLibTypeFactory.Byte
-            )
-
-        classDefinition.Fields.Add dataBytesField
-
-        do
-            let il = classDefinitionStaticConstructor.Value.CilMethodBody.Instructions
-            // Copy from the data field to the byte array
-            il.Add(CilInstruction.CreateLdcI4 data.Bytes.Length)
-            il.Add(CilInstruction(CilOpCodes.Newarr, TypeSpecification mdle.CorLibTypeFactory.Byte :> ITypeDefOrRef))
-            il.Add(CilInstruction CilOpCodes.Dup)
-            il.Add(CilInstruction(CilOpCodes.Ldtoken, dataContentsField))
-            il.Add(CilInstruction(CilOpCodes.Call, syslib.RuntimeHelpers.InitalizeArray))
-            il.Add(CilInstruction(CilOpCodes.Stsfld, dataBytesField))
-
-        match data.Mode with
-        | ValueNone -> passiveDataSegments[i] <- ValueSome dataBytesField
-        | ValueSome activeDataSegment ->
-            // Generate method that returns the offset that the data is copied to
-            let dataOffsetHelper =
-                MethodDefinition(
-                    strbuf.Clear().Append("offset$data#").Append(i).ToString(),
-                    MethodAttributes.HideBySig,
-                    MethodSignature(
-                        CallingConventionAttributes.HasThis,
-                        mdle.CorLibTypeFactory.Int32,
-                        System.Array.Empty()
-                    )
+            let dataBytesField =
+                FieldDefinition(
+                    dataFieldName,
+                    FieldAttributes.Static ||| FieldAttributes.InitOnly,
+                    SzArrayTypeSignature mdle.CorLibTypeFactory.Byte
                 )
 
-            classDefinition.Methods.Add dataOffsetHelper
+            classDefinition.Fields.Add dataBytesField
 
-            // Generate code that copies from active data segment to memory
-            let il = classConstructorBody.Instructions
-            let memory = classMemoryFields[Checked.int32 activeDataSegment.Memory]
-            il.Add(CilInstruction CilOpCodes.Ldarg_0)
-            il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
-            il.Add(CilInstruction CilOpCodes.Ldarg_0)
-            il.Add(CilInstruction(CilOpCodes.Call, dataOffsetHelper))
-            il.Add(CilInstruction(CilOpCodes.Ldsfld, dataBytesField))
-            il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.WriteArray))
+            do
+                let il = classDefinitionStaticConstructor.Value.CilMethodBody.Instructions
+                // Copy from the data field to the byte array
+                il.Add(CilInstruction.CreateLdcI4 data.Bytes.Length)
+                il.Add(CilInstruction(CilOpCodes.Newarr, TypeSpecification mdle.CorLibTypeFactory.Byte :> ITypeDefOrRef))
+                il.Add(CilInstruction CilOpCodes.Dup)
+                il.Add(CilInstruction(CilOpCodes.Ldtoken, dataContentsField))
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.RuntimeHelpers.InitalizeArray))
+                il.Add(CilInstruction(CilOpCodes.Stsfld, dataBytesField))
 
-            activeDataSegments.Add(activeDataSegment.Offset, dataOffsetHelper)
+            match data.Mode with
+            | ValueNone -> passiveDataSegments[i] <- ValueSome dataBytesField
+            | ValueSome activeDataSegment ->
+                // Generate method that returns the offset that the data is copied to
+                let dataOffsetHelper =
+                    MethodDefinition(
+                        strbuf.Clear().Append("offset$data#").Append(i).ToString(),
+                        MethodAttributes.HideBySig,
+                        MethodSignature(
+                            CallingConventionAttributes.HasThis,
+                            mdle.CorLibTypeFactory.Int32,
+                            System.Array.Empty()
+                        )
+                    )
+
+                classDefinition.Methods.Add dataOffsetHelper
+
+                // Generate code that copies from active data segment to memory
+                let il = classConstructorBody.Instructions
+                let memory = classMemoryFields[Checked.int32 activeDataSegment.Memory]
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                il.Add(CilInstruction(CilOpCodes.Call, dataOffsetHelper))
+                il.Add(CilInstruction(CilOpCodes.Ldsfld, dataBytesField))
+                il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.WriteArray))
+
+                activeDataSegments.Add(activeDataSegment.Offset, dataOffsetHelper)
 
     // TODO: Attach a DebuggerHiddenAttribute to all generated helpers
 
