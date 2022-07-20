@@ -188,9 +188,19 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
     member _.Magic = actual
 
 let parseMemArg (reader: Reader) =
-    { MemArg.Alignment = reader.ReadUnsignedInteger() |> Checked.uint32 |> MemArgAlignment
-      MemArg.Offset = reader.ReadUnsignedInteger() |> Checked.uint32 }
+    let flags = reader.ReadUnsignedInteger() |> Checked.uint8
+    let offset = reader.ReadUnsignedInteger() |> Checked.uint32
+    let alignment, memory =
+        if flags < 64uy then
+            MemArgAlign flags, MemIdx.Zero
+        else
+            MemArgAlign(flags - 64uy), reader.ReadIndex()
 
+    { MemArg.Alignment = alignment
+      MemArg.Offset = offset
+      MemArg.Memory = memory }
+
+[<System.Obsolete>]
 let parseMemoryIndex (reader: Reader) =
     if reader.ReadByte() <> 0uy then
         failwithf "TODO: Expected 0 byte after memory instruction"

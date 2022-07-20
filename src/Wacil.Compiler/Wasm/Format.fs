@@ -94,6 +94,7 @@ type TableIdx =
 type MemIdx =
     | MemIdx of int
 
+    static member inline Zero = MemIdx 0
     static member From (index: int64) = MemIdx(Checked.int32 index)
     static member From (index: uint64) = MemIdx(Checked.int32 index)
     static member inline op_Implicit(MemIdx index) = index
@@ -325,15 +326,18 @@ type Opcode =
     | PrefixFC = 0xFCuy
 
 [<Struct>]
-type MemArgAlignment =
-    | MemArgAlignment of power: uint32
+type MemArgAlign =
+    | MemArgAlign of power: uint8
 
-    member this.Power = let (MemArgAlignment power) = this in power
+    member this.Power = let (MemArgAlign power) = this in power
 
     member this.Alignment = pown 2UL (int32 this.Power)
 
 [<Struct>]
-type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
+type MemArg =
+    { Alignment: MemArgAlign
+      Offset: uint32
+      Memory: MemIdx }
 
 // TODO: Or should this be FuncType? It seems multi-value proposal might have been merged?
 [<Struct>]

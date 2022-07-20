@@ -93,6 +93,7 @@ type TableIdx =
 type MemIdx =
     | MemIdx of int
 
+    static member inline Zero: MemIdx
     static member From: index: int64 -> MemIdx
     static member From: index: uint64 -> MemIdx
     static member inline op_Implicit: index: MemIdx -> int32
@@ -324,17 +325,20 @@ type Opcode =
     | PrefixFC = 0xFCuy
 
 [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
-type MemArgAlignment =
-    | MemArgAlignment of power: uint32
+type MemArgAlign =
+    | MemArgAlign of power: uint8
 
-    member Power: uint32
+    member Power: uint8
 
     /// Gets the alignment, in bytes
     member Alignment: uint64
 
-/// Immediate used by memory load and store instructions.
+/// Immediate argument used by memory load and store instructions.
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
+type MemArg =
+    { Alignment: MemArgAlign
+      Offset: uint32
+      Memory: MemIdx }
 
 // TODO: Or should this be FuncType? It seems multi-value proposal might have been merged?
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; StructuralEquality>]
