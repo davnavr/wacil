@@ -3,7 +3,6 @@ namespace Wacil.Compiler.Wasm.Validation.Table
 open System.Collections.Immutable
 open System.Collections.Generic
 
-open Wacil.Compiler.Wasm
 open Wacil.Compiler.Wasm.Format
 
 [<RequireQualifiedAccess>]
@@ -26,30 +25,13 @@ type ModuleImports =
       Globals: ImmutableArray<GlobalImport> }
 
 [<Sealed>]
-type ModuleImportLookup internal
-    (
-        lookup: Dictionary<string, ModuleImports>,
-        functions: ImmutableArray<struct(string * FunctionImport)>
-    )
-    =
-    member _.Item with get (moduleImportName: string) =
+type ModuleImportLookup internal (lookup: Dictionary<string, ModuleImports>, imports: ModuleImports) =
+    member _.Item with get name =
         if isNull lookup then
             raise(KeyNotFoundException "modules does not contain any imports")
-        lookup[moduleImportName]
+        lookup[name]
 
-    member _.Count = if isNull lookup then 0 else lookup.Count
-
-    member _.Functions = functions
-
-    interface IReadOnlyDictionary<string, ModuleImports> with
-        member this.Item with get key = this[key]
-        member _.Keys = lookup.Keys
-        member _.Values = lookup.Values
-        member this.Count = this.Count
-        member _.ContainsKey key = lookup.ContainsKey key
-        member _.TryGetValue(key: string, value: byref<ModuleImports>) = lookup.TryGetValue(key, &value)
-        member _.GetEnumerator() = if isNull lookup then Seq.empty.GetEnumerator() else lookup.GetEnumerator() :> IEnumerator<_>
-        member _.GetEnumerator() = lookup.GetEnumerator() :> System.Collections.IEnumerator
+    member _.Imports = imports
 
 type OperandType =
     | ValType of ValType

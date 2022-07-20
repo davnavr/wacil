@@ -9,15 +9,45 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm
 open Wacil.Compiler.Wasm.Validation.Table
 
-[<RequireQualifiedAccess>]
-type AnyFunction =
-    | Definition of int * Table.Function
-    | Import of Table.FunctionImport
+// [<System.Runtime.CompilerServices.IsReadOnly; Struct; NoComparison; NoEquality>]
+// type ArrayLookup<'Any, 'Import, 'Definition when 'Any : not struct> =
+//     val private lookup: 'Any[]
+//     val private imports: ImmutableArray<'Import>
+//     val private definitions: ImmutableArray<'Definition>
 
-    member this.Type =
-        match this with
-        | Definition(_, f) -> f.Type
-        | Import f -> f.Type
+// type ArrayLookup<'T, 'Import, 'Definition when 'T : not struct> =
+//     { Lookup: 'T[]
+//       Imports: ImmutableArray<'Import>
+//       Definitions: ImmutableArray<'Definition>
+//       MapDefinition: (int * 'Definition) -> 'T
+//       MapImport: (int * 'Import) -> 'T }
+
+// [<RequireQualifiedAccess>]
+// module ArrayLookup =
+//     let create (imports: ImmutableArray<'_>) (definitions: ImmutableArray<'_>) mapd mapi =
+//         { Lookup = Array.zeroCreate(imports.Length + definitions.Length)
+//           Imports = imports
+//           Definitions = definitions }
+
+[<AutoOpen>]
+module Helpers =
+    let inline createImportOrDefinitionLookup
+        (imports: ImmutableArray<_>)
+        (definitions: ImmutableArray<_>)
+        importMap
+        definitionMap
+        =
+        let lookup = Array.zeroCreate<'Any>(imports.Length + definitions.Length)
+        fun (index: 'Index) ->
+            let index' = int32 index
+            if Unsafe.isReferenceNull lookup[index'] then
+                lookup[index'] <-
+                    if index' < imports.Length then
+                        importMap(index', imports[index'])
+                    else
+                        let index'' = index' - imports.Length
+                        definitionMap(index'', definitions[index''])
+            lookup[index']
 
 [<Sealed>]
 type ValidModule
@@ -34,7 +64,11 @@ type ValidModule
         data: ImmutableArray<ValidData>
     )
     =
-    let anyFunctionLookup = Array.zeroCreate<AnyFunction voption>(imports.Functions.Length + functions.Length)
+    let anyFunctionLookup =
+        createImportOrDefinitionLookup imports.Imports.Functions functions AnyFunction.Import AnyFunction.Defined
+
+    let anyMemoryLookup =
+        createImportOrDefinitionLookup imports.Imports.Memories memories AnyMemory.Import AnyMemory.Defined
 
     member _.CustomSections = custom
     member _.Types = types
@@ -47,19 +81,8 @@ type ValidModule
     member _.Start = start
     member _.Data = data
 
-    member _.GetFunction(Format.FuncIdx index) =
-        match anyFunctionLookup[index] with
-        | ValueSome f -> f
-        | ValueNone ->
-            let f =
-                if index < imports.Functions.Length then
-                    let struct(_, f') = imports.Functions[index]
-                    AnyFunction.Import f'
-                else
-                    let index' = index - imports.Functions.Length
-                    AnyFunction.Definition(index', functions[index'])
-            anyFunctionLookup[index] <- ValueSome f
-            f
+    member _.GetFunction(index: Format.FuncIdx) = anyFunctionLookup index
+    member _.GetMemory(index: Format.MemIdx) = anyMemoryLookup index
 
 type ValidationException =
     inherit System.Exception
@@ -152,13 +175,6 @@ type ExpectedPassiveDataSegmentException (index: Format.DataIdx) =
     member _.Index = index
 
 module Validate =
-    let errwith format = Printf.kprintf (fun msg -> raise(ValidationException msg)) format
-
-    let multiMemoryNotSupported() =
-        let e = System.NotSupportedException "Multiple memories are not yet supported by the Wacil compiler"
-        e.HelpLink <- "https://github.com/WebAssembly/multi-memory"
-        raise e
-
     [<Struct; RequireQualifiedAccess; StructuralComparison; StructuralEquality>]
     type SectionOrder =
         | Type
@@ -422,8 +438,11 @@ module Validate =
                     this.PopValue(OperandType.fromRefType(this.GetTableType table))
                     this.PopValue OperandType.i32
                 | Format.I32Load _ | Format.I32Load8S _ | Format.I32Load8U _ | Format.I32Load16S _ | Format.I32Load16U _
-                | Format.MemoryGrow | Format.I32Eqz | Format.MemoryGrow | Format.I32Clz | Format.I32Ctz | Format.I32Popcnt
-                | Format.I32Extend8S | Format.I32Extend16S ->
+                | Format.I32Eqz | Format.I32Clz | Format.I32Ctz | Format.I32Popcnt | Format.I32Extend8S | Format.I32Extend16S ->
+                    this.PopValue OperandType.i32
+                    this.PushValue OperandType.i32
+                | Format.MemoryGrow memory ->
+                    mdle.GetMemory memory |> ignore
                     this.PopValue OperandType.i32
                     this.PushValue OperandType.i32
                 | Format.I64Load _ | Format.I64Load8S _ | Format.I64Load8U _ | Format.I64Load16S _ | Format.I64Load16U _
@@ -448,7 +467,10 @@ module Validate =
                 | Format.F64Store _ ->
                     this.PopValue OperandType.f64
                     this.PopValue OperandType.i32
-                | Format.I32Const _ | Format.MemorySize | Format.TableSize _ -> this.PushValue OperandType.i32
+                | Format.I32Const _ | Format.TableSize _ -> this.PushValue OperandType.i32
+                | Format.MemorySize memory ->
+                    mdle.GetMemory memory |> ignore
+                    this.PushValue OperandType.i32
                 | Format.I64Const _ -> this.PushValue OperandType.i64
                 | Format.F32Const _ -> this.PushValue OperandType.f32
                 | Format.F64Const _ -> this.PushValue OperandType.f64
@@ -535,15 +557,27 @@ module Validate =
                     if not(OperandType.isRefType popped) then failwithf "%A is not a ref type" popped
                     this.PushValue OperandType.i32
                 | Format.RefFunc _ -> this.PushValue OperandType.funcref
-                | Format.MemoryInit data ->
+                | Format.MemoryInit(data, memory) ->
                     match mdle.Data[int32 data].Mode with
                     | ValueSome _ -> raise(ExpectedPassiveDataSegmentException data) 
                     | ValueNone -> ()
 
+                    mdle.GetMemory memory |> ignore
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
-                | Format.MemoryCopy | Format.MemoryFill | Format.TableCopy _ ->
+                | Format.MemoryCopy(x, y) ->
+                    mdle.GetMemory x |> ignore
+                    mdle.GetMemory y |> ignore
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                | Format.MemoryFill memory ->
+                    mdle.GetMemory memory |> ignore
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                    this.PopValue OperandType.i32
+                | Format.TableCopy _ ->
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
                     this.PopValue OperandType.i32
@@ -623,7 +657,6 @@ module Validate =
                 | Format.Section.Memory memory ->
                     if order > SectionOrder.Memory then raise(InvalidSectionOrderException(Format.SectionId.Memory, order.Id))
                     else if contents.Memories.IsSome then raise(DuplicateSectionException Format.SectionId.Memory)
-                    else if memory.Length > 1 then multiMemoryNotSupported()
                     else
                         order <- SectionOrder.Global
                         contents.Memories <- ValueSome memory
@@ -681,7 +714,7 @@ module Validate =
 
         let imports =
             // Group all imports by module name
-            let moduleImportLookup =
+            let moduleImportLookup, actualModuleImports =
                 let imports = itemsOrEmpty contents.Imports
                 let lookup = if imports.IsEmpty then null else Dictionary(capacity = imports.Length)
                 for import in imports do
@@ -695,44 +728,57 @@ module Validate =
                             entries'
 
                     entries.Add(import)
-                lookup
+                lookup, if isNull lookup then null else Dictionary(capacity = lookup.Count)
+
+            let mutable allFunctionImports = ArrayBuilder<FunctionImport>.Create()
+            let mutable allTableImports = ArrayBuilder<TableImport>.Create()
+            let mutable allMemoryImports = ArrayBuilder<MemoryImport>.Create()
+            let mutable allGlobalImports = ArrayBuilder<GlobalImport>.Create()
 
             if not(isNull moduleImportLookup) then
-                let actualModuleImports = Dictionary(capacity = moduleImportLookup.Count)
-                let mutable functions = ArrayBuilder<FunctionImport>.Create()
-                let mutable tables = ArrayBuilder<TableImport>.Create()
-                let mutable memories = ArrayBuilder<MemoryImport>.Create()
-                let mutable globals = ArrayBuilder<GlobalImport>.Create()
-                let mutable allFunctions = ArrayBuilder<_>.Create()
+                let mutable matchingFunctionImports = ArrayBuilder<FunctionImport>.Create()
+                let mutable matchingTableImports = ArrayBuilder<TableImport>.Create()
+                let mutable matchingMemoryImports = ArrayBuilder<MemoryImport>.Create()
+                let mutable matchingGlobalImports = ArrayBuilder<GlobalImport>.Create()
 
                 for KeyValue(importModuleName, moduleImports) in moduleImportLookup do
-                    functions.Clear()
-                    tables.Clear()
-                    memories.Clear()
-                    globals.Clear()
+                    matchingFunctionImports.Clear()
+                    matchingTableImports.Clear()
+                    matchingMemoryImports.Clear()
+                    matchingGlobalImports.Clear()
 
                     for import in moduleImports do
                         match import.Description with
                         | Format.ImportDesc.Func index ->
                             let func = { FunctionImport.Name = import.Name; FunctionImport.Type = types[Checked.int32 index] }
-                            functions.Add func
-                            allFunctions.Add(struct(importModuleName, func))
-                        | Format.ImportDesc.Table ty -> tables.Add { TableImport.Name = import.Name; TableImport.Type = ty }
-                        | Format.ImportDesc.Mem limits -> memories.Add { MemoryImport.Name = import.Name; Limits = limits }
-                        | Format.ImportDesc.Global ty -> globals.Add { GlobalImport.Name = import.Name; Type = ty }
+                            matchingFunctionImports.Add func
+                            allFunctionImports.Add func
+                        | Format.ImportDesc.Table ty ->
+                            let table = { TableImport.Name = import.Name; TableImport.Type = ty }
+                            matchingTableImports.Add table
+                            allTableImports.Add table
+                        | Format.ImportDesc.Mem limits ->
+                            let memory = { MemoryImport.Name = import.Name; MemoryImport.Limits = limits }
+                            matchingMemoryImports.Add memory
+                            allMemoryImports.Add memory
+                        | Format.ImportDesc.Global ty ->
+                            let glbl = { GlobalImport.Name = import.Name; GlobalImport.Type = ty }
+                            matchingGlobalImports.Add glbl
+                            allGlobalImports.Add glbl
 
                     actualModuleImports[importModuleName] <- 
-                        { ModuleImports.Functions = functions.ToImmutableArray()
-                          ModuleImports.Tables = tables.ToImmutableArray()
-                          ModuleImports.Memories = memories.ToImmutableArray()
-                          ModuleImports.Globals = globals.ToImmutableArray() }
+                        { ModuleImports.Functions = matchingFunctionImports.ToImmutableArray()
+                          ModuleImports.Tables = matchingTableImports.ToImmutableArray()
+                          ModuleImports.Memories = matchingMemoryImports.ToImmutableArray()
+                          ModuleImports.Globals = matchingGlobalImports.ToImmutableArray() }
 
-                ModuleImportLookup(
-                    actualModuleImports,
-                    allFunctions.ToImmutableArray()
-                )
-            else
-                ModuleImportLookup(null, ImmutableArray.Empty)
+            let allModuleImports =
+                { ModuleImports.Functions = allFunctionImports.ToImmutableArray()
+                  ModuleImports.Tables = allTableImports.ToImmutableArray()
+                  ModuleImports.Memories = allMemoryImports.ToImmutableArray()
+                  ModuleImports.Globals = allGlobalImports.ToImmutableArray() }
+
+            ModuleImportLookup(actualModuleImports, allModuleImports)
 
         let globals =
             let moduleGlobalDefinitions = itemsOrEmpty contents.Globals

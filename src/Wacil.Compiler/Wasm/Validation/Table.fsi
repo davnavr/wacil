@@ -26,16 +26,11 @@ type ModuleImports =
       
 [<Sealed>]
 type ModuleImportLookup =
-    internal new:
-        lookup: Dictionary<string, ModuleImports> *
-        functions: ImmutableArray<struct(string * FunctionImport)> -> ModuleImportLookup
+    internal new: lookup: Dictionary<string, ModuleImports> * imports: ModuleImports -> ModuleImportLookup
 
-    member Item: moduleImportName: string -> ModuleImports with get
-    member Functions: ImmutableArray<struct(string * FunctionImport)>
-
-    member Count: int
-
-    interface IReadOnlyDictionary<string, ModuleImports>
+    /// <summary>Gets the imports corresponding to the specified <paramref name="name"/>.</summary>
+    member Item: name: string -> ModuleImports with get
+    member Imports: ModuleImports
 
 [<NoComparison; StructuralEquality>]
 type OperandType =
