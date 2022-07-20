@@ -134,7 +134,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
           WriteArray =
             ImportHelpers.importMethod
                 mdle.DefaultImporter
-                CallingConventionAttributes.Default
+                CallingConventionAttributes.HasThis
                 mdle.CorLibTypeFactory.Void
                 [| mdle.CorLibTypeFactory.UInt32; SzArrayTypeSignature mdle.CorLibTypeFactory.Byte |]
                 "Write"
