@@ -176,19 +176,19 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         let returnTypes =
             if ty.Results.IsEmpty
-            then moduleDefinition.CorLibTypeFactory.Void :> TypeSignature
-            else getValTypeSignature ty.Results[0]
+            then mdle.CorLibTypeFactory.Void :> TypeSignature
+            else translateValType ty.Results[0]
 
         let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
 
         for parameter in ty.Parameters do
-            parameterTypes.Add(getValTypeSignature parameter)
+            parameterTypes.Add(translateValType parameter)
 
         MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
 
     let rtlib = RuntimeLibrary.importTypes options.RuntimeVersion translateValType syslib mdle
 
-    mdle.GetOrCreateModuleType().BaseType <- TypeSpecification mdle.CorLibTypeFactory.Object
+    mdle.GetOrCreateModuleType().BaseType <- syslib.Object.Type
 
     let getFriendlyTypeName(name: string) =
         strbuf.Clear().Append(name).Replace("_", "__").Replace('.', '_').ToString()
@@ -200,25 +200,25 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             TypeAttributes.Sealed
         )
 
-    implementationDetailsDefinition.BaseType <- coreSystemObject
-    moduleDefinition.TopLevelTypes.Add implementationDetailsDefinition
+    implementationDetailsDefinition.BaseType <- syslib.Object.Type
+    mdle.TopLevelTypes.Add implementationDetailsDefinition
 
     let delegateConstructorSignature =
         MethodSignature(
             CallingConventionAttributes.HasThis,
-            moduleDefinition.CorLibTypeFactory.Void,
-            [| moduleDefinition.CorLibTypeFactory.Object; moduleDefinition.CorLibTypeFactory.IntPtr |]
+            mdle.CorLibTypeFactory.Void,
+            [| mdle.CorLibTypeFactory.Object; mdle.CorLibTypeFactory.IntPtr |]
         )
 
     let classDefinition =
         TypeDefinition(
             String.orEmpty options.Namespace,
-            getFriendlyTypeName outputName,
+            getFriendlyTypeName outputModuleName,
             TypeAttributes.Sealed ||| TypeAttributes.Public ||| TypeAttributes.SequentialLayout
         )
 
-    classDefinition.BaseType <- coreSystemObject
-    moduleDefinition.TopLevelTypes.Add classDefinition
+    classDefinition.BaseType <- syslib.Object.Type
+    mdle.TopLevelTypes.Add classDefinition
 
     let classDefinitionSignature = TypeDefOrRefSignature classDefinition
 
@@ -233,14 +233,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     TypeAttributes.Sealed ||| TypeAttributes.NestedPublic
                 )
 
-            importClassDefinition.BaseType <- coreSystemObject
+            importClassDefinition.BaseType <- syslib.Object.Type
             classDefinition.NestedTypes.Add importClassDefinition
 
             let importTypeSignature = TypeDefOrRefSignature importClassDefinition
 
             let importFieldDefinition =
                 FieldDefinition (
-                    stringBuffer.Clear().Append("import_").Append(moduleName).ToString(),
+                    strbuf.Clear().Append("import_").Append(moduleName).ToString(),
                     FieldAttributes.InitOnly,
                     FieldSignature importTypeSignature
                 )
@@ -259,7 +259,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         TypeAttributes.NestedPublic ||| TypeAttributes.Sealed
                     )
 
-                functionImportDelegate.BaseType <- coreSystemMulticastDelegate
+                functionImportDelegate.BaseType <- syslib.MulticastDelegate.Type
                 importClassDefinition.NestedTypes.Add functionImportDelegate
 
                 let emitFunctionImportDelegateMethod name additionalFlags signature =
@@ -307,7 +307,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     MethodAttributes.HideBySig,
                     MethodSignature(
                         CallingConventionAttributes.HasThis,
-                        moduleDefinition.CorLibTypeFactory.Void,
+                        mdle.CorLibTypeFactory.Void,
                         importConstructorParameterTypes.ToImmutableArray()
                     )
                 )
@@ -323,7 +323,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 let importConstructorBody = CilMethodBody importClassConstructor
                 let il = importConstructorBody.Instructions
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                il.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))
                 
                 // TODO: Figure out what kind of duplicate imports will be allowed.
                 for index = 1 to functionImportList.Length do
@@ -334,7 +334,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     il.Add(CilInstruction CilOpCodes.Dup)
                     il.Add(CilInstruction(CilOpCodes.Brtrue, CilInstructionLabel storeFunctionImport))
                     il.Add(CilInstruction(CilOpCodes.Ldstr, functionImportField.Name.ToString()))
-                    il.Add(CilInstruction(CilOpCodes.Newobj, coreSystemArgumentNullExceptionConstructor))
+                    il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.UnreachableExceptionConstructor))
                     il.Add(CilInstruction CilOpCodes.Throw)
                     il.Add storeFunctionImport
 
@@ -363,7 +363,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             MethodAttributes.HideBySig,
             MethodSignature(
                 CallingConventionAttributes.HasThis,
-                moduleDefinition.CorLibTypeFactory.Void,
+                mdle.CorLibTypeFactory.Void,
                 constructorSignatureParameters.ToImmutableArray()
             )
         )
@@ -382,7 +382,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let il = body.Instructions
         // Call System.Object constructor
         il.Add(CilInstruction CilOpCodes.Ldarg_0)
-        il.Add(CilInstruction(CilOpCodes.Call, coreSystemObjectConstructor))
+        il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))
 
         // Set the fields corresponding to module imports
         // The order of the fields matches the order of the constructor parameters, since the lookup is sorted
@@ -394,7 +394,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction CilOpCodes.Dup)
             il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel storeModuleImport))
             il.Add(CilInstruction(CilOpCodes.Ldstr, name))
-            il.Add(CilInstruction(CilOpCodes.Newobj, coreSystemArgumentNullExceptionConstructor))
+            il.Add(CilInstruction(CilOpCodes.Newobj, syslib.ArgumentNullExceptionConstructor))
             il.Add(CilInstruction CilOpCodes.Throw)
             il.Add storeModuleImport
             importParameterIndex <- importParameterIndex + 1
@@ -404,14 +404,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     // TODO: Maybe move memory initalization further down?
     let classMemoryFields =
         let mutable fields = ArrayBuilder<_>.Create(input.Memories.Length)
+        let memoryFieldSignature = FieldSignature rtlib.Memory.Signature
 
         for i = 0 to input.Memories.Length - 1 do
             let memory = input.Memories[i]
             let memoryField =
                 FieldDefinition(
-                    stringBuffer.Clear().Append("memory#").Append(i).ToString(),
+                    strbuf.Clear().Append("memory#").Append(i).ToString(),
                     FieldAttributes.InitOnly,
-                    FieldSignature runtimeLibraryReference.MemorySignature
+                    memoryFieldSignature
                 )
 
             classDefinition.Fields.Add memoryField
@@ -422,18 +423,18 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             instructions.Add(CilInstruction CilOpCodes.Ldarg_0)
             instructions.Add(CilInstruction.CreateLdcI4(Checked.int32 memory.Minimum))
             instructions.Add(CilInstruction.CreateLdcI4(ValueOption.map Checked.int32 memory.Maximum |> ValueOption.defaultValue -1))
-            instructions.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.MemoryConstructor))
+            instructions.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Memory.Constructor))
             instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
 
             match input.Exports.GetMemoryName i with
             | true, name ->
                 let memoryFieldGetter =
                     MethodDefinition(
-                        stringBuffer.Clear().Append("get_").Append(name).ToString(),
+                        strbuf.Clear().Append("get_").Append(name).ToString(),
                         MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.HideBySig,
                         MethodSignature(
                             CallingConventionAttributes.HasThis,
-                            runtimeLibraryReference.MemorySignature,
+                            rtlib.Memory.Signature,
                             Array.empty
                         )
                     )
@@ -453,7 +454,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                         PropertyAttributes.None,
                         PropertySignature(
                             CallingConventionAttributes.HasThis,
-                            runtimeLibraryReference.MemorySignature,
+                            rtlib.Memory.Signature,
                             Array.empty
                         )
                     )
@@ -468,11 +469,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let fields = Array.zeroCreate input.Tables.Length
         for i = 0 to fields.Length - 1 do
             let table = input.Tables[i]
-            let runtimeTableReference = runtimeLibraryReference.InstantiatedTable table.ElementType
+            let runtimeTableReference = rtlib.InstantiatedTable table.ElementType
 
             let generatedTableField =
                 FieldDefinition(
-                    stringBuffer.Clear().Append("table#").Append(i).ToString(),
+                    strbuf.Clear().Append("table#").Append(i).ToString(),
                     FieldAttributes.InitOnly,
                     FieldSignature runtimeTableReference.Instantiation
                 )
@@ -483,7 +484,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | true, name ->
                 let tableFieldGetter =
                     MethodDefinition(
-                        stringBuffer.Clear().Append("get_").Append(name).ToString(),
+                        strbuf.Clear().Append("get_").Append(name).ToString(),
                         MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.HideBySig,
                         MethodSignature(
                             CallingConventionAttributes.HasThis,
@@ -540,7 +541,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let generatedFunctionName, generatedFunctionAccess =
                 match input.Exports.GetFunctionName(i + input.Imports.Functions.Length) with
                 | true, existing -> existing, MethodAttributes.Public
-                | false, _ -> stringBuffer.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
+                | false, _ -> strbuf.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
 
             let generatedFunctionDefinition =
                 MethodDefinition(
@@ -560,7 +561,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let glbl = input.Globals[i]
             // TODO: Check export for name
             let name, access =
-                stringBuffer.Clear().Append("global#").Append(i).ToString(), FieldAttributes.PrivateScope
+                strbuf.Clear().Append("global#").Append(i).ToString(), FieldAttributes.PrivateScope
 
             let mutability =
                 match glbl.Type.Mutability with
@@ -571,7 +572,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 FieldDefinition(
                     name,
                     mutability ||| access,
-                    FieldSignature(getValTypeSignature glbl.Type.Type)
+                    FieldSignature(translateValType glbl.Type.Type)
                 )
 
             classDefinition.Fields.Add field
@@ -579,7 +580,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             // Note that the initializer method is not static, since CIL methods are assumed to be instance methods during translation
             let initializer =
                 MethodDefinition(
-                    stringBuffer.Clear().Append("init$").Append(name).ToString(),
+                    strbuf.Clear().Append("init$").Append(name).ToString(),
                     MethodAttributes.CompilerControlled,
                     MethodSignature(
                         CallingConventionAttributes.HasThis,
@@ -602,11 +603,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 | Mutability.Var ->
                     let definition =
                         MethodDefinition(
-                            stringBuffer.Clear().Append("set$").Append(name).ToString(),
+                            strbuf.Clear().Append("set$").Append(name).ToString(),
                             MethodAttributes.Static,
                             MethodSignature(
                                 CallingConventionAttributes.Default,
-                                moduleDefinition.CorLibTypeFactory.Void,
+                                mdle.CorLibTypeFactory.Void,
                                 [| field.Signature.FieldType; classDefinitionSignature |]
                             )
                         )
@@ -640,7 +641,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     ".cctor",
                     MethodAttributes.Private ||| MethodAttributes.HideBySig ||| MethodAttributes.SpecialName |||
                     MethodAttributes.RuntimeSpecialName ||| MethodAttributes.Static,
-                    MethodSignature(CallingConventionAttributes.Default, moduleDefinition.CorLibTypeFactory.Void, Array.empty)
+                    MethodSignature(CallingConventionAttributes.Default, mdle.CorLibTypeFactory.Void, Array.empty)
                 )
 
             classDefinition.Methods.Add definition
@@ -655,17 +656,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         let dataContentsDefinition =
             TypeDefinition(
                 String.empty,
-                stringBuffer.Clear().Append("value$data#").Append(i).ToString(),
+                strbuf.Clear().Append("value$data#").Append(i).ToString(),
                 TypeAttributes.NestedAssembly ||| TypeAttributes.ExplicitLayout ||| TypeAttributes.Sealed
             )
 
-        dataContentsDefinition.BaseType <- coreSystemValueType
+        dataContentsDefinition.BaseType <- syslib.ValueType
         implementationDetailsDefinition.NestedTypes.Add dataContentsDefinition
         dataContentsDefinition.ClassLayout <- ClassLayout(1us, uint32 data.Bytes.Length)
 
         let dataContentsField =
             FieldDefinition(
-                stringBuffer.Clear().Append("bytes$data#").Append(i).ToString(),
+                strbuf.Clear().Append("bytes$data#").Append(i).ToString(),
                 FieldAttributes.Assembly ||| FieldAttributes.Static ||| FieldAttributes.InitOnly ||| FieldAttributes.HasFieldRva,
                 FieldSignature(TypeDefOrRefSignature dataContentsDefinition)
             )
@@ -677,7 +678,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             FieldDefinition(
                 dataContentsField.Name,
                 FieldAttributes.Static ||| FieldAttributes.InitOnly,
-                byteArraySignature
+                SzArrayTypeSignature mdle.CorLibTypeFactory.Byte
             )
 
         classDefinition.Fields.Add dataBytesField
@@ -686,10 +687,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let il = classDefinitionStaticConstructor.Value.CilMethodBody.Instructions
             // Copy from the data field to the byte array
             il.Add(CilInstruction.CreateLdcI4 data.Bytes.Length)
-            il.Add(CilInstruction(CilOpCodes.Newarr, coreLibraryReference.CreateTypeReference("System", "Byte") |> moduleDefinition.DefaultImporter.ImportTypeOrNull)) // moduleDefinition.CorLibTypeFactory.Byte
+            il.Add(CilInstruction(CilOpCodes.Newarr, TypeSpecification mdle.CorLibTypeFactory.Byte :> ITypeDefOrRef))
             il.Add(CilInstruction CilOpCodes.Dup)
             il.Add(CilInstruction(CilOpCodes.Ldtoken, dataContentsField))
-            il.Add(CilInstruction(CilOpCodes.Call, coreSystemRuntimeHelpersInitializeArray))
+            il.Add(CilInstruction(CilOpCodes.Call, syslib.RuntimeHelpers.InitalizeArray))
             il.Add(CilInstruction(CilOpCodes.Stsfld, dataBytesField))
 
         match data.Mode with
@@ -698,11 +699,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             // Generate method that returns the offset that the data is copied to
             let dataOffsetHelper =
                 MethodDefinition(
-                    stringBuffer.Clear().Append("offset$data#").Append(i).ToString(),
+                    strbuf.Clear().Append("offset$data#").Append(i).ToString(),
                     MethodAttributes.HideBySig,
                     MethodSignature(
                         CallingConventionAttributes.HasThis,
-                        moduleDefinition.CorLibTypeFactory.Int32,
+                        mdle.CorLibTypeFactory.Int32,
                         System.Array.Empty()
                     )
                 )
@@ -717,7 +718,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction(CilOpCodes.Call, dataOffsetHelper))
             il.Add(CilInstruction(CilOpCodes.Ldsfld, dataBytesField))
-            il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryWriteArray))
+            il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.WriteArray))
 
             activeDataSegments.Add(activeDataSegment.Offset, dataOffsetHelper)
 
@@ -733,11 +734,11 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 let invocationDelegateDefinition =
                     TypeDefinition(
                         String.empty,
-                        stringBuffer.Clear().Append("funcref#").Append(lookup.Count).ToString(),
+                        strbuf.Clear().Append("funcref#").Append(lookup.Count).ToString(),
                         TypeAttributes.Sealed ||| TypeAttributes.NestedPrivate
                     )
 
-                invocationDelegateDefinition.BaseType <- coreSystemMulticastDelegate
+                invocationDelegateDefinition.BaseType <- syslib.MulticastDelegate.Type
                 classDefinition.NestedTypes.Add invocationDelegateDefinition
 
                 let emitHelperDelegateMethod name additionalFlags signature =
@@ -781,13 +782,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 let signature = getFuncTypeSignature CallingConventionAttributes.Default ty
                 let functionIndexParameter = signature.ParameterTypes.Count
                 let currentModuleParameter = functionIndexParameter + 1
-                signature.ParameterTypes.Add moduleDefinition.CorLibTypeFactory.Int32
+                signature.ParameterTypes.Add mdle.CorLibTypeFactory.Int32
                 signature.ParameterTypes.Add classDefinitionSignature
 
                 // TODO: Put the return and parameter types in the helper name
                 let definition =
                     MethodDefinition(
-                        stringBuffer.Clear().Append("call_indirect$").Append(table.Field.Name).ToString(),
+                        strbuf.Clear().Append("call_indirect$").Append(table.Field.Name).ToString(),
                         MethodAttributes.Static,
                         signature
                     )
@@ -795,7 +796,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 classDefinition.Methods.Add definition
 
                 let body = CilMethodBody definition
-                body.LocalVariables.Add(CilLocalVariable coreSystemDelegateSignature)
+                body.LocalVariables.Add(CilLocalVariable syslib.Delegate.Signature)
                 let il = body.Instructions
                 il.Add(CilInstruction.CreateLdarg functionIndexParameter)
                 il.Add(CilInstruction.CreateLdarg currentModuleParameter)
@@ -812,12 +813,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 // Slow path, need to allocate a new helper delegate
                 il.Add(CilInstruction CilOpCodes.Pop)
                 il.Add(CilInstruction(CilOpCodes.Ldtoken, dynamicInvocationDelegate))
-                il.Add(CilInstruction(CilOpCodes.Call, coreSystemGetTypeFromHandle))
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.Type.GetTypeFromHandle))
                 il.Add(CilInstruction CilOpCodes.Ldloc_0)
-                il.Add(CilInstruction(CilOpCodes.Callvirt, coreSystemDelegateGetTarget))
+                il.Add(CilInstruction(CilOpCodes.Callvirt, syslib.Delegate.GetTarget))
                 il.Add(CilInstruction CilOpCodes.Ldloc_0)
-                il.Add(CilInstruction(CilOpCodes.Callvirt, coreSystemDelegateGetMethod))
-                il.Add(CilInstruction(CilOpCodes.Call, coreSystemDelegateCreate))
+                il.Add(CilInstruction(CilOpCodes.Callvirt, syslib.Delegate.GetMethod))
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.Delegate.CreateDelegate))
                 il.Add(CilInstruction(CilOpCodes.Castclass, dynamicInvocationDelegate))
 
                 il.Add beginDelegateInvocation
@@ -880,7 +881,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
                     let helper =
                         MethodDefinition(
-                            stringBuffer.Clear().Append("call_import$").Append(moduleName).Append('_').Append(func.Name).ToString(),
+                            strbuf.Clear().Append("call_import$").Append(moduleName).Append('_').Append(func.Name).ToString(),
                             MethodAttributes.Static,
                             MethodSignature(
                                 CallingConventionAttributes.Default,
@@ -921,7 +922,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 Loc(i - expression.ParameterTypes.Length)
 
         for ty in expression.LocalTypes do
-            body.LocalVariables.Add(CilLocalVariable(getValTypeSignature ty))
+            body.LocalVariables.Add(CilLocalVariable(translateValType ty))
 
         let il = body.Instructions
         let wasm = expression.Instructions
@@ -953,7 +954,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         for i = 0 to wasm.Length - 1 do
             match wasm[i].Instruction with
             | Unreachable ->
-                il.Add(CilInstruction(CilOpCodes.Newobj, runtimeLibraryReference.UnreachableExceptionConstructor))
+                il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.UnreachableExceptionConstructor))
                 il.Add(CilInstruction CilOpCodes.Throw)
             | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
@@ -1019,16 +1020,16 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 // Top of stack is address to load, which is first parameter
                 pushMemoryField 0
                 pushMemArg arg
-                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Load))
+                il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.ReadInt32))
             | I32Store arg ->
                 // Stack contains the value to store on top of the address
                 pushMemoryField 0
                 pushMemArg arg
-                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryI32Store))
+                il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.WriteInt32))
             | MemoryGrow ->
                 // Top of the stack is the size delta
                 pushMemoryField 0
-                il.Add(CilInstruction(CilOpCodes.Call, runtimeLibraryReference.MemoryGrow))
+                il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.Grow))
             | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
             | I64Const value ->
                 if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then
@@ -1108,7 +1109,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     if classDefinitionStaticConstructor.IsValueCreated then
         classDefinitionStaticConstructor.Value.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
-    moduleDefinition
+    mdle
 
 let compileToStream options input (stream: System.IO.Stream) =
     if isNull stream then nullArg (nameof stream)
