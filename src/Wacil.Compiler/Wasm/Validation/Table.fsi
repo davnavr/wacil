@@ -87,16 +87,42 @@ type ValidExpression =
 type Function = { Type: Format.FuncType; Body: ValidExpression }
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
-type Global =
-    { Type: Format.GlobalType
-      Value: ValidExpression }
+type Global = { Type: Format.GlobalType; Value: ValidExpression }
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyFunction =
+    | Defined of int * Function
+    | Import of int * FunctionImport
+
+    member Type : Format.FuncType
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyMemory =
+    | Defined of int * Format.Limits
+    | Import of int * MemoryImport
+
+    member Limits : Format.Limits
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyTable =
+    | Defined of int * Format.TableType
+    | Import of int * TableImport
+
+    member Type : Format.TableType
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyGlobal =
+    | Defined of int * Global
+    | Import of int * GlobalImport
+
+    member Type : Format.GlobalType
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type ModuleExport =
-    | Function of Function
-    | Table
-    | Memory of Format.MemIdx
-    | Global
+    | Function of Format.FuncIdx * AnyFunction
+    | Table of Format.TableIdx * AnyTable
+    | Memory of Format.MemIdx * AnyMemory
+    | Global of Format.GlobalIdx * AnyGlobal
 
 [<Sealed>]
 type ModuleExportLookup =

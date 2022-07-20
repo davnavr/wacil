@@ -71,12 +71,12 @@ module OperandType =
         | ValType(ValType.Ref _) | UnknownType -> true
         | ValType(ValType.Num _ | ValType.Vec _) -> false
 
-    let i32 = ValType(ValType.Num I32)
-    let i64 = ValType(ValType.Num I64)
-    let f32 = ValType(ValType.Num F32)
-    let f64 = ValType(ValType.Num F64)
-    let funcref = ValType(ValType.Ref FuncRef)
-    let externref = ValType(ValType.Ref ExternRef)
+    let i32 = ValType ValType.i32
+    let i64 = ValType ValType.i64
+    let f32 = ValType ValType.f32
+    let f64 = ValType ValType.f64
+    let funcref = ValType ValType.funcref
+    let externref = ValType ValType.externref
 
     let fromRefType ty =
         match ty with
@@ -132,11 +132,51 @@ type Function = { Type: FuncType; Body: ValidExpression }
 type Global = { Type: GlobalType; Value: ValidExpression }
 
 [<RequireQualifiedAccess>]
+type AnyFunction =
+    | Defined of int * Function
+    | Import of int * FunctionImport
+
+    member this.Type =
+        match this with
+        | Defined(_, f) -> f.Type
+        | Import(_, f) -> f.Type
+
+[<RequireQualifiedAccess>]
+type AnyMemory =
+    | Defined of int * Limits
+    | Import of int * MemoryImport
+
+    member this.Limits =
+        match this with
+        | Defined(_, limits) -> limits
+        | Import(_, import) -> import.Limits
+
+[<RequireQualifiedAccess>]
+type AnyTable =
+    | Defined of int * TableType
+    | Import of int * TableImport
+
+    member this.Type =
+        match this with
+        | Defined(_, ty) -> ty
+        | Import(_, import) -> import.Type
+
+[<RequireQualifiedAccess>]
+type AnyGlobal =
+    | Defined of int * Global
+    | Import of int * GlobalImport
+
+    member this.Type =
+        match this with
+        | Defined(_, defined) -> defined.Type
+        | Import(_, import) -> import.Type
+
+[<RequireQualifiedAccess>]
 type ModuleExport =
-    | Function of Function
-    | Table
-    | Memory of MemIdx
-    | Global
+    | Function of FuncIdx * AnyFunction
+    | Table of TableIdx * AnyTable
+    | Memory of MemIdx * AnyMemory
+    | Global of GlobalIdx * AnyGlobal
 
 [<Sealed>]
 type ModuleExportLookup internal
