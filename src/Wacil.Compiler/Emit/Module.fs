@@ -112,8 +112,8 @@ type BranchTargetStack =
         let target = this.Targets.Pop()
         target
 
-    member this.GetLabel (target: Wacil.Compiler.Wasm.Format.Index): CilInstructionLabel =
-        match this.Targets.ItemFromEnd(Checked.int32 target) with
+    member this.GetLabel (LabelIdx target): CilInstructionLabel =
+        match this.Targets.ItemFromEnd target with
         | BranchTarget.Block label
         | BranchTarget.Loop label
         | BranchTarget.If(_, label) -> label
@@ -421,7 +421,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             instructions.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Memory.Constructor))
             instructions.Add(CilInstruction(CilOpCodes.Stfld, memoryField))
 
-            match input.Exports.GetMemoryName i with
+            // TODO: Don't forget to account for memory imports when getting the index.
+            match input.Exports.GetMemoryName(MemIdx i) with
             | true, name ->
                 let memoryFieldGetter =
                     MethodDefinition(
@@ -475,7 +476,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
             classDefinition.Fields.Add generatedTableField
             
-            match input.Exports.GetTableName i with
+            // TODO: Account for table exports when getting table name
+            match input.Exports.GetTableName(TableIdx i) with
             | true, name ->
                 let tableFieldGetter =
                     MethodDefinition(
@@ -534,7 +536,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             let func = input.Functions[i]
 
             let generatedFunctionName, generatedFunctionAccess =
-                match input.Exports.GetFunctionName(i + input.Imports.Functions.Length) with
+                match input.Exports.GetFunctionName(FuncIdx(i + input.Imports.Functions.Length)) with
                 | true, existing -> existing, MethodAttributes.Public
                 | false, _ -> strbuf.Clear().Append("function#").Append(i).ToString(), MethodAttributes.CompilerControlled
 
@@ -751,7 +753,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     // Helper to generate a static method used when translating indirect calls
     let generateDynamicInvocationHelper =
-        let lookup = Dictionary<struct(Index * FuncType), MethodDefinition>()
+        let lookup = Dictionary<struct(_ * FuncType), MethodDefinition>()
         fun index (ty: FuncType) ->
             let key = struct(index, ty)
             match lookup.TryGetValue key with
@@ -888,7 +890,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                     helper
 
     // TODO: Omit helper generation and just generate a direct call for functions w/o arguments
-    let inline getIndexedCallee (index: Index) = generateClassFunctionDefinitionStatic(Checked.int32 index)
+    let inline getIndexedCallee (FuncIdx index) = generateClassFunctionDefinitionStatic index
 
     //let getIndexedTable (index: Index): TranslatedTable
 
