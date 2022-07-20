@@ -1,7 +1,7 @@
-namespace Wacil.Runtime {
-    using System;
+namespace Wacil.Runtime;
 
-    public sealed class UnreachableException : Exception {
-        public UnreachableException() : base("Encountered unreachable point in code") {}
-    }
+using System;
+
+public sealed class UnreachableException : Exception {
+    public UnreachableException() : base("Encountered unreachable point in code") {}
 }
