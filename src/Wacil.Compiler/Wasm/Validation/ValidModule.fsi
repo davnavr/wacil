@@ -17,10 +17,10 @@ type ValidModule =
     member Memories: ImmutableArray<Format.Limits>
     member Globals: ImmutableArray<Table.Global>
     member Exports: Table.ModuleExportLookup
-    member Start: Table.Index voption
+    member Start: Format.FuncIdx voption
     member Data: ImmutableArray<Table.ValidData>
     
-    member GetFunction: index: int -> AnyFunction
+    member GetFunction: index: Format.FuncIdx -> AnyFunction
 
 /// Base class used for all errors that occur during module validation.
 [<Class>]
@@ -92,13 +92,13 @@ type GlobalIsNotMutableException =
     inherit ValidationException
 
     /// <summary>The index of the global.</summary>
-    member Index: Format.Index
+    member Index: Format.GlobalIdx
 
 [<Sealed; Class>]
 type TableElementTypeMismatchException =
     inherit ValidationException
 
-    member Table: Format.Index
+    member Table: Format.TableIdx
     member Expected: Format.RefType
     member Actual: Format.RefType
 
@@ -107,7 +107,7 @@ type ExpectedPassiveDataSegmentException =
     inherit ValidationException
 
     /// <summary>The index of the data segment.</summary>
-    member Index: Format.Index
+    member Index: Format.DataIdx
 
 [<RequireQualifiedAccess>]
 module Validate =

@@ -30,7 +30,7 @@ type ValidModule
         memories: ImmutableArray<Format.Limits>,
         globals: ImmutableArray<Global>,
         exports: ModuleExportLookup,
-        start: Table.Index voption,
+        start: Format.FuncIdx voption,
         data: ImmutableArray<ValidData>
     )
     =
@@ -47,7 +47,7 @@ type ValidModule
     member _.Start = start
     member _.Data = data
 
-    member _.GetFunction index =
+    member _.GetFunction(Format.FuncIdx index) =
         match anyFunctionLookup[index] with
         | ValueSome f -> f
         | ValueNone ->
@@ -132,22 +132,22 @@ type ElseInstructionMismatchException (index: int, previous: Format.Instruction)
     member _.PreviousStructuredInstruction = previous
 
 [<Sealed>]
-type GlobalIsNotMutableException (index: Format.Index) =
-    inherit ValidationException(sprintf "The global variable at index %i is not mutable" index)
+type GlobalIsNotMutableException (index: Format.GlobalIdx) =
+    inherit ValidationException(sprintf "The global variable at index %i is not mutable" (int32 index))
 
     member _.Index = index
 
 [<Sealed>]
-type TableElementTypeMismatchException (table: Format.Index, expected: Format.RefType, actual: Format.RefType) =
-    inherit ValidationException(sprintf "Expected table #%i to contain elements of type %O but got %O" table expected actual)
+type TableElementTypeMismatchException (table: Format.TableIdx, expected: Format.RefType, actual: Format.RefType) =
+    inherit ValidationException(sprintf "Expected table #%i to contain elements of type %O but got %O" (int32 table) expected actual)
 
     member _.Table = table
     member _.Expected = expected
     member _.Actual = actual
 
 [<Sealed>]
-type ExpectedPassiveDataSegmentException (index: Format.Index) =
-    inherit ValidationException(sprintf "Expected data segment #%i to be a passive data segment" index)
+type ExpectedPassiveDataSegmentException (index: Format.DataIdx) =
+    inherit ValidationException(sprintf "Expected data segment #%i to be a passive data segment" (int32 index))
 
     member _.Index = index
 
@@ -194,12 +194,12 @@ module Validate =
         { mutable CustomSections: ArrayBuilder<Format.Custom>
           mutable Types: ImmutableArray<Format.FuncType> voption
           mutable Imports: ImmutableArray<Format.Import> voption
-          mutable Functions: ImmutableArray<Format.Index> voption
+          mutable Functions: ImmutableArray<Format.TypeIdx> voption
           mutable Tables: ImmutableArray<Format.TableType> voption
           mutable Memories: ImmutableArray<Format.Limits> voption
           mutable Globals: ImmutableArray<Format.Global> voption
           mutable Exports: ImmutableArray<Format.Export> voption
-          mutable Start: Format.Index voption
+          mutable Start: Format.FuncIdx voption
           mutable Element: ImmutableArray<Format.Element> voption 
           mutable Code: ImmutableArray<Format.Code> voption
           mutable DataCount: uint32 voption
@@ -219,8 +219,8 @@ module Validate =
         for i = 0 to types.Length - 1 do mapped[i] <- ValType types[i]
         Unsafe.Array.toImmutable mapped
 
-    let getVariableType (expression: ValidExpression) (index: Format.Index) =
-        match expression.TryGetLocal(Checked.int32 index) with
+    let getVariableType (expression: ValidExpression) index =
+        match expression.TryGetLocal index with
         | true, ty -> ValType ty
         | false, _ -> raise(System.ArgumentOutOfRangeException(nameof index, index, "Local variable was not defined"))
 
@@ -294,12 +294,12 @@ module Validate =
             valueTypeStack.ResizeWithDefault(int32 frame.StartHeight)
             frame.Unreachable <- true
 
-        member _.CheckBranchTarget(target: Format.Index) =
-            if uint32 controlFrameStack.Length < target then
+        member _.CheckBranchTarget(target: Format.LabelIdx) =
+            if controlFrameStack.Length < int32 target then
                 failwithf
                     "TODO: Add exception type for bad branch target (length = %i, target = %i)"
                     controlFrameStack.Length
-                    target
+                    (int32 target)
             Checked.int32 target
 
         member _.GetBlockType ty =
@@ -312,9 +312,9 @@ module Validate =
             this.PopManyValues(this.LabelTypes(controlFrameStack.ItemFromEnd target))
             this.MarkUnreachable()
 
-        member _.GetTableType(index: Format.Index) =
+        member _.GetTableType(Format.TableIdx index) =
             // TODO: Check table imports as well
-            mdle.Tables[Checked.int32 index].ElementType
+            mdle.Tables[index].ElementType
 
         member this.CheckTableType(index, expected) =
             let tableElementType = this.GetTableType index
@@ -385,7 +385,7 @@ module Validate =
                     this.MarkUnreachable()
                 | Format.Return -> this.CheckUnconditionalBranch(controlFrameStack.Length - 1) // Branch to the implicit outermost block
                 | Format.Call callee ->
-                    let ty = mdle.GetFunction(Checked.int32 callee).Type
+                    let ty = mdle.GetFunction(callee).Type
                     this.PopManyValues ty.Parameters
                     this.PushManyValues ty.Results
                 | Format.CallIndirect(ty, table) ->
@@ -536,7 +536,7 @@ module Validate =
                     this.PushValue OperandType.i32
                 | Format.RefFunc _ -> this.PushValue OperandType.funcref
                 | Format.MemoryInit data ->
-                    match mdle.Data[Checked.int32 data].Mode with
+                    match mdle.Data[int32 data].Mode with
                     | ValueSome _ -> raise(ExpectedPassiveDataSegmentException data) 
                     | ValueNone -> ()
 
@@ -799,7 +799,7 @@ module Validate =
                         | Format.DataMode.Passive -> ValueNone
                         | Format.DataMode.Active(memory, offset) ->
                             ValueSome
-                                { ValidActiveData.Memory = Checked.int32 memory
+                                { ValidActiveData.Memory = memory
                                   ValidActiveData.Offset = ValidExpression(
                                     offset,
                                     ImmutableArray.Empty,
@@ -821,17 +821,17 @@ module Validate =
                     lookup[e.Name] <-
                         match e.Description with
                         | Format.ExportDesc.Func index ->
-                            functionNames.Add(Checked.int32 index, e.Name)
-                            let i = Checked.int32 index - imports.Functions.Length
+                            functionNames.Add(index, e.Name)
+                            let i = int32 index - imports.Functions.Length
                             if i < 0 then
                                 failwith "TODO: Fix, attempt was made to exprot a function import. Is this behavior allowed?"
                             ModuleExport.Function functions[i]
                         | Format.ExportDesc.Table index ->
-                            tableNames.Add(Checked.int32 index, e.Name)
+                            tableNames.Add(index, e.Name)
                             ModuleExport.Table
                         | Format.ExportDesc.Mem index ->
-                            memoryNames.Add(Checked.int32 index, e.Name)
-                            ModuleExport.Memory(Checked.int32 index)
+                            memoryNames.Add(index, e.Name)
+                            ModuleExport.Memory(index)
                         | Format.ExportDesc.Global index ->
                             ModuleExport.Global
             ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
@@ -845,7 +845,7 @@ module Validate =
             memories = memories,
             globals = globals,
             exports = exports,
-            start = ValueOption.map Checked.int32 contents.Start,
+            start = contents.Start,
             data = data
         )
 
