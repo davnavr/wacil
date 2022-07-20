@@ -193,12 +193,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let getFriendlyTypeName(name: string) =
         strbuf.Clear().Append(name).Replace("_", "__").Replace('.', '_').ToString()
 
-    let implementationDetailsDefinition =
-        TypeDefinition(
-            String.empty,
-            "<PrivateImplementationDetails>",
-            TypeAttributes.Sealed
-        )
+    let implementationDetailsDefinition = TypeDefinition(String.empty, "<PrivateImplementationDetails>", TypeAttributes.Sealed)
 
     implementationDetailsDefinition.BaseType <- syslib.Object.Type
     mdle.TopLevelTypes.Add implementationDetailsDefinition

@@ -53,17 +53,19 @@ type References =
       Type: TypeClass
       ArgumentNullExceptionConstructor: IMethodDefOrRef
       RuntimeHelpers: RuntimeHelpersClass
-      TargetFrameworkAttributeConstructor: ICustomAttributeType }
+      TargetFrameworkAttributeConstructor: ICustomAttributeType
+      CompilerGeneratedAttributeConstructor: ICustomAttributeType }
 
 let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
     let importCoreType = ImportHelpers.importType mdle.DefaultImporter assembly
     let importSystemType = importCoreType "System"
+    let importCompilerServicesType = importCoreType "System.Runtime.CompilerServices"
 
     let tyObject = importSystemType "Object"
     let tyDelegate = importSystemType "Delegate"
     let tyMulticastDelegate = importSystemType "MulticastDelegate"
     let tyType = importSystemType "Type"
-    let tyRuntimeHelpers = importCoreType "System.Runtime.CompilerServices" "RuntimeHelpers"
+    let tyRuntimeHelpers = importCompilerServicesType "RuntimeHelpers"
 
     let sigDelegate = TypeDefOrRefSignature tyDelegate
     let sigMethodInfo = TypeDefOrRefSignature(importCoreType "System.Reflection" "MethodInfo")
@@ -134,4 +136,8 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
       TargetFrameworkAttributeConstructor =
         importCoreType "System.Runtime.Versioning" "TargetFrameworkAttribute"
         |> ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String |]
+        :?> ICustomAttributeType
+      CompilerGeneratedAttributeConstructor =
+        importCompilerServicesType "CompilerGeneratedAttribute"
+        |> ImportHelpers.importConstructor mdle Seq.empty
         :?> ICustomAttributeType }
