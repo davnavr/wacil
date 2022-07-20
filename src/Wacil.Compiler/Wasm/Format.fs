@@ -72,6 +72,7 @@ type TypeIdx =
 
     static member From (index: int64) = TypeIdx(Checked.int32 index)
     static member From (index: uint64) = TypeIdx(Checked.int32 index)
+    static member inline op_Implicit(TypeIdx index) = index
 
 [<Struct>]
 type FuncIdx =
@@ -79,6 +80,7 @@ type FuncIdx =
 
     static member From (index: int64) = FuncIdx(Checked.int32 index)
     static member From (index: uint64) = FuncIdx(Checked.int32 index)
+    static member inline op_Implicit(FuncIdx index) = index
 
 [<Struct>]
 type TableIdx =
@@ -86,6 +88,7 @@ type TableIdx =
 
     static member From (index: int64) = TableIdx(Checked.int32 index)
     static member From (index: uint64) = TableIdx(Checked.int32 index)
+    static member inline op_Implicit(TableIdx index) = index
 
 [<Struct>]
 type MemIdx =
@@ -93,6 +96,7 @@ type MemIdx =
 
     static member From (index: int64) = MemIdx(Checked.int32 index)
     static member From (index: uint64) = MemIdx(Checked.int32 index)
+    static member inline op_Implicit(MemIdx index) = index
 
 [<Struct>]
 type GlobalIdx =
@@ -100,6 +104,7 @@ type GlobalIdx =
 
     static member From (index: int64) = GlobalIdx(Checked.int32 index)
     static member From (index: uint64) = GlobalIdx(Checked.int32 index)
+    static member inline op_Implicit(GlobalIdx index) = index
 
 [<Struct>]
 type ElemIdx =
@@ -107,6 +112,7 @@ type ElemIdx =
 
     static member From (index: int64) = ElemIdx(Checked.int32 index)
     static member From (index: uint64) = ElemIdx(Checked.int32 index)
+    static member inline op_Implicit(ElemIdx index) = index
 
 [<Struct>]
 type DataIdx =
@@ -114,6 +120,7 @@ type DataIdx =
 
     static member From (index: int64) = DataIdx(Checked.int32 index)
     static member From (index: uint64) = DataIdx(Checked.int32 index)
+    static member inline op_Implicit(DataIdx index) = index
 
 [<Struct>]
 type LocalIdx =
@@ -121,6 +128,7 @@ type LocalIdx =
 
     static member From (index: int64) = LocalIdx(Checked.int32 index)
     static member From (index: uint64) = LocalIdx(Checked.int32 index)
+    static member inline op_Implicit(LocalIdx index) = index
 
 [<Struct>]
 type LabelIdx =
@@ -128,6 +136,7 @@ type LabelIdx =
 
     static member From (index: int64) = LabelIdx(Checked.int32 index)
     static member From (index: uint64) = LabelIdx(Checked.int32 index)
+    static member inline op_Implicit(LabelIdx index) = index
 
 type Opcode =
     | Unreachable = 0uy

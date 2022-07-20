@@ -5,8 +5,6 @@ open System.Collections.Generic
 
 open Wacil.Compiler.Wasm
 
-type Index = int
-
 [<RequireQualifiedAccess>]
 type FunctionImport = { Name: string; Type: Format.FuncType }
 
@@ -71,7 +69,7 @@ type ValidExpression =
         resultTypes: ImmutableArray<Format.ValType> -> ValidExpression
 
     member internal SetInstructions: ImmutableArray<ValidInstruction> -> unit
-    member internal SetMaximumIntroducedBlockCount: int32 -> unit
+    member internal SetMaximumIntroducedBlockCount: int -> unit
 
     member Source: ImmutableArray<Format.Instruction>
     /// <summary>The WebAssembly instructions of the expression, including the terminating <c>end</c> instruction.</summary>
@@ -81,9 +79,9 @@ type ValidExpression =
     member LocalTypes: ImmutableArray<Format.ValType>
     member ResultTypes: ImmutableArray<Format.ValType>
     /// The maximum number of blocks that are ever introduced in the expression.
-    member MaximumIntroducedBlockCount: int32
+    member MaximumIntroducedBlockCount: int
 
-    member TryGetLocal: index: int32 * variableType: outref<Format.ValType> -> bool
+    member TryGetLocal: index: Format.LocalIdx * variableType: outref<Format.ValType> -> bool
 
 [<NoComparison; StructuralEquality>]
 type Function = { Type: Format.FuncType; Body: ValidExpression }
@@ -97,26 +95,26 @@ type Global =
 type ModuleExport =
     | Function of Function
     | Table
-    | Memory of Index
+    | Memory of Format.MemIdx
     | Global
 
 [<Sealed>]
 type ModuleExportLookup =
     internal new:
-        memories: Dictionary<Index, string> *
-        functions: Dictionary<Index, string> *
-        tables: Dictionary<Index, string> *
+        memories: Dictionary<Format.MemIdx, string> *
+        functions: Dictionary<Format.FuncIdx, string> *
+        tables: Dictionary<Format.TableIdx, string> *
         lookup: Dictionary<string, ModuleExport> -> ModuleExportLookup
 
-    member GetMemoryName: index: Index * name: outref<string> -> bool
-    member GetFunctionName: index: Index * name: outref<string> -> bool
-    member GetTableName: index: Index * name: outref<string> -> bool
+    member GetMemoryName: index: Format.MemIdx * name: outref<string> -> bool
+    member GetFunctionName: index: Format.FuncIdx * name: outref<string> -> bool
+    member GetTableName: index: Format.TableIdx * name: outref<string> -> bool
     /// <summary>Gets an export corresponding to the specified <paramref name="name"/>.</summary>
     member Item: name: string -> ModuleExport with get
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type ValidActiveData =
-    { Memory: Index
+    { Memory: Format.MemIdx
       /// An expression that evaluates to an offset that the data is copied to.
       Offset: ValidExpression }
 

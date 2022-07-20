@@ -70,6 +70,7 @@ type TypeIdx =
 
     static member From: index: int64 -> TypeIdx
     static member From: index: uint64 -> TypeIdx
+    static member inline op_Implicit: index: TypeIdx -> int32
 
 /// An index to a function, starting with any function imports followed by the functions defined in the current module.
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
@@ -78,6 +79,7 @@ type FuncIdx =
 
     static member From: index: int64 -> FuncIdx
     static member From: index: uint64 -> FuncIdx
+    static member inline op_Implicit: index: FuncIdx -> int32
 
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
 type TableIdx =
@@ -85,6 +87,7 @@ type TableIdx =
 
     static member From: index: int64 -> TableIdx
     static member From: index: uint64 -> TableIdx
+    static member inline op_Implicit: index: TableIdx -> int32
 
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
 type MemIdx =
@@ -92,6 +95,7 @@ type MemIdx =
 
     static member From: index: int64 -> MemIdx
     static member From: index: uint64 -> MemIdx
+    static member inline op_Implicit: index: MemIdx -> int32
 
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
 type GlobalIdx =
@@ -99,6 +103,7 @@ type GlobalIdx =
 
     static member From: index: int64 -> GlobalIdx
     static member From: index: uint64 -> GlobalIdx
+    static member inline op_Implicit: index: GlobalIdx -> int32
 
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
 type ElemIdx =
@@ -106,6 +111,7 @@ type ElemIdx =
 
     static member From: index: int64 -> ElemIdx
     static member From: index: uint64 -> ElemIdx
+    static member inline op_Implicit: index: ElemIdx -> int32
 
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
 type DataIdx =
@@ -113,6 +119,7 @@ type DataIdx =
 
     static member From: index: int64 -> DataIdx
     static member From: index: uint64 -> DataIdx
+    static member inline op_Implicit: index: DataIdx -> int32
 
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
 type LocalIdx =
@@ -120,6 +127,7 @@ type LocalIdx =
 
     static member From: index: int64 -> LocalIdx
     static member From: index: uint64 -> LocalIdx
+    static member inline op_Implicit: index: LocalIdx -> int32
 
 [<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
 type LabelIdx =
@@ -127,6 +135,7 @@ type LabelIdx =
 
     static member From: index: int64 -> LabelIdx
     static member From: index: uint64 -> LabelIdx
+    static member inline op_Implicit: index: LabelIdx -> int32
 
 type Opcode =
     | Unreachable = 0uy
