@@ -130,6 +130,7 @@ type ModuleExportLookup =
     member GetMemoryName: index: Format.MemIdx * name: outref<string> -> bool
     member GetFunctionName: index: Format.FuncIdx * name: outref<string> -> bool
     member GetTableName: index: Format.TableIdx * name: outref<string> -> bool
+    //member GetGlobalName: index: Format.GlobalIdx * name: outref<string> -> bool
     /// <summary>Gets an export corresponding to the specified <paramref name="name"/>.</summary>
     member Item: name: string -> ModuleExport with get
 

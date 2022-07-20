@@ -9,26 +9,6 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm
 open Wacil.Compiler.Wasm.Validation.Table
 
-// [<System.Runtime.CompilerServices.IsReadOnly; Struct; NoComparison; NoEquality>]
-// type ArrayLookup<'Any, 'Import, 'Definition when 'Any : not struct> =
-//     val private lookup: 'Any[]
-//     val private imports: ImmutableArray<'Import>
-//     val private definitions: ImmutableArray<'Definition>
-
-// type ArrayLookup<'T, 'Import, 'Definition when 'T : not struct> =
-//     { Lookup: 'T[]
-//       Imports: ImmutableArray<'Import>
-//       Definitions: ImmutableArray<'Definition>
-//       MapDefinition: (int * 'Definition) -> 'T
-//       MapImport: (int * 'Import) -> 'T }
-
-// [<RequireQualifiedAccess>]
-// module ArrayLookup =
-//     let create (imports: ImmutableArray<'_>) (definitions: ImmutableArray<'_>) mapd mapi =
-//         { Lookup = Array.zeroCreate(imports.Length + definitions.Length)
-//           Imports = imports
-//           Definitions = definitions }
-
 [<AutoOpen>]
 module Helpers =
     let inline createImportOrDefinitionLookup
@@ -67,8 +47,14 @@ type ValidModule
     let anyFunctionLookup =
         createImportOrDefinitionLookup imports.Imports.Functions functions AnyFunction.Import AnyFunction.Defined
 
+    let anyTableLookup =
+        createImportOrDefinitionLookup imports.Imports.Tables tables AnyTable.Import AnyTable.Defined
+
     let anyMemoryLookup =
         createImportOrDefinitionLookup imports.Imports.Memories memories AnyMemory.Import AnyMemory.Defined
+
+    let anyGlobalLookup =
+        createImportOrDefinitionLookup imports.Imports.Globals globals AnyGlobal.Import AnyGlobal.Defined
 
     member _.CustomSections = custom
     member _.Types = types
@@ -82,7 +68,9 @@ type ValidModule
     member _.Data = data
 
     member _.GetFunction(index: Format.FuncIdx) = anyFunctionLookup index
+    member _.GetTable(index: Format.TableIdx) = anyTableLookup index
     member _.GetMemory(index: Format.MemIdx) = anyMemoryLookup index
+    member _.GetGlobal(index: Format.GlobalIdx) = anyGlobalLookup index
 
 type ValidationException =
     inherit System.Exception
@@ -854,33 +842,11 @@ module Validate =
                                   ) } }
             Unsafe.Array.toImmutable segments
 
-        let exports =
-            let exports = ValueOption.defaultValue ImmutableArray.Empty contents.Exports
-            let lookup = Dictionary(exports.Length, System.StringComparer.Ordinal)
-            let memoryNames = Dictionary() // TODO: Use arrays in export lookup
-            let functionNames = Dictionary()
-            let tableNames = Dictionary()
-            for e in exports do
-                match lookup.TryGetValue e.Name with
-                | true, _ -> raise(DuplicateExportException e.Name)
-                | false, _ ->
-                    lookup[e.Name] <-
-                        match e.Description with
-                        | Format.ExportDesc.Func index ->
-                            functionNames.Add(index, e.Name)
-                            let i = int32 index - imports.Functions.Length
-                            if i < 0 then
-                                failwith "TODO: Fix, attempt was made to exprot a function import. Is this behavior allowed?"
-                            ModuleExport.Function functions[i]
-                        | Format.ExportDesc.Table index ->
-                            tableNames.Add(index, e.Name)
-                            ModuleExport.Table
-                        | Format.ExportDesc.Mem index ->
-                            memoryNames.Add(index, e.Name)
-                            ModuleExport.Memory(index)
-                        | Format.ExportDesc.Global index ->
-                            ModuleExport.Global
-            ModuleExportLookup(memoryNames, functionNames, tableNames, lookup)
+        let originalModuleExports = ValueOption.defaultValue ImmutableArray.Empty contents.Exports
+        let moduleExportLookup = Dictionary(originalModuleExports.Length, System.StringComparer.Ordinal)
+        let memoryExportNames = Dictionary() // TODO: Use arrays in export lookup
+        let functionExportNames = Dictionary()
+        let tableExportNames = Dictionary()
 
         let validated = ValidModule(
             custom = contents.CustomSections.ToImmutableArray(),
@@ -890,10 +856,29 @@ module Validate =
             tables = tables,
             memories = memories,
             globals = globals,
-            exports = exports,
+            exports = ModuleExportLookup(memoryExportNames, functionExportNames, tableExportNames, moduleExportLookup),
             start = contents.Start,
             data = data
         )
+
+        for e in originalModuleExports do
+            match moduleExportLookup.TryGetValue e.Name with
+            | true, _ -> raise(DuplicateExportException e.Name)
+            | false, _ ->
+                moduleExportLookup[e.Name] <-
+                    match e.Description with // TODO: Figure out if WASM allows re-exporting things.
+                    | Format.ExportDesc.Func index ->
+                        functionExportNames.Add(index, e.Name)
+                        ModuleExport.Function(index, validated.GetFunction index)
+                    | Format.ExportDesc.Table index ->
+                        tableExportNames.Add(index, e.Name)
+                        ModuleExport.Table(index, validated.GetTable index)
+                    | Format.ExportDesc.Mem index ->
+                        memoryExportNames.Add(index, e.Name)
+                        ModuleExport.Memory(index, validated.GetMemory index)
+                    | Format.ExportDesc.Global index ->
+                        //ModuleExport.Global
+                        failwith "TODO: Export global"
 
         let instructionSequenceValidator = InstructionValidator validated
 
