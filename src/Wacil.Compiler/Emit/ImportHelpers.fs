@@ -1,5 +1,5 @@
 [<RequireQualifiedAccess>]
-module internal ImportHelpers
+module internal Wacil.Compiler.Emit.ImportHelpers
 
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
