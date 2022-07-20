@@ -396,8 +396,8 @@ type Instruction =
     | I64Store8 of MemArg
     | I64Store16 of MemArg
     | I64Store32 of MemArg
-    | MemorySize
-    | MemoryGrow
+    | MemorySize of MemIdx
+    | MemoryGrow of MemIdx
     | I32Const of int32
     | I64Const of int64
     | F32Const of single
@@ -541,10 +541,10 @@ type Instruction =
     | I64TruncSatF32U
     | I64TruncSatF64S
     | I64TruncSatF64U
-    | MemoryInit of data: DataIdx
+    | MemoryInit of data: DataIdx * MemIdx
     | DataDrop of DataIdx
-    | MemoryCopy
-    | MemoryFill
+    | MemoryCopy of x: MemIdx * y: MemIdx
+    | MemoryFill of MemIdx
     | TableInit of element: ElemIdx * table: TableIdx
     | ElemDrop of element: ElemIdx
     | TableCopy of table1: TableIdx * table2: TableIdx
