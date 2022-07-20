@@ -73,6 +73,8 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             if cont then shifted <- Checked.(+) shifted 7
         n
 
+    member inline this.ReadIndex() = (^T : (static member From: uint64 -> 'T) this.ReadUnsignedInteger())
+
     member this.ReadSignedIntegerOrNegativeZero() =
         let mutable cont, n, shifted = true, 0L, 0
         let mutable result = ValueNone
@@ -139,7 +141,7 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
     member this.ReadBlockType() =
         match this.ReadSignedIntegerOrNegativeZero() with
         | ValueNone -> BlockType.Void
-        | ValueSome value when value >= 0L -> BlockType.Index(Checked.uint32 value)
+        | ValueSome value when value >= 0L -> BlockType.Index(TypeIdx.From value)
         | ValueSome value ->
             (int8 value * -1y) ||| 0b0100_0000y
             |> uint8
@@ -242,30 +244,26 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.End ->
             nestedBlockLevel <- Checked.(-) nestedBlockLevel 1
             instructions.Add End
-        | Opcode.Br -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Br)
-        | Opcode.BrIf -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> BrIf)
+        | Opcode.Br -> instructions.Add(reader.ReadIndex() |> Br)
+        | Opcode.BrIf -> instructions.Add(reader.ReadIndex() |> BrIf)
         | Opcode.BrTable ->
             let mutable targetLabels = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-            for i = 0 to targetLabels.Length - 1 do targetLabels[i] <- reader.ReadUnsignedInteger() |> Checked.uint32
-            let defaultLabel = reader.ReadUnsignedInteger() |> Checked.uint32
+            for i = 0 to targetLabels.Length - 1 do targetLabels[i] <- reader.ReadIndex()
+            let defaultLabel = reader.ReadIndex()
             instructions.Add(BrTable(Unsafe.Array.toImmutable targetLabels, defaultLabel))
         | Opcode.Return -> instructions.Add Return
-        | Opcode.Call -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> Call)
-        | Opcode.CallIndirect ->
-            let instruction =
-                (reader.ReadUnsignedInteger() |> Checked.uint32, reader.ReadUnsignedInteger() |> Checked.uint32)
-                |> CallIndirect
-            instructions.Add instruction
+        | Opcode.Call -> instructions.Add(reader.ReadIndex() |> Call)
+        | Opcode.CallIndirect -> instructions.Add(CallIndirect(reader.ReadIndex(), reader.ReadIndex()))
         | Opcode.Drop -> instructions.Add Drop
         | Opcode.Select -> instructions.Add Select
         | Opcode.SelectMany -> raise(NotSupportedException "select instruction that uses multiple values not yet suppoprted")
-        | Opcode.LocalGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalGet)
-        | Opcode.LocalSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalSet)
-        | Opcode.LocalTee -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> LocalTee)
-        | Opcode.GlobalGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalGet)
-        | Opcode.GlobalSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> GlobalSet)
-        | Opcode.TableGet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableGet)
-        | Opcode.TableSet -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableSet)
+        | Opcode.LocalGet -> instructions.Add(reader.ReadIndex() |> LocalGet)
+        | Opcode.LocalSet -> instructions.Add(reader.ReadIndex() |> LocalSet)
+        | Opcode.LocalTee -> instructions.Add(reader.ReadIndex() |> LocalTee)
+        | Opcode.GlobalGet -> instructions.Add(reader.ReadIndex() |> GlobalGet)
+        | Opcode.GlobalSet -> instructions.Add(reader.ReadIndex() |> GlobalSet)
+        | Opcode.TableGet -> instructions.Add(reader.ReadIndex() |> TableGet)
+        | Opcode.TableSet -> instructions.Add(reader.ReadIndex() |> TableSet)
         | Opcode.I32Load -> instructions.Add(parseMemArg reader |> I32Load)
         | Opcode.I64Load -> instructions.Add(parseMemArg reader |> I64Load)
         | Opcode.F32Load -> instructions.Add(parseMemArg reader |> F32Load)
@@ -429,7 +427,7 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             | ValType.Ref r -> instructions.Add(RefNull r)
             | bad -> failwithf "%A is not a ref type" bad
         | Opcode.RefIsNull -> instructions.Add RefIsNull
-        | Opcode.RefFunc -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> RefFunc)
+        | Opcode.RefFunc -> instructions.Add(reader.ReadIndex() |> RefFunc)
         | Opcode.PrefixFC ->
             match reader.ReadUnsignedInteger() with
             | 0UL -> instructions.Add I32TruncSatF32S
@@ -441,21 +439,15 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             | 6UL -> instructions.Add I64TruncSatF64S
             | 7UL -> instructions.Add I64TruncSatF64U
             //| 8UL -> 
-            | 9UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> DataDrop)
+            | 9UL -> instructions.Add(reader.ReadIndex() |> DataDrop)
             //| 10UL ->
             //| 11UL ->
-            | 12UL ->
-                let element = reader.ReadUnsignedInteger() |> Checked.uint32
-                let table = reader.ReadUnsignedInteger() |> Checked.uint32
-                instructions.Add(TableInit(element, table))
-            | 13UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> ElemDrop)
-            | 14UL ->
-                let table1 = reader.ReadUnsignedInteger() |> Checked.uint32
-                let table2 = reader.ReadUnsignedInteger() |> Checked.uint32
-                instructions.Add(TableCopy(table1, table2))
-            | 15UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableGrow)
-            | 16UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableSize)
-            | 17UL -> instructions.Add(reader.ReadUnsignedInteger() |> Checked.uint32 |> TableFill)
+            | 12UL -> instructions.Add(TableInit(reader.ReadIndex(), reader.ReadIndex()))
+            | 13UL -> instructions.Add(reader.ReadIndex() |> ElemDrop)
+            | 14UL -> instructions.Add(TableCopy(reader.ReadIndex(), reader.ReadIndex()))
+            | 15UL -> instructions.Add(reader.ReadIndex() |> TableGrow)
+            | 16UL -> instructions.Add(reader.ReadIndex() |> TableSize)
+            | 17UL -> instructions.Add(reader.ReadIndex() |> TableFill)
             | bad -> failwithf "Invalid prefixed instruction 0xFC 0x%02X" bad
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
@@ -532,7 +524,7 @@ let parseFromStream (stream: Stream) =
                           Import.Name = reader.ReadName()
                           Import.Description =
                             match reader.ReadByte() with
-                            | 0uy -> reader.ReadUnsignedInteger() |> Checked.uint32 |> ImportDesc.Func
+                            | 0uy -> reader.ReadIndex() |> ImportDesc.Func
                             | 1uy -> reader.ReadTableType() |> ImportDesc.Table
                             | 2uy -> reader.ReadLimits() |> ImportDesc.Mem
                             //| 3uy -> reader.Global
@@ -540,7 +532,7 @@ let parseFromStream (stream: Stream) =
                 sections.Add(Section.Import(Unsafe.Array.toImmutable imports))
             | SectionId.Function ->
                 let indices = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadUnsignedInteger() |> Checked.uint32
+                for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadIndex()
                 sections.Add(Section.Function(Unsafe.Array.toImmutable indices))
             | SectionId.Table ->
                 let tables = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
@@ -570,15 +562,15 @@ let parseFromStream (stream: Stream) =
                         { Export.Name = reader.ReadName()
                           Description =
                             let kind = reader.ReadByte()
-                            let index: Index = reader.ReadUnsignedInteger() |> Checked.uint32
+                            let index = reader.ReadUnsignedInteger()
                             match kind with
-                            | 0uy -> ExportDesc.Func index
-                            | 1uy -> ExportDesc.Table index
-                            | 2uy -> ExportDesc.Mem index
-                            | 3uy -> ExportDesc.Global index
+                            | 0uy -> ExportDesc.Func(FuncIdx.From index)
+                            | 1uy -> ExportDesc.Table(TableIdx.From index)
+                            | 2uy -> ExportDesc.Mem(MemIdx.From index)
+                            | 3uy -> ExportDesc.Global(GlobalIdx.From index)
                             | _ -> failwithf "0x%02X is not a valid export kind" kind }
                 sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
-            | SectionId.Start -> sections.Add(Section.Start(reader.ReadUnsignedInteger() |> Checked.uint32))
+            | SectionId.Start -> sections.Add(Section.Start(reader.ReadIndex()))
             | SectionId.Code ->
                 let code = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionSequenceBuilder
@@ -592,13 +584,13 @@ let parseFromStream (stream: Stream) =
                             let expression = parseExpression reader &instructionSequenceBuilder
                             let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                             reader.ReadAll(Span bytes)
-                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(0u, expression) }
+                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(MemIdx 0, expression) }
                         | 1u ->
                             let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                             reader.ReadAll(Span bytes)
                             { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Passive }
                         | 2u ->
-                            let index = reader.ReadUnsignedInteger() |> Checked.uint32
+                            let index = reader.ReadIndex()
                             let expression = parseExpression reader &instructionSequenceBuilder
                             let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                             reader.ReadAll(Span bytes)

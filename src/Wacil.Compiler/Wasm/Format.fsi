@@ -64,7 +64,69 @@ module FuncType =
 
     val ofReturnType: returnType: ValType -> FuncType
 
-type Index = uint32
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type TypeIdx =
+    | TypeIdx of int
+
+    static member From: index: int64 -> TypeIdx
+    static member From: index: uint64 -> TypeIdx
+
+/// An index to a function, starting with any function imports followed by the functions defined in the current module.
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type FuncIdx =
+    | FuncIdx of int
+
+    static member From: index: int64 -> FuncIdx
+    static member From: index: uint64 -> FuncIdx
+
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type TableIdx =
+    | TableIdx of int
+
+    static member From: index: int64 -> TableIdx
+    static member From: index: uint64 -> TableIdx
+
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type MemIdx =
+    | MemIdx of int
+
+    static member From: index: int64 -> MemIdx
+    static member From: index: uint64 -> MemIdx
+
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type GlobalIdx =
+    | GlobalIdx of int
+
+    static member From: index: int64 -> GlobalIdx
+    static member From: index: uint64 -> GlobalIdx
+
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type ElemIdx =
+    | ElemIdx of int
+
+    static member From: index: int64 -> ElemIdx
+    static member From: index: uint64 -> ElemIdx
+
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type DataIdx =
+    | DataIdx of int
+
+    static member From: index: int64 -> DataIdx
+    static member From: index: uint64 -> DataIdx
+
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type LocalIdx =
+    | LocalIdx of int
+
+    static member From: index: int64 -> LocalIdx
+    static member From: index: uint64 -> LocalIdx
+
+[<StructuralComparison; StructuralEquality; IsReadOnly; Struct>]
+type LabelIdx =
+    | LabelIdx of int
+
+    static member From: index: int64 -> LabelIdx
+    static member From: index: uint64 -> LabelIdx
 
 type Opcode =
     | Unreachable = 0uy
@@ -269,7 +331,7 @@ type MemArg = { Alignment: MemArgAlignment; Offset: uint32 }
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type BlockType =
     | Void
-    | Index of index: Index
+    | Index of index: TypeIdx
     | Val of ValType
     //| Func of FuncType
 
@@ -283,21 +345,21 @@ type Instruction =
     | If of BlockType
     | Else
     | End
-    | Br of label: Index
-    | BrIf of label: Index
-    | BrTable of targetLabels: ImmutableArray<Index> * defaultLabel: Index
+    | Br of label: LabelIdx
+    | BrIf of label: LabelIdx
+    | BrTable of targetLabels: ImmutableArray<LabelIdx> * defaultLabel: LabelIdx
     | Return
-    | Call of callee: Index
-    | CallIndirect of functionType: Index * table: Index
+    | Call of callee: FuncIdx
+    | CallIndirect of functionType: TypeIdx * table: TableIdx
     | Drop
     | Select
-    | LocalGet of Index
-    | LocalSet of Index
-    | LocalTee of Index
-    | GlobalGet of Index
-    | GlobalSet of Index
-    | TableGet of Index
-    | TableSet of Index
+    | LocalGet of LocalIdx
+    | LocalSet of LocalIdx
+    | LocalTee of LocalIdx
+    | GlobalGet of GlobalIdx
+    | GlobalSet of GlobalIdx
+    | TableGet of TableIdx
+    | TableSet of TableIdx
     | I32Load of MemArg
     | I64Load of MemArg
     | F32Load of MemArg
@@ -457,7 +519,7 @@ type Instruction =
     | I64Extend32S
     | RefNull of RefType
     | RefIsNull
-    | RefFunc of func: Index
+    | RefFunc of func: FuncIdx
     | I32TruncSatF32S
     | I32TruncSatF32U
     | I32TruncSatF64S
@@ -466,16 +528,16 @@ type Instruction =
     | I64TruncSatF32U
     | I64TruncSatF64S
     | I64TruncSatF64U
-    | MemoryInit of data: Index
-    | DataDrop of Index
+    | MemoryInit of data: DataIdx
+    | DataDrop of DataIdx
     | MemoryCopy
     | MemoryFill
-    | TableInit of element: Index * table: Index
-    | ElemDrop of element: Index
-    | TableCopy of table1: Index * table2: Index
-    | TableGrow of table: Index
-    | TableSize of table: Index
-    | TableFill of table: Index
+    | TableInit of element: ElemIdx * table: TableIdx
+    | ElemDrop of element: ElemIdx
+    | TableCopy of table1: TableIdx * table2: TableIdx
+    | TableGrow of table: TableIdx
+    | TableSize of table: TableIdx
+    | TableFill of table: TableIdx
 
 type Name = string
 
@@ -520,7 +582,7 @@ type GlobalType = { Type: ValType; Mutability: Mutability }
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ImportDesc =
-    | Func of ty: Index
+    | Func of TypeIdx
     | Table of TableType
     | Mem of MemType
     | Global of GlobalType
@@ -535,10 +597,10 @@ type Global = { Type: GlobalType; Expression: Expression }
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ExportDesc =
-    | Func of Index
-    | Table of Index
-    | Mem of Index
-    | Global of Index
+    | Func of FuncIdx
+    | Table of TableIdx
+    | Mem of MemIdx
+    | Global of GlobalIdx
 
 [<NoComparison; StructuralEquality>]
 type Export = { Name: string; Description: ExportDesc }
@@ -546,11 +608,11 @@ type Export = { Name: string; Description: ExportDesc }
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ElementMode =
     | Passive
-    | Active of table: Index * offset: Expression
+    | Active of table: TableIdx * offset: Expression
     | Declarative
 
 [<NoComparison; StructuralEquality>]
-type Element = { Type: RefType; Expressions: Expression; Mode: ElementMode }
+type Element = { Type: RefType; Expressions: ImmutableArray<Expression>; Mode: ElementMode }
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type Local = { Count: uint32; Type: ValType }
@@ -561,7 +623,7 @@ type Code = { Locals: ImmutableArray<Local>; Body: Expression }
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type DataMode =
     | Passive
-    | Active of memory: Index * offset: Expression
+    | Active of memory: MemIdx * offset: Expression
 
 [<NoComparison; StructuralEquality>]
 type Data  = { Bytes: ImmutableArray<byte>; Mode: DataMode }
@@ -571,12 +633,12 @@ type Section =
     | Custom of Custom
     | Type of ImmutableArray<FuncType>
     | Import of ImmutableArray<Import>
-    | Function of types: ImmutableArray<Index>
+    | Function of types: ImmutableArray<TypeIdx>
     | Table of ImmutableArray<TableType>
     | Memory of ImmutableArray<Limits>
     | Global of ImmutableArray<Global>
     | Export of ImmutableArray<Export>
-    | Start of Index
+    | Start of FuncIdx
     | Element of ImmutableArray<Element>
     | Code of ImmutableArray<Code>
     | Data of ImmutableArray<Data>
