@@ -5,7 +5,7 @@ module internal Wacil.Compiler.Emit.ImportTranslator
 open Wacil.Compiler
 open Wacil.Compiler.Helpers.Collections
 
-open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
+open AsmResolver.PE.DotNet.Metadata.Tables.Rows
 open AsmResolver.PE.DotNet.Cil;
 
 open AsmResolver.DotNet
@@ -16,6 +16,14 @@ type ModuleClass =
     { Definition: TypeDefinition
       //Signature:
       }
+
+type private ParameterIndex =
+    { mutable Index: uint16 }
+
+    member this.Next() =
+        let index = this.Index
+        this.Index <- Checked.(+) this.Index 1us
+        index
 
 let translateModuleImports
     (mangleMemberName: string -> string)
@@ -30,10 +38,14 @@ let translateModuleImports
     let mutable constructorParameterTypes = ArrayBuilder.Create()
     let mutable translatedModuleImports = ArrayBuilder<ModuleClass>.Create(wasm.Imports.Modules.Count)
 
-    // TODO: To ensure deterministic builds, iterate over the module imports and its named imports in the same way (maybe use a sorted dictionary?)
+    let importMemberInitializers = ResizeArray<CilInstructionCollection -> unit>()
+    let importParameterIndex = { Index = 1us }
+
     for moduleImportName in wasm.Imports.Modules do
         constructorParameterTypes.Clear()
         constructorParameterNames.Clear()
+        importMemberInitializers.Clear()
+        importParameterIndex.Index <- 1us
 
         let imports = wasm.Imports[moduleImportName]
 
@@ -44,8 +56,6 @@ let translateModuleImports
                 (TypeAttributes.Sealed ||| TypeAttributes.Public)
                 ns
                 (mangleMemberName moduleImportName)
-
-        // TODO: Add parameter types
 
         // TODO: First, are the function imports, followed by the table imports
 
@@ -62,7 +72,9 @@ let translateModuleImports
             constructorParameterTypes.Add rtlib.Memory.Signature
             constructorParameterNames.Add name
 
-            ()
+            let index = importParameterIndex.Next()
+
+            importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index name field)
 
         let importConstructorDefinition =
             DefinitionHelpers.addInstanceConstructor
@@ -79,7 +91,7 @@ let translateModuleImports
             let il = body.Instructions
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))
-
+            for init in importMemberInitializers do init il
             il.Add(CilInstruction CilOpCodes.Ret)
             importConstructorDefinition.CilMethodBody <- body
         
