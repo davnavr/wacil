@@ -9,16 +9,20 @@ open AsmResolver.PE.DotNet.Metadata.Tables.Rows
 open AsmResolver.PE.DotNet.Cil;
 
 open AsmResolver.DotNet
+open AsmResolver.DotNet.Signatures
+open AsmResolver.DotNet.Signatures.Types
 open AsmResolver.DotNet.Code.Cil
 
-/// Represents a generated .NET class corresponding to a WebAssembly module import.
-type ModuleClass =
-    { Definition: TypeDefinition
-      //Signature:
-      }
+type private ModuleClass =
+    { Name: string
+      Definition: TypeDefinition
+      Signature: TypeSignature
+      Field: FieldDefinition }
 
 type private ParameterIndex =
     { mutable Index: uint16 }
+
+    member this.Reset() = this.Index <- 1us
 
     member this.Next() =
         let index = this.Index
@@ -45,9 +49,10 @@ let translateModuleImports
         constructorParameterTypes.Clear()
         constructorParameterNames.Clear()
         importMemberInitializers.Clear()
-        importParameterIndex.Index <- 1us
+        importParameterIndex.Reset()
 
         let imports = wasm.Imports[moduleImportName]
+        let mangledModuleImportName = mangleMemberName moduleImportName
 
         let importClassDefinition =
             DefinitionHelpers.addNormalClass
@@ -55,7 +60,16 @@ let translateModuleImports
                 moduleClassDefinition.Module
                 (TypeAttributes.Sealed ||| TypeAttributes.Public)
                 ns
-                (mangleMemberName moduleImportName)
+                mangledModuleImportName
+
+        let importClassSignature = TypeDefOrRefSignature importClassDefinition
+
+        let importInstanceField =
+            DefinitionHelpers.addFieldDefinition
+                moduleClassDefinition
+                (FieldSignature importClassSignature)
+                FieldAttributes.InitOnly
+                mangledModuleImportName
 
         // TODO: First, are the function imports, followed by the table imports
 
@@ -76,6 +90,8 @@ let translateModuleImports
 
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index name field)
 
+            members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field)
+
         let importConstructorDefinition =
             DefinitionHelpers.addInstanceConstructor
                 (constructorParameterTypes.ToArray())
@@ -87,16 +103,41 @@ let translateModuleImports
             importConstructorDefinition.ParameterDefinitions.Add(ParameterDefinition(uint16 index, name, Unchecked.defaultof<_>))
 
         do
-            let body = CilMethodBody importConstructorDefinition
-            let il = body.Instructions
-            il.Add(CilInstruction CilOpCodes.Ldarg_0)
-            il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))
+            importConstructorDefinition.CilMethodBody <- CilMethodBody importConstructorDefinition
+            let il = importConstructorDefinition.CilMethodBody.Instructions
+            CilHelpers.emitObjectCtorCall syslib il
             for init in importMemberInitializers do init il
             il.Add(CilInstruction CilOpCodes.Ret)
-            importConstructorDefinition.CilMethodBody <- body
         
         translatedModuleImports.Add
-            { Definition = importClassDefinition }
+            { Name = mangledModuleImportName
+              Definition = importClassDefinition
+              Signature = importClassSignature
+              Field = importInstanceField }
 
-    //TODO: Also return some closure that appends code to .ctor that assigns to the field corresponding to the module import
-    translatedModuleImports.ToImmutableArray()
+    let moduleClassConstructor =
+        let imports = translatedModuleImports.ToImmutableArray()
+        let mutable parameters = ArrayBuilder.Create imports.Length
+
+        for i in imports do parameters.Add i.Signature
+
+        let constructor =
+            DefinitionHelpers.addInstanceConstructor
+                (parameters.ToArray())
+                (MethodAttributes.Public ||| MethodAttributes.HideBySig)
+                moduleClassDefinition
+
+        for sequence in 1..imports.Length do
+            let name = imports[sequence - 1].Name
+            constructor.ParameterDefinitions.Add(ParameterDefinition(uint16 sequence, name, Unchecked.defaultof<_>))
+
+        constructor.CilMethodBody <- CilMethodBody constructor
+        let il = constructor.CilMethodBody.Instructions
+        CilHelpers.emitObjectCtorCall syslib il
+        for sequence in 1..imports.Length do
+            let i = imports[sequence - 1]
+            CilHelpers.emitArgumentStoreWithNullCheck syslib (uint16 sequence) i.Name i.Field il
+        il.Add(CilInstruction CilOpCodes.Ret)
+        constructor
+
+    moduleClassConstructor

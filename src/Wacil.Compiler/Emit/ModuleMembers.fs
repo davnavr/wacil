@@ -3,7 +3,7 @@ module internal Wacil.Compiler.Emit.ModuleMembers
 
 open AsmResolver.DotNet
 
-[<NoComparison; NoEquality>]
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MemoryMember =
     | Defined of memory: FieldDefinition
     | Imported of import: FieldDefinition * memory: FieldDefinition

@@ -168,8 +168,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let members =
         { Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length) }
 
-    let translatedModuleImports =
+    let mainInstanceConstructor =
         ImportTranslator.translateModuleImports mangleMemberName syslib rtlib mainClassDefinition input mainClassNamespace members
+
+    // TODO: Add defined memories
 
     mdle
 
