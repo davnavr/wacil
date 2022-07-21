@@ -1,5 +1,5 @@
 (module
-  (memory (export "memory") 2)
+  (import "env" "memory" (memory 2))
   (global $_stack_ptr (mut i32) (i32.const 65536))
   (func $_stack_push (export "_stack_push") (param $amount i32) (result i32)
     global.get $_stack_ptr
