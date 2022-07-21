@@ -190,27 +190,22 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let rtlib = RuntimeLibrary.importTypes options.RuntimeVersion translateValType syslib mdle
 
     let implementationDetailsClass =
-        let definition = TypeDefinition(String.empty, "<PrivateImplementationDetails>", TypeAttributes.Sealed)
-        definition.BaseType <- syslib.Object.Type
-        mdle.TopLevelTypes.Add definition
-        definition
+        DefinitionHelpers.addNormalClass syslib mdle TypeAttributes.Sealed String.empty "<PrivateImplementationDetails>"
 
     let mangleMemberName = NameMangling.mangle (System.Text.StringBuilder())
 
-    let nspace = String.orEmpty options.Namespace // TODO: Check that namespace name is correct (.Split('.') should not contain empty strings)
-        
+    // TODO: Check that namespace name is correct (.Split('.') should not contain empty strings)
+    let mainClassNamespace = String.defaultValue outputModuleName options.Namespace
+
     let mainClassDefinition =
-        let definition = TypeDefinition(
-            nspace,
-            String.defaultValue outputModuleName (mangleMemberName options.MainClassName),
-            TypeAttributes.Sealed ||| TypeAttributes.Public
-        )
+        mangleMemberName options.MainClassName
+        |> String.defaultValue outputModuleName
+        |> DefinitionHelpers.addNormalClass syslib mdle (TypeAttributes.Sealed ||| TypeAttributes.Public) mainClassNamespace
+        
+    let members =
+        { Memories = ArrayBuilder.Create(input.Imports.Imports.Memories.Length + input.Memories.Length) }
 
-        definition.BaseType <- syslib.Object.Type
-        mdle.TopLevelTypes.Add definition
-        definition
-
-    
+    ImportTranslator.translateModuleImports mangleMemberName syslib rtlib mainClassDefinition input mainClassNamespace members
 
     mdle
 
