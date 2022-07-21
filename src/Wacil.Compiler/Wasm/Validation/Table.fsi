@@ -26,10 +26,11 @@ type ModuleImports =
       
 [<Sealed>]
 type ModuleImportLookup =
-    internal new: lookup: Dictionary<string, ModuleImports> * imports: ModuleImports -> ModuleImportLookup
+    internal new: lookup: SortedDictionary<string, ModuleImports> * imports: ModuleImports -> ModuleImportLookup
 
     /// <summary>Gets the imports corresponding to the specified module <paramref name="name"/>.</summary>
     member Item: name: string -> ModuleImports with get
+    /// Gets the names of all imported modules, in a consistent order.
     member Modules: IReadOnlyCollection<string>
     member Imports: ModuleImports
 

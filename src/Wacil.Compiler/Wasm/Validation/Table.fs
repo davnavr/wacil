@@ -25,7 +25,7 @@ type ModuleImports =
       Globals: ImmutableArray<GlobalImport> }
 
 [<Sealed>]
-type ModuleImportLookup internal (lookup: Dictionary<string, ModuleImports>, imports: ModuleImports) =
+type ModuleImportLookup internal (lookup: SortedDictionary<string, ModuleImports>, imports: ModuleImports) =
     member _.Item with get name =
         if isNull lookup then
             raise(KeyNotFoundException "modules does not contain any imports")

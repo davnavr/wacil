@@ -705,8 +705,14 @@ module Validate =
             let moduleImportLookup, actualModuleImports =
                 let imports = itemsOrEmpty contents.Imports
                 let lookup = if imports.IsEmpty then null else Dictionary(capacity = imports.Length)
+
+                let mutable functionImportIndex = 0
+                let mutable tableImportIndex = 0
+                let mutable memoryImportIndex = 0
+                let mutable globalImportIndex = 0
+
+                // Loop is skipped if lookup is null
                 for import in imports do
-                    // Loop is skipped if lookup is null
                     let entries =
                         match lookup.TryGetValue import.Module with
                         | true, entries' -> entries'
@@ -715,8 +721,27 @@ module Validate =
                             lookup[import.Module] <- entries'
                             entries'
 
-                    entries.Add(import)
-                lookup, if isNull lookup then null else Dictionary(capacity = lookup.Count)
+                    let index =
+                        match import.Description with
+                        | Format.ImportDesc.Func _ ->
+                            let i = functionImportIndex
+                            functionImportIndex <- functionImportIndex + 1
+                            i
+                        | Format.ImportDesc.Table _ ->
+                            let i = tableImportIndex
+                            tableImportIndex <- tableImportIndex + 1
+                            i
+                        | Format.ImportDesc.Mem _ ->
+                            let i = memoryImportIndex
+                            memoryImportIndex <- memoryImportIndex + 1
+                            i
+                        | Format.ImportDesc.Global _ ->
+                            let i = globalImportIndex
+                            globalImportIndex <- globalImportIndex + 1
+                            i
+
+                    entries.Add(struct(index, import))
+                lookup, if isNull lookup then null else SortedDictionary()
 
             let mutable allFunctionImports = ArrayBuilder<FunctionImport>.Create()
             let mutable allTableImports = ArrayBuilder<TableImport>.Create()
@@ -729,55 +754,46 @@ module Validate =
                 let mutable matchingMemoryImports = ArrayBuilder<MemoryImport>.Create()
                 let mutable matchingGlobalImports = ArrayBuilder<GlobalImport>.Create()
 
-                let mutable functionImportIndex = 0
-                let mutable tableImportIndex = 0
-                let mutable memoryImportIndex = 0
-                let mutable globalImportIndex = 0
-
                 for KeyValue(importModuleName, moduleImports) in moduleImportLookup do
                     matchingFunctionImports.Clear()
                     matchingTableImports.Clear()
                     matchingMemoryImports.Clear()
                     matchingGlobalImports.Clear()
 
-                    for import in moduleImports do
+                    for (i, import) in moduleImports do
                         match import.Description with
                         | Format.ImportDesc.Func index ->
                             let func =
-                                { FunctionImport.Index = Format.FuncIdx functionImportIndex
+                                { FunctionImport.Index = Format.FuncIdx i
                                   FunctionImport.Name = import.Name
                                   FunctionImport.Type = types[Checked.int32 index] }
 
                             matchingFunctionImports.Add func
                             allFunctionImports.Add func
-                            functionImportIndex <- functionImportIndex + 1
                         | Format.ImportDesc.Table ty ->
                             let table =
-                                { TableImport.Index = Format.TableIdx tableImportIndex
+                                { TableImport.Index = Format.TableIdx i
                                   TableImport.Name = import.Name
                                   TableImport.Type = ty }
 
                             matchingTableImports.Add table
                             allTableImports.Add table
-                            tableImportIndex <- tableImportIndex + 1
                         | Format.ImportDesc.Mem limits ->
                             let memory =
-                                { MemoryImport.Index = Format.MemIdx memoryImportIndex;
+                                { MemoryImport.Index = Format.MemIdx i
                                   MemoryImport.Name = import.Name
                                   MemoryImport.Limits = limits }
 
                             matchingMemoryImports.Add memory
                             allMemoryImports.Add memory
-                            memoryImportIndex <- memoryImportIndex + 1
                         | Format.ImportDesc.Global ty ->
                             let glbl =
-                                { GlobalImport.Index = Format.GlobalIdx globalImportIndex;
+                                { GlobalImport.Index = Format.GlobalIdx i
                                   GlobalImport.Name = import.Name
                                   GlobalImport.Type = ty }
 
                             matchingGlobalImports.Add glbl
                             allGlobalImports.Add glbl
-                            globalImportIndex <- globalImportIndex + 1
 
                     actualModuleImports[importModuleName] <- 
                         { ModuleImports.Functions = matchingFunctionImports.ToImmutableArray()

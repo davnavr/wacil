@@ -27,6 +27,7 @@ let translateModuleImports
     let mutable constructorParameterTypes = ArrayBuilder.Create()
     //let mutable importedMemoryMembers = ArrayBuilder<MemoryMembers>
 
+    // TODO: To ensure deterministic builds, iterate over the module imports and its named imports in the same way (maybe use a sorted dictionary?)
     for moduleImportName in wasm.Imports.Modules do
         constructorParameterTypes.Clear()
 
@@ -44,7 +45,8 @@ let translateModuleImports
 
         // TODO: First, are the function imports, followed by the table imports
 
-        // TODO: Module import time
+        for memory in imports.Memories do
+            ()
 
         let importClassConstructor =
             DefinitionHelpers.addInstanceConstructor
@@ -54,4 +56,5 @@ let translateModuleImports
 
         ()
 
+    //TODO: Also return some closure that appends code to .ctor that assigns to the field corresponding to the module import
     failwith "AA" // importedMemoryMembers.ToArray()
