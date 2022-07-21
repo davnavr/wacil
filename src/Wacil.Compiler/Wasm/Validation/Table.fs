@@ -6,16 +6,16 @@ open System.Collections.Generic
 open Wacil.Compiler.Wasm.Format
 
 [<RequireQualifiedAccess>]
-type FunctionImport = { Name: string; Type: FuncType }
+type FunctionImport = { Index: FuncIdx; Name: string; Type: FuncType }
 
 [<RequireQualifiedAccess>]
-type TableImport = { Name: string; Type: TableType }
+type TableImport = { Index: TableIdx; Name: string; Type: TableType }
 
 [<RequireQualifiedAccess>]
-type MemoryImport = { Name: string; Limits: Limits }
+type MemoryImport = { Index: MemIdx; Name: string; Limits: Limits }
 
 [<RequireQualifiedAccess>]
-type GlobalImport = { Name: string; Type: GlobalType }
+type GlobalImport = { Index: GlobalIdx; Name: string; Type: GlobalType }
 
 [<RequireQualifiedAccess>]
 type ModuleImports =

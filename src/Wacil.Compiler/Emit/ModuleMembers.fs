@@ -1,8 +1,6 @@
 [<AutoOpen>]
 module internal Wacil.Compiler.Emit.ModuleMembers
 
-open Wacil.Compiler.Helpers.Collections
-
 open AsmResolver.DotNet
 
 [<NoComparison; NoEquality>]
@@ -12,4 +10,4 @@ type MemoryMember =
 
 [<NoComparison; NoEquality>]
 type ModuleMembers =
-    { mutable Memories: ArrayBuilder<MemoryMember> }
+    { Memories: MemoryMember[] }

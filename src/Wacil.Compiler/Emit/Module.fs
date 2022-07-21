@@ -203,7 +203,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         |> DefinitionHelpers.addNormalClass syslib mdle (TypeAttributes.Sealed ||| TypeAttributes.Public) mainClassNamespace
         
     let members =
-        { Memories = ArrayBuilder.Create(input.Imports.Imports.Memories.Length + input.Memories.Length) }
+        { Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length) }
 
     ImportTranslator.translateModuleImports mangleMemberName syslib rtlib mainClassDefinition input mainClassNamespace members
 

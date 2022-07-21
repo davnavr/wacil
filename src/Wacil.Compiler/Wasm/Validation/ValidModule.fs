@@ -729,6 +729,11 @@ module Validate =
                 let mutable matchingMemoryImports = ArrayBuilder<MemoryImport>.Create()
                 let mutable matchingGlobalImports = ArrayBuilder<GlobalImport>.Create()
 
+                let mutable functionImportIndex = 0
+                let mutable tableImportIndex = 0
+                let mutable memoryImportIndex = 0
+                let mutable globalImportIndex = 0
+
                 for KeyValue(importModuleName, moduleImports) in moduleImportLookup do
                     matchingFunctionImports.Clear()
                     matchingTableImports.Clear()
@@ -738,21 +743,41 @@ module Validate =
                     for import in moduleImports do
                         match import.Description with
                         | Format.ImportDesc.Func index ->
-                            let func = { FunctionImport.Name = import.Name; FunctionImport.Type = types[Checked.int32 index] }
+                            let func =
+                                { FunctionImport.Index = Format.FuncIdx functionImportIndex
+                                  FunctionImport.Name = import.Name
+                                  FunctionImport.Type = types[Checked.int32 index] }
+
                             matchingFunctionImports.Add func
                             allFunctionImports.Add func
+                            functionImportIndex <- functionImportIndex + 1
                         | Format.ImportDesc.Table ty ->
-                            let table = { TableImport.Name = import.Name; TableImport.Type = ty }
+                            let table =
+                                { TableImport.Index = Format.TableIdx tableImportIndex
+                                  TableImport.Name = import.Name
+                                  TableImport.Type = ty }
+
                             matchingTableImports.Add table
                             allTableImports.Add table
+                            tableImportIndex <- tableImportIndex + 1
                         | Format.ImportDesc.Mem limits ->
-                            let memory = { MemoryImport.Name = import.Name; MemoryImport.Limits = limits }
+                            let memory =
+                                { MemoryImport.Index = Format.MemIdx memoryImportIndex;
+                                  MemoryImport.Name = import.Name
+                                  MemoryImport.Limits = limits }
+
                             matchingMemoryImports.Add memory
                             allMemoryImports.Add memory
+                            memoryImportIndex <- memoryImportIndex + 1
                         | Format.ImportDesc.Global ty ->
-                            let glbl = { GlobalImport.Name = import.Name; GlobalImport.Type = ty }
+                            let glbl =
+                                { GlobalImport.Index = Format.GlobalIdx globalImportIndex;
+                                  GlobalImport.Name = import.Name
+                                  GlobalImport.Type = ty }
+
                             matchingGlobalImports.Add glbl
                             allGlobalImports.Add glbl
+                            globalImportIndex <- globalImportIndex + 1
 
                     actualModuleImports[importModuleName] <- 
                         { ModuleImports.Functions = matchingFunctionImports.ToImmutableArray()
