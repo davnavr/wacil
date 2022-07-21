@@ -126,7 +126,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | TargetFramework.Net6 -> KnownCorLibs.SystemRuntime_v6_0_0_0
 
     let strbuf = System.Text.StringBuilder()
-    let outputModuleName = String.defaultValue "module" options.Name
+    let outputModuleName = String.defaultValue "module" options.OutputName
     let mdle = new ModuleDefinition(outputModuleName + ".dll", mscorlib)
 
     let syslib = SystemLibrary.importTypes mscorlib mdle
@@ -196,6 +196,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         mdle.TopLevelTypes.Add definition
         definition
         
+    let mainClassDefinition =
+        let definition = TypeDefinition(
+            String.orEmpty options.Namespace,
+            String.defaultValue outputModuleName options.MainClassName,
+            TypeAttributes.Sealed ||| TypeAttributes.Public
+        )
+
+        definition.BaseType <- syslib.Object.Type
+        mdle.TopLevelTypes.Add definition
+        definition
+
     
 
     mdle
