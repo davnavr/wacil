@@ -396,6 +396,12 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         body
 
+    // TODO: Should do the following in the ctor this order instead:
+    // - Initialize globals
+    // - Do stuff with the element segments (initialize tables?)
+    // - Initialize the memories, and copy the data segments
+    // - Finally, call start
+
     // TODO: Maybe move memory initalization further down?
     let classMemoryFields =
         let mutable fields = ArrayBuilder<_>.Create(input.Memories.Length)
