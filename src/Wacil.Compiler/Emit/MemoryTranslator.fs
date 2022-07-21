@@ -12,6 +12,7 @@ open AsmResolver.DotNet
 open AsmResolver.DotNet.Code.Cil
 
 let translateModuleMemories
+    mangleMemberName
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
     (wasm: Wasm.Validation.ValidModule)
@@ -33,14 +34,21 @@ let translateModuleMemories
 
         match wasm.Exports.GetMemoryName(Wasm.Format.MemIdx index) with
         | true, memoryExportName ->
-            // TODO: Generate an accessor if this is an export
-            ()
+            DefinitionHelpers.addInstanceFieldGetter
+                moduleClassDefinition
+                rtlib.Memory.Signature
+                PropertyAttributes.None
+                (MethodAttributes.Public ||| MethodAttributes.HideBySig)
+                field
+                (mangleMemberName memoryExportName)
         | false, _ -> ()
 
         let maximum =
             match memory.Maximum with
             | ValueSome m -> int32 m
             | ValueNone -> -1
+
+        members.Memories[index] <- MemoryMember.Defined field
 
         // Append memory initialization code to the module constructor
         let il = moduleInstanceConstructor.Instructions

@@ -1,9 +1,11 @@
 [<RequireQualifiedAccess>]
 module internal Wacil.Compiler.Emit.DefinitionHelpers
 
-open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
+open AsmResolver.PE.DotNet.Metadata.Tables.Rows
+open AsmResolver.PE.DotNet.Cil;
 
 open AsmResolver.DotNet
+open AsmResolver.DotNet.Code.Cil
 open AsmResolver.DotNet.Signatures
 
 let addTypeDefinition (mdle: ModuleDefinition) btype flags tnamespace tname =
@@ -32,3 +34,27 @@ let addInstanceConstructor parameters flags (parent: TypeDefinition) =
         (MethodSignature(CallingConventionAttributes.HasThis, parent.Module.CorLibTypeFactory.Void, parameters))
         (MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName ||| flags)
         ".ctor"
+
+let addPropertyDefinition (parent: TypeDefinition) signature flags name =
+    let definition = PropertyDefinition(name, flags, signature)
+    parent.Properties.Add definition
+    definition
+
+let addInstanceFieldGetter parent ty pflags mflags field (name: string) =
+    let property =
+        addPropertyDefinition parent (PropertySignature(CallingConventionAttributes.HasThis, ty, Seq.empty)) pflags name
+
+    let getter =
+        addMethodDefinition
+            parent
+            (MethodSignature(CallingConventionAttributes.HasThis, ty, Seq.empty))
+            (MethodAttributes.SpecialName ||| mflags)
+            ("get_" + name)
+
+    property.SetSemanticMethods(getter, null)
+
+    getter.CilMethodBody <- CilMethodBody getter
+    let il = getter.CilMethodBody.Instructions
+    il.Add(CilInstruction CilOpCodes.Ldarg_0)
+    il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+    il.Add(CilInstruction CilOpCodes.Ret)

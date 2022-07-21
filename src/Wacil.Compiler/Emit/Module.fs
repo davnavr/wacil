@@ -178,7 +178,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             mainClassNamespace
             members
 
-    MemoryTranslator.translateModuleMemories rtlib mainClassDefinition input members mainInstanceConstructor.CilMethodBody
+    MemoryTranslator.translateModuleMemories
+        mangleMemberName
+        rtlib
+        mainClassDefinition
+        input
+        members
+        mainInstanceConstructor.CilMethodBody
 
     mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
