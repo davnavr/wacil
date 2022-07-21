@@ -16,6 +16,11 @@ let addTypeDefinition (mdle: ModuleDefinition) btype flags tnamespace tname =
 let addNormalClass (syslib: SystemLibrary.References) mdle flags tnamespace tname =
     addTypeDefinition mdle syslib.Object.Type flags tnamespace tname
 
+let addFieldDefinition (parent: TypeDefinition) (signature: FieldSignature) flags name =
+    let definition = FieldDefinition(name, flags, signature)
+    parent.Fields.Add definition
+    definition
+
 let addMethodDefinition (parent: TypeDefinition) signature flags name =
     let definition = MethodDefinition(name, flags, signature)
     parent.Methods.Add definition

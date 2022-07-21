@@ -6,8 +6,10 @@ open Wacil.Compiler
 open Wacil.Compiler.Helpers.Collections
 
 open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
+open AsmResolver.PE.DotNet.Cil;
 
 open AsmResolver.DotNet
+open AsmResolver.DotNet.Code.Cil
 
 /// Represents a generated .NET class corresponding to a WebAssembly module import.
 type ModuleClass =
@@ -24,12 +26,14 @@ let translateModuleImports
     (ns: string)
     (members: ModuleMembers)
     =
+    let constructorParameterNames = ResizeArray()
     let mutable constructorParameterTypes = ArrayBuilder.Create()
     //let mutable importedMemoryMembers = ArrayBuilder<MemoryMembers>
 
     // TODO: To ensure deterministic builds, iterate over the module imports and its named imports in the same way (maybe use a sorted dictionary?)
     for moduleImportName in wasm.Imports.Modules do
         constructorParameterTypes.Clear()
+        constructorParameterNames.Clear()
 
         let imports = wasm.Imports[moduleImportName]
 
@@ -46,14 +50,40 @@ let translateModuleImports
         // TODO: First, are the function imports, followed by the table imports
 
         for memory in imports.Memories do
+            let name = mangleMemberName memory.Name
+
+            let field =
+                DefinitionHelpers.addFieldDefinition
+                    importClassDefinition
+                    rtlib.Memory.FieldSignature
+                    FieldAttributes.InitOnly
+                    name
+                    
+            constructorParameterTypes.Add rtlib.Memory.Signature
+            constructorParameterNames.Add name
+
             ()
 
-        let importClassConstructor =
+        let importConstructorDefinition =
             DefinitionHelpers.addInstanceConstructor
                 (constructorParameterTypes.ToArray())
                 (MethodAttributes.HideBySig ||| MethodAttributes.Public)
                 importClassDefinition
 
+        for index in 1..constructorParameterNames.Count do
+            let name = constructorParameterNames[index - 1]
+            importConstructorDefinition.ParameterDefinitions.Add(ParameterDefinition(uint16 index, name, Unchecked.defaultof<_>))
+
+        do
+            let body = CilMethodBody importConstructorDefinition
+            let il = body.Instructions
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))
+
+
+
+            importConstructorDefinition.CilMethodBody <- body
+        
         ()
 
     //TODO: Also return some closure that appends code to .ctor that assigns to the field corresponding to the module import
