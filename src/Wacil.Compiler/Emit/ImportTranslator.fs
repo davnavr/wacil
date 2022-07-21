@@ -132,12 +132,13 @@ let translateModuleImports
             constructor.ParameterDefinitions.Add(ParameterDefinition(uint16 sequence, name, Unchecked.defaultof<_>))
 
         constructor.CilMethodBody <- CilMethodBody constructor
+
         let il = constructor.CilMethodBody.Instructions
         CilHelpers.emitObjectCtorCall syslib il
         for sequence in 1..imports.Length do
             let i = imports[sequence - 1]
             CilHelpers.emitArgumentStoreWithNullCheck syslib (uint16 sequence) i.Name i.Field il
-        il.Add(CilInstruction CilOpCodes.Ret)
+            
         constructor
 
     moduleClassConstructor

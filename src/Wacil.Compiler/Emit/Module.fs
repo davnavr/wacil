@@ -169,9 +169,18 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         { Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length) }
 
     let mainInstanceConstructor =
-        ImportTranslator.translateModuleImports mangleMemberName syslib rtlib mainClassDefinition input mainClassNamespace members
+        ImportTranslator.translateModuleImports
+            mangleMemberName
+            syslib
+            rtlib
+            mainClassDefinition
+            input
+            mainClassNamespace
+            members
 
-    // TODO: Add defined memories
+    MemoryTranslator.translateModuleMemories rtlib mainClassDefinition input members mainInstanceConstructor.CilMethodBody
+
+    mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
     mdle
 

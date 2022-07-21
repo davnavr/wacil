@@ -5,6 +5,9 @@ module internal Wacil.Compiler.Emit.MemoryTranslator
 open Wacil.Compiler
 open Wacil.Compiler.Helpers.Collections
 
+open AsmResolver.PE.DotNet.Metadata.Tables.Rows
+open AsmResolver.PE.DotNet.Cil;
+
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Code.Cil
 
@@ -12,12 +15,37 @@ let translateModuleMemories
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
     (wasm: Wasm.Validation.ValidModule)
+    (members: ModuleMembers)
+    (moduleInstanceConstructor: CilMethodBody)
     =
-    let mutable fields = ArrayBuilder<FieldDefinition>.Create(wasm.Imports.Imports.Memories.Length + wasm.Memories.Length)
+    let firstDefinedIndex = wasm.Imports.Imports.Memories.Length
 
-    let memoryInitializationCode (body: CilMethodBody) =
-        failwith "TODO: Append memory initialization code to the constructor"
+    for i in 0..wasm.Memories.Length - 1 do
+        let memory = wasm.Memories[i]
+        let index = firstDefinedIndex + i
 
-    failwith "TODO: Translate memories"
+        let field =
+            DefinitionHelpers.addFieldDefinition
+                moduleClassDefinition
+                rtlib.Memory.FieldSignature
+                FieldAttributes.InitOnly
+                ("__memory@" + string index)
 
-    (fields.ToImmutableArray(), memoryInitializationCode)
+        match wasm.Exports.GetMemoryName(Wasm.Format.MemIdx index) with
+        | true, memoryExportName ->
+            // TODO: Generate an accessor if this is an export
+            ()
+        | false, _ -> ()
+
+        let maximum =
+            match memory.Maximum with
+            | ValueSome m -> int32 m
+            | ValueNone -> -1
+
+        // Append memory initialization code to the module constructor
+        let il = moduleInstanceConstructor.Instructions
+        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+        il.Add(CilInstruction.CreateLdcI4(int32 memory.Minimum))
+        il.Add(CilInstruction.CreateLdcI4 maximum)
+        il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Memory.Constructor))
+        il.Add(CilInstruction(CilOpCodes.Stfld, field))
