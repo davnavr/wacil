@@ -28,7 +28,7 @@ let translateModuleImports
     =
     let constructorParameterNames = ResizeArray()
     let mutable constructorParameterTypes = ArrayBuilder.Create()
-    //let mutable importedMemoryMembers = ArrayBuilder<MemoryMembers>
+    let mutable translatedModuleImports = ArrayBuilder<ModuleClass>.Create(wasm.Imports.Modules.Count)
 
     // TODO: To ensure deterministic builds, iterate over the module imports and its named imports in the same way (maybe use a sorted dictionary?)
     for moduleImportName in wasm.Imports.Modules do
@@ -80,11 +80,11 @@ let translateModuleImports
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))
 
-
-
+            il.Add(CilInstruction CilOpCodes.Ret)
             importConstructorDefinition.CilMethodBody <- body
         
-        ()
+        translatedModuleImports.Add
+            { Definition = importClassDefinition }
 
     //TODO: Also return some closure that appends code to .ctor that assigns to the field corresponding to the module import
-    failwith "AA" // importedMemoryMembers.ToArray()
+    translatedModuleImports.ToImmutableArray()

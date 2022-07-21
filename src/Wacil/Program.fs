@@ -14,7 +14,7 @@ type Options =
     | [<Unique; AltCommandLine("-i")>] Module of ``module.wasm``: string
     | [<Unique>] Namespace of string
     | [<Unique; AltCommandLine("-o")>] Out of file: string
-    | [<Unique>] Type of OutputType
+    //| [<Unique>] Type of OutputType
     //| [<Unique>] Version of Version
 
     interface IArgParserTemplate with
@@ -29,7 +29,7 @@ type Options =
             | Namespace _ ->
                 "the name of the namespace that will contain the class generated from the WebAssembly module"
             | Out _ -> "the path to the generated CIL file"
-            | Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
+            //| Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
 
 let parser = ArgumentParser.Create<Options>(programName = "wacil")
 
@@ -74,9 +74,9 @@ let main argv =
 
         Module.compileToStream
             { TargetFramework = args.GetResult(<@ Framework @>, defaultValue = TargetFramework.Net6)
-              OutputType = args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
-              Name = oname
-              Version = Version(0, 0, 0, 0)
+              OutputType = OutputType.Assembly(Version(0, 0, 0, 0)) //args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
+              OutputName = oname
+              MainClassName = oname
               RuntimeVersion = Version(1, 0, 0, 0)
               Namespace = "" }
             input''
