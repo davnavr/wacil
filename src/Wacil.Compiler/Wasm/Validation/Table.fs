@@ -31,6 +31,7 @@ type ModuleImportLookup internal (lookup: Dictionary<string, ModuleImports>, imp
             raise(KeyNotFoundException "modules does not contain any imports")
         lookup[name]
 
+    member _.Modules = lookup.Keys :> IReadOnlyCollection<string>
     member _.Imports = imports
 
 type OperandType =

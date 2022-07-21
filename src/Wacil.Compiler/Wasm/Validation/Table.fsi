@@ -28,8 +28,9 @@ type ModuleImports =
 type ModuleImportLookup =
     internal new: lookup: Dictionary<string, ModuleImports> * imports: ModuleImports -> ModuleImportLookup
 
-    /// <summary>Gets the imports corresponding to the specified <paramref name="name"/>.</summary>
+    /// <summary>Gets the imports corresponding to the specified module <paramref name="name"/>.</summary>
     member Item: name: string -> ModuleImports with get
+    member Modules: IReadOnlyCollection<string>
     member Imports: ModuleImports
 
 [<NoComparison; StructuralEquality>]

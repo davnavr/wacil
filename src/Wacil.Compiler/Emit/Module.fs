@@ -125,7 +125,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         match options.TargetFramework with
         | TargetFramework.Net6 -> KnownCorLibs.SystemRuntime_v6_0_0_0
 
-    let strbuf = System.Text.StringBuilder()
     let outputModuleName = String.defaultValue "module" options.OutputName
     let mdle = new ModuleDefinition(outputModuleName + ".dll", mscorlib)
 
@@ -195,11 +194,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         definition.BaseType <- syslib.Object.Type
         mdle.TopLevelTypes.Add definition
         definition
+
+    let mangleMemberName = NameMangling.mangle (System.Text.StringBuilder())
+
+    let nspace = String.orEmpty options.Namespace // TODO: Check that namespace name is correct (.Split('.') should not contain empty strings)
         
     let mainClassDefinition =
         let definition = TypeDefinition(
-            String.orEmpty options.Namespace,
-            String.defaultValue outputModuleName options.MainClassName,
+            nspace,
+            String.defaultValue outputModuleName (mangleMemberName options.MainClassName),
             TypeAttributes.Sealed ||| TypeAttributes.Public
         )
 
