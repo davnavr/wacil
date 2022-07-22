@@ -134,8 +134,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | ValType.Ref FuncRef -> syslib.MulticastDelegate.Signature
         | ValType.Vec _ -> raise(System.NotImplementedException "TODO: conversion of vectors to System.Runtime.Intrinsics.Vector128")
 
-    let getFuncTypeSignature cconv (ty: FuncType) =
-        // TODO: For multi-return, use out parameters
+    let translateFuncType (ty: FuncType) =
+        // TODO: For multi-return, use out value tuple parameter
         if ty.Results.Length > 1 then failwith "TODO: Compilation of functions with multiple return values is not yet supported"
 
         let returnTypes =
@@ -148,7 +148,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         for parameter in ty.Parameters do
             parameterTypes.Add(translateValType parameter)
 
-        MethodSignature(cconv, returnTypes, parameterTypes.ToImmutableArray())
+        MethodSignature(CallingConventionAttributes.HasThis, returnTypes, parameterTypes.ToImmutableArray())
 
     let rtlib = RuntimeLibrary.importTypes options.RuntimeVersion translateValType syslib mdle
 
@@ -167,6 +167,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         
     let members =
         { Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length) }
+
+    let tupleTypeCache = TupleCache.create mdle mscorlib translateValType
 
     let mainInstanceConstructor =
         ImportTranslator.translateModuleImports

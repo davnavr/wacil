@@ -10,6 +10,9 @@ let importType (importer: ReferenceImporter) (assembly: AssemblyReference) ns =
 let importMethod (importer: ReferenceImporter) cconv returnType parameterTypes name (parent: IMemberRefParent) =
     parent.CreateMemberReference(name, MethodSignature(cconv, returnType, parameterTypes)) |> importer.ImportMethodOrNull
 
+let importField (importer: ReferenceImporter) (signature: FieldSignature) name (parent: IMemberRefParent) =
+    parent.CreateMemberReference(name, signature) |> importer.ImportField
+
 let importPropertyAccessor importer cconv propertyType name parent =
     importMethod importer cconv propertyType Seq.empty name parent
 
