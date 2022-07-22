@@ -31,6 +31,8 @@ type private ParameterIndex =
 
 let translateModuleImports
     (mangleMemberName: string -> string)
+    (delegateTypeCache: MethodSignature -> _)
+    (translateFuncType: Wasm.Format.FuncType -> MethodSignature)
     (syslib: SystemLibrary.References)
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
@@ -71,7 +73,21 @@ let translateModuleImports
                 FieldAttributes.InitOnly
                 mangledModuleImportName
 
-        // TODO: First, are the function imports, followed by the table imports
+        for func in imports.Functions do
+            let name = mangleMemberName func.Name
+            let translatedFunctionSignature = translateFuncType func.Type
+            let functionDelegateTemplate: DelegateCache.Template = delegateTypeCache translatedFunctionSignature
+
+            let field =
+                DefinitionHelpers.addFieldDefinition
+                    importClassDefinition
+                    functionDelegateTemplate.FieldSignature
+                    FieldAttributes.InitOnly
+                    name
+
+            ()
+
+        // TODO: table imports
 
         for memory in imports.Memories do
             let name = mangleMemberName memory.Name
@@ -91,6 +107,8 @@ let translateModuleImports
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index name field)
 
             members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field)
+
+        // TODO: Global imports
 
         let importConstructorDefinition =
             DefinitionHelpers.addInstanceConstructor

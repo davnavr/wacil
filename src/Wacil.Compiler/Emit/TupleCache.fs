@@ -33,7 +33,7 @@ let create
                 if count > 8 then raise(System.NotSupportedException "Returning more than eight values is not yet supported")
 
                 let vtype = ImportHelpers.importType mdle.DefaultImporter mscorlib "System" (valueTupleName count)
-                let mutable fields = ArrayBuilder.Create count
+                let mutable fields = ArrayBuilder<IFieldDescriptor>.Create count
 
                 for i in 1..count do
                     let tupleFieldSignature = GenericParameterSignature(GenericParameterType.Type, i - 1) |> FieldSignature

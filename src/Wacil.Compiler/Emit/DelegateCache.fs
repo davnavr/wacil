@@ -22,7 +22,11 @@ let private signatureContainsByRefParameters (signature: MethodSignature) =
 let private signatureHasPredefinedDelegate (signature: MethodSignature) =
     not (signatureContainsByRefParameters signature) && signature.ParameterTypes.Count <= 16
 
-type Template = { Type: ITypeDefOrRef; Invoke: IMethodDefOrRef }
+type Template =
+    { Type: ITypeDefOrRef
+      Signature: TypeSignature
+      FieldSignature: FieldSignature
+      Invoke: IMethodDefOrRef }
 
 /// <summary>
 /// Creates a factory for delegate types.
@@ -67,9 +71,17 @@ let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) =
                     )
 
                 let delegateInvokeMethod =
-                    ImportHelpers.importMember mdle.DefaultImporter templateInvokeSignature "Invoke" delegateTypeReference
+                    delegateTypeReference.CreateMemberReference("Invoke", templateInvokeSignature)
+                    |> mdle.DefaultImporter.ImportMethod
 
-                let template = { Type = delegateTypeReference; Invoke = delegateInvokeMethod }
+                let delegateTypeSignature = TypeDefOrRefSignature delegateTypeReference
+
+                let template =
+                    { Type = delegateTypeReference
+                      Signature = delegateTypeSignature
+                      FieldSignature = FieldSignature delegateTypeSignature
+                      Invoke = delegateInvokeMethod }
+
                 lookup[key] <- template
                 template
 
