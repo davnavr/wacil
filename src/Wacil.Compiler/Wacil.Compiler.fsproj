@@ -32,8 +32,10 @@
     <Compile Include="Emit\ConstantBytes.fs" />
     <Compile Include="Emit\CustomAttribute.fs" />
     <Compile Include="Emit\CilHelpers.fs" />
+    <Compile Include="Emit\TypeHelpers.fs" />
     <Compile Include="Emit\NameMangling.fs" />
     <Compile Include="Emit\TupleCache.fs" />
+    <Compile Include="Emit\DelegateCache.fs" />
     <Compile Include="Emit\ModuleMembers.fs" />
     <Compile Include="Emit\ImportTranslator.fs" />
     <Compile Include="Emit\MemoryTranslator.fs" />

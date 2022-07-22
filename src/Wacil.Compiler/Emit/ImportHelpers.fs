@@ -7,11 +7,14 @@ open AsmResolver.DotNet.Signatures
 let importType (importer: ReferenceImporter) (assembly: AssemblyReference) ns =
     fun name -> assembly.CreateTypeReference(ns, name) |> importer.ImportTypeOrNull
 
-let importMethod (importer: ReferenceImporter) cconv returnType parameterTypes name (parent: IMemberRefParent) =
-    parent.CreateMemberReference(name, MethodSignature(cconv, returnType, parameterTypes)) |> importer.ImportMethodOrNull
+let importMember (importer: ReferenceImporter) signature name (parent: IMemberRefParent) =
+    parent.CreateMemberReference(name, signature) |> importer.ImportMethodOrNull
 
-let importField (importer: ReferenceImporter) (signature: FieldSignature) name (parent: IMemberRefParent) =
-    parent.CreateMemberReference(name, signature) |> importer.ImportField
+let importMethod importer cconv returnType parameterTypes name parent =
+    importMember importer (MethodSignature(cconv, returnType, parameterTypes)) name parent
+
+let importField importer (signature: FieldSignature) name parent =
+    importMember importer signature name parent
 
 let importPropertyAccessor importer cconv propertyType name parent =
     importMethod importer cconv propertyType Seq.empty name parent
