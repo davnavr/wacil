@@ -4,6 +4,8 @@ module internal Wacil.Compiler.Emit.DelegateCache
 open System.Collections.Immutable
 open System.Collections.Generic
 
+open Wacil.Compiler.Helpers.Collections
+
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
@@ -22,9 +24,10 @@ let private signatureContainsByRefParameters (signature: MethodSignature) =
 let private signatureHasPredefinedDelegate (signature: MethodSignature) =
     not (signatureContainsByRefParameters signature) && signature.ParameterTypes.Count <= 16
 
-type Template =
-    { Type: ITypeDefOrRef
-      Signature: TypeSignature
+type private Template = { Type: ITypeDefOrRef; Invoke: IMethodDefOrRef }
+
+type Instantiation =
+    { TypeSignature: TypeSignature
       FieldSignature: FieldSignature
       Invoke: IMethodDefOrRef }
 
@@ -50,7 +53,7 @@ let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) =
                 let delegateTypeReference =
                     if signature.ReturnsValue
                     then funcTypeName(signature.ParameterTypes.Count + 1)
-                    elif signature.ParameterTypes.Count = 1 then "Action"
+                    elif signature.ParameterTypes.Count = 0 then "Action"
                     else actionTypeName(signature.ParameterTypes.Count)
                     |> ImportHelpers.importType mdle.DefaultImporter mscorlib "System"
 
@@ -71,17 +74,13 @@ let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) =
                     )
 
                 let delegateInvokeMethod =
-                    delegateTypeReference.CreateMemberReference("Invoke", templateInvokeSignature)
+                    delegateTypeReference.CreateMemberReference(
+                        "Invoke",
+                        templateInvokeSignature
+                    )
                     |> mdle.DefaultImporter.ImportMethod
 
-                let delegateTypeSignature = TypeDefOrRefSignature delegateTypeReference
-
-                let template =
-                    { Type = delegateTypeReference
-                      Signature = delegateTypeSignature
-                      FieldSignature = FieldSignature delegateTypeSignature
-                      Invoke = delegateInvokeMethod }
-
+                let template = { Type = delegateTypeReference; Invoke = delegateInvokeMethod }
                 lookup[key] <- template
                 template
 
@@ -90,6 +89,24 @@ let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) =
             invalidArg (nameof signature) (sprintf "Attempt to generate delegate type with %A" signature.Attributes)
             
         if signatureHasPredefinedDelegate signature then
-            systemDelegateCache signature
+            let template = systemDelegateCache signature
+            
+            let instantiation =
+                let mutable genericTemplateArguments = ArrayBuilder.Create(signature.ParameterTypes.Count + 1)
+                for ty in signature.ParameterTypes do genericTemplateArguments.Add ty
+                if signature.ReturnsValue then genericTemplateArguments.Add signature.ReturnType
+                template.Type.MakeGenericInstanceType(genericTemplateArguments.ToArray())
+
+            let specification = TypeSpecification instantiation
+
+            // TODO: Maybe cache the instantiations?
+            { TypeSignature = instantiation
+              FieldSignature = FieldSignature instantiation
+              Invoke =
+                specification.CreateMemberReference(
+                    template.Invoke.Name,
+                    template.Invoke.Signature
+                )
+                |> mdle.DefaultImporter.ImportMethodOrNull }
         else
-            failwith "TODO: Manually generate a delegate"
+            failwith "TODO: generatedDelegateCache"

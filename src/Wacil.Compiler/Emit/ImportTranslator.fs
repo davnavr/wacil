@@ -76,12 +76,12 @@ let translateModuleImports
         for func in imports.Functions do
             let name = mangleMemberName func.Name
             let translatedFunctionSignature = translateFuncType func.Type
-            let functionDelegateTemplate: DelegateCache.Template = delegateTypeCache translatedFunctionSignature
+            let functionDelegateType: DelegateCache.Instantiation = delegateTypeCache translatedFunctionSignature
 
             let field =
                 DefinitionHelpers.addFieldDefinition
                     importClassDefinition
-                    functionDelegateTemplate.FieldSignature
+                    functionDelegateType.FieldSignature
                     FieldAttributes.InitOnly
                     name
 
