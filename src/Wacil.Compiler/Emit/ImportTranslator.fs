@@ -89,7 +89,7 @@ let translateModuleImports
             constructorParameterNames.Add name
             
             let index = importParameterIndex.Next()
-            importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index name field)
+            importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index func.Name field)
 
             members.Functions[int32 func.Index] <-
                 FunctionMember.Imported(importInstanceField, field, functionDelegateType.Invoke)
@@ -110,7 +110,7 @@ let translateModuleImports
             constructorParameterNames.Add name
 
             let index = importParameterIndex.Next()
-            importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index name field)
+            importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index memory.Name field)
 
             members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field)
 
