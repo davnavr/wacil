@@ -28,8 +28,14 @@
     <Compile Include="Emit\ImportHelpers.fs" />
     <Compile Include="Emit\SystemLibrary.fs" />
     <Compile Include="Emit\RuntimeLibrary.fs" />
+    <Compile Include="Emit\DefinitionHelpers.fs" />
     <Compile Include="Emit\ConstantBytes.fs" />
     <Compile Include="Emit\CustomAttribute.fs" />
+    <Compile Include="Emit\CilHelpers.fs" />
+    <Compile Include="Emit\NameMangling.fs" />
+    <Compile Include="Emit\ModuleMembers.fs" />
+    <Compile Include="Emit\ImportTranslator.fs" />
+    <Compile Include="Emit\MemoryTranslator.fs" />
     <Compile Include="Emit\Module.fsi" />
     <Compile Include="Emit\Module.fs" />
   </ItemGroup>

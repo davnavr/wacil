@@ -20,6 +20,7 @@ type TableInstantiation =
 type MemoryClass =
     { Type: ITypeDefOrRef
       Signature: TypeSignature
+      FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef
       ReadInt32: IMethodDefOrRef
       WriteInt32: IMethodDefOrRef
@@ -96,6 +97,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
       Memory =
         { Type = tyMemory
           Signature = sigMemory
+          FieldSignature = FieldSignature sigMemory
           Constructor =
             ImportHelpers.importConstructor
                 mdle

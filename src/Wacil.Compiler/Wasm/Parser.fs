@@ -188,12 +188,17 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
     member _.Magic = actual
 
 let parseMemArg (reader: Reader) =
-    { MemArg.Alignment = reader.ReadUnsignedInteger() |> Checked.uint32 |> MemArgAlignment
-      MemArg.Offset = reader.ReadUnsignedInteger() |> Checked.uint32 }
+    let flags = reader.ReadUnsignedInteger() |> Checked.uint8
+    let offset = reader.ReadUnsignedInteger() |> Checked.uint32
+    let alignment, memory =
+        if flags < 64uy then
+            MemArgAlign flags, MemIdx.Zero
+        else
+            MemArgAlign(flags - 64uy), reader.ReadIndex()
 
-let parseMemoryIndex (reader: Reader) =
-    if reader.ReadByte() <> 0uy then
-        failwithf "TODO: Expected 0 byte after memory instruction"
+    { MemArg.Alignment = alignment
+      MemArg.Offset = offset
+      MemArg.Memory = memory }
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type BlockBuilderState =
@@ -287,9 +292,8 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.I64Store8 -> instructions.Add(parseMemArg reader |> I64Store8)
         | Opcode.I64Store16 -> instructions.Add(parseMemArg reader |> I64Store16)
         | Opcode.I64Store32 -> instructions.Add(parseMemArg reader |> I64Store32)
-        | Opcode.MemoryGrow ->
-            parseMemoryIndex reader
-            instructions.Add MemoryGrow
+        | Opcode.MemorySize -> instructions.Add(reader.ReadIndex() |> MemoryGrow)
+        | Opcode.MemoryGrow -> instructions.Add(reader.ReadIndex() |> MemoryGrow)
         | Opcode.I32Const -> instructions.Add(reader.ReadSignedInteger() |> Checked.int32 |> I32Const)
         | Opcode.I64Const -> instructions.Add(reader.ReadSignedInteger() |> I64Const)
         | Opcode.F32Const -> instructions.Add(reader.ReadFloat32() |> F32Const)
@@ -438,10 +442,10 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             | 5UL -> instructions.Add I64TruncSatF32U
             | 6UL -> instructions.Add I64TruncSatF64S
             | 7UL -> instructions.Add I64TruncSatF64U
-            //| 8UL -> 
+            | 8UL -> instructions.Add(MemoryInit(reader.ReadIndex(), reader.ReadIndex()))
             | 9UL -> instructions.Add(reader.ReadIndex() |> DataDrop)
-            //| 10UL ->
-            //| 11UL ->
+            | 10UL -> instructions.Add(MemoryCopy(reader.ReadIndex(), reader.ReadIndex()))
+            | 11UL -> instructions.Add(reader.ReadIndex() |> MemoryFill)
             | 12UL -> instructions.Add(TableInit(reader.ReadIndex(), reader.ReadIndex()))
             | 13UL -> instructions.Add(reader.ReadIndex() |> ElemDrop)
             | 14UL -> instructions.Add(TableCopy(reader.ReadIndex(), reader.ReadIndex()))
