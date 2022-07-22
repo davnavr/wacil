@@ -134,22 +134,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | ValType.Ref FuncRef -> syslib.MulticastDelegate.Signature
         | ValType.Vec _ -> raise(System.NotImplementedException "TODO: conversion of vectors to System.Runtime.Intrinsics.Vector128")
 
-    let translateFuncType (ty: FuncType) =
-        // TODO: For multi-return, use out value tuple parameter
-        if ty.Results.Length > 1 then failwith "TODO: Compilation of functions with multiple return values is not yet supported"
-
-        let returnTypes =
-            if ty.Results.IsEmpty
-            then mdle.CorLibTypeFactory.Void :> TypeSignature
-            else translateValType ty.Results[0]
-
-        let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length)
-
-        for parameter in ty.Parameters do
-            parameterTypes.Add(translateValType parameter)
-
-        MethodSignature(CallingConventionAttributes.HasThis, returnTypes, parameterTypes.ToImmutableArray())
-
     let rtlib = RuntimeLibrary.importTypes options.RuntimeVersion translateValType syslib mdle
 
     let implementationDetailsClass =
@@ -169,6 +153,28 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         { Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length) }
 
     let tupleTypeCache = TupleCache.create mdle mscorlib translateValType
+
+    let translateFuncType (ty: FuncType) =
+        let firstReturnType, extraParameterCount =
+            if ty.Results.IsEmpty then
+                mdle.CorLibTypeFactory.Void :> TypeSignature, 0
+            else
+                translateValType ty.Results[0], 1
+
+        let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length + extraParameterCount)
+
+        for parameter in ty.Parameters do
+            parameterTypes.Add(translateValType parameter)
+
+        if ty.Results.Length > 1 then
+            let remainingReturnTypes =
+                if ty.Results.Length > 2 then
+                    tupleTypeCache(ty.Results.AsMemory().Slice(1)).Signature
+                else
+                    translateValType ty.Results[1]
+            parameterTypes.Add(remainingReturnTypes.MakeByReferenceType())
+
+        MethodSignature(CallingConventionAttributes.HasThis, firstReturnType, parameterTypes.ToImmutableArray())
 
     let mainInstanceConstructor =
         ImportTranslator.translateModuleImports

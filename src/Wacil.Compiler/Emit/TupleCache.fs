@@ -26,7 +26,7 @@ let create
         let valueTupleName = sprintf "ValueTuple`%i"
         let tupleFieldName = sprintf "Item%i"
         fun count ->
-            if count <= 1 then invalidArg (nameof count) "tuple field count must be greater than 1"
+            if count <= 1 then invalidArg (nameof count) "tuple field count must be greater than zero"
             match lookup.TryGetValue count with
             | true, existing -> existing
             | false, _ ->
@@ -43,16 +43,16 @@ let create
                 lookup[count] <- template
                 template
 
-    let lookup = Dictionary<ImmutableArray<Wasm.Format.ValType>, Instantiation>(comparer = LanguagePrimitives.FastGenericEqualityComparer)
+    let lookup = Dictionary<System.ReadOnlyMemory<Wasm.Format.ValType>, Instantiation>(comparer = LanguagePrimitives.FastGenericEqualityComparer)
     let mutable tupleFieldTypes = ref(ArrayBuilder.Create())
-    fun (types: ImmutableArray<_>) ->
+    fun (types: System.ReadOnlyMemory<_>) ->
         match lookup.TryGetValue types with
         | true, existing -> existing
         | false, _ ->
             let template = sizeTemplateLookup types.Length
 
             tupleFieldTypes.Value.Clear()
-            for ty in types do
+            for ty in types.Span do
                 tupleFieldTypes.Value.Add(translateValType ty)
 
             let instantiation = template.Type.MakeGenericInstanceType(tupleFieldTypes.Value.ToArray())
