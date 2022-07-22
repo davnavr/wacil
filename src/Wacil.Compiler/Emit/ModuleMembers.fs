@@ -6,7 +6,7 @@ open AsmResolver.DotNet
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type FunctionMember =
     | Defined of MethodDefinition * Wacil.Compiler.Wasm.Format.FuncType
-    | Imported of import: FieldDefinition * func: FieldDefinition * invoke: MethodDefinition
+    | Imported of import: FieldDefinition * func: FieldDefinition * invoke: IMethodDefOrRef
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MemoryMember =
@@ -15,4 +15,5 @@ type MemoryMember =
 
 [<NoComparison; NoEquality>]
 type ModuleMembers =
-    { Memories: MemoryMember[] }
+    { Functions: FunctionMember[]
+      Memories: MemoryMember[] }

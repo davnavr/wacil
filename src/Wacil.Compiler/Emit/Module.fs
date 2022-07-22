@@ -150,7 +150,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         |> DefinitionHelpers.addNormalClass syslib mdle (TypeAttributes.Sealed ||| TypeAttributes.Public) mainClassNamespace
         
     let members =
-        { Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length) }
+        { Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length)
+          Functions = Array.zeroCreate(input.Imports.Imports.Functions.Length + input.Functions.Length) }
 
     let tupleTypeCache = TupleCache.create mdle mscorlib translateValType
 

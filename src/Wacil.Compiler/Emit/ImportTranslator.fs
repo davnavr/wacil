@@ -85,7 +85,14 @@ let translateModuleImports
                     FieldAttributes.InitOnly
                     name
 
-            ()
+            constructorParameterTypes.Add functionDelegateType.TypeSignature
+            constructorParameterNames.Add name
+            
+            let index = importParameterIndex.Next()
+            importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index name field)
+
+            members.Functions[int32 func.Index] <-
+                FunctionMember.Imported(importInstanceField, field, functionDelegateType.Invoke)
 
         // TODO: table imports
 
@@ -103,7 +110,6 @@ let translateModuleImports
             constructorParameterNames.Add name
 
             let index = importParameterIndex.Next()
-
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index name field)
 
             members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field)
