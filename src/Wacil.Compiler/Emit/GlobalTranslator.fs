@@ -25,11 +25,11 @@ let translateGlobalVariables
     =
     let firstDefinedIndex = wasm.Imports.Imports.Globals.Length
 
-    for i in 0..wasm.Memories.Length - 1 do
+    for i in 0..wasm.Globals.Length - 1 do
         let glbl = wasm.Globals[i]
         let index = firstDefinedIndex + i
-        let memoryIndexString = string index
-        let memoryFieldName = "__global@" + memoryIndexString
+        let globalIndexString = string index
+        let globalFieldName = "__global@" + globalIndexString
 
         let isMutableGlobal =
             match glbl.Type.Mutability with
@@ -44,7 +44,7 @@ let translateGlobalVariables
                 moduleClassDefinition
                 (MethodSignature(CallingConventionAttributes.HasThis, translatedGlobalType, Seq.empty))
                 Unchecked.defaultof<MethodAttributes>
-                ("__global_init@" + memoryIndexString)
+                ("__global_init@" + globalIndexString)
 
         match wasm.Exports.GetGlobalName(Wasm.Format.GlobalIdx index) with
         | true, globalExportName ->
@@ -55,7 +55,7 @@ let translateGlobalVariables
                     moduleClassDefinition
                     globalTypeInstantiation.FieldSignature
                     FieldAttributes.InitOnly
-                    memoryFieldName
+                    globalFieldName
 
             DefinitionHelpers.addInstanceFieldGetter
                 moduleClassDefinition
@@ -80,7 +80,7 @@ let translateGlobalVariables
                     moduleClassDefinition
                     (FieldSignature translatedGlobalType)
                     (if isMutableGlobal then FieldAttributes.PrivateScope else FieldAttributes.InitOnly)
-                    memoryFieldName
+                    globalFieldName
 
             let setter =
                 if isMutableGlobal then
@@ -95,7 +95,7 @@ let translateGlobalVariables
                             moduleClassDefinition
                             signature
                             MethodAttributes.Static
-                            ("__global_set@" + memoryIndexString)
+                            ("__global_set@" + globalIndexString)
 
                     definition.CilMethodBody <- CilMethodBody definition
                     let il = definition.CilMethodBody.Instructions
