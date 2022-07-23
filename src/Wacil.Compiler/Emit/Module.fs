@@ -215,8 +215,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     // TODO: Emit calls to the things with element segments
 
-    // TODO: Generate function definitions
-    //FunctionTranslator.
+    FunctionTranslator.translateGlobalVariables
+        mangleMemberName
+        translateFuncType
+        rtlib
+        mainClassDefinition
+        mainClassSignature
+        input
+        members
 
     // TODO: Have a transpiler module to translate WASM expressions
 
