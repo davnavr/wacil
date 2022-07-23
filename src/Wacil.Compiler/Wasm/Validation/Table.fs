@@ -31,7 +31,11 @@ type ModuleImportLookup internal (lookup: SortedDictionary<string, ModuleImports
             raise(KeyNotFoundException "modules does not contain any imports")
         lookup[name]
 
-    member _.Modules = lookup.Keys :> IReadOnlyCollection<string>
+    member _.Modules =
+        if isNull lookup
+        then Array.empty :> IReadOnlyCollection<string>
+        else lookup.Keys :> IReadOnlyCollection<string>
+
     member _.Imports = imports
 
 type OperandType =
