@@ -64,6 +64,7 @@ let translateGlobalVariables
                     ("__call_function@" + functionIndexString)
 
             definition.CilMethodBody <- CilMethodBody definition
+            definition.ImplAttributes <- methodImplAggressiveInlining
             let il = definition.CilMethodBody.Instructions
             let originalParameterCount = translatedFunctionSignature.ParameterTypes.Count
             il.Add(CilInstruction.CreateLdarg(Checked.uint16 originalParameterCount))
