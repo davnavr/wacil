@@ -77,7 +77,7 @@ let translateGlobalVariables
             il.Add(CilInstruction(CilOpCodes.Call, initialValueMethod))
             il.Add(CilInstruction(if isMutableGlobal then CilOpCodes.Ldc_I4_1 else CilOpCodes.Ldc_I4_0))
             il.Add(CilInstruction(CilOpCodes.Newobj, globalTypeInstantiation.Constructor))
-            il.Add(CilInstruction CilOpCodes.Stfld)
+            il.Add(CilInstruction(CilOpCodes.Stfld, field))
         | false, _ ->
             let field =
                 DefinitionHelpers.addFieldDefinition
