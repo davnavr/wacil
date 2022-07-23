@@ -40,7 +40,7 @@ let addPropertyDefinition (parent: TypeDefinition) signature flags name =
     parent.Properties.Add definition
     definition
 
-let addInstanceFieldGetter parent ty pflags mflags field (name: string) =
+let addInstanceFieldGetter parent ty pflags mflags (field: IFieldDescriptor) (name: string) =
     let property =
         addPropertyDefinition parent (PropertySignature(CallingConventionAttributes.HasThis, ty, Seq.empty)) pflags name
 

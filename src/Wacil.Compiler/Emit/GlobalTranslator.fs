@@ -15,7 +15,7 @@ open AsmResolver.DotNet.Code.Cil
 
 let translateGlobalVariables
     mangleMemberName
-    translateValType
+    (translateValType: _ -> TypeSignature)
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
     (mainClassSignature: TypeDefOrRefSignature)
@@ -43,8 +43,12 @@ let translateGlobalVariables
             DefinitionHelpers.addMethodDefinition
                 moduleClassDefinition
                 (MethodSignature(CallingConventionAttributes.HasThis, translatedGlobalType, Seq.empty))
-                Unchecked.defaultof<MethodAttributes>
+                MethodAttributes.CompilerControlled
                 ("__global_init@" + globalIndexString)
+
+        initialValueMethod.CilMethodBody <- CilMethodBody initialValueMethod // TODO: Remove when expression translation is finished
+        initialValueMethod.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ldnull)
+        initialValueMethod.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Throw)
 
         match wasm.Exports.GetGlobalName(Wasm.Format.GlobalIdx index) with
         | true, globalExportName ->
