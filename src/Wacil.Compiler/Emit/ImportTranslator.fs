@@ -111,7 +111,7 @@ let translateModuleImports
                         moduleClassDefinition
                         signature
                         MethodAttributes.Static
-                        ("__call_function@" + string func.Index)
+                        ("__call_function@" + string(int func.Index))
 
                 definition.CilMethodBody <- CilMethodBody definition
                 definition.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
