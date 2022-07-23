@@ -236,8 +236,8 @@ let translateWebAssembly
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
 
-            // TODO: TODO TODO: Move implicit return code to the handler for End, End handler could just reuse code for Ret
-            // TODO: Properly handle implicit returns (maybe assume all items are there)
-            // TODO: Handle implicit multi-return
-            if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
-                il.Add(CilInstruction CilOpCodes.Ret)
+        // TODO: TODO TODO: Move implicit return code to the handler for End, End handler could just reuse code for Ret
+        // TODO: Properly handle implicit returns (maybe assume all items are there)
+        // TODO: Handle implicit multi-return
+        if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
+            il.Add(CilInstruction CilOpCodes.Ret)
