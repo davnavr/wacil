@@ -114,7 +114,40 @@ let translateModuleImports
 
             members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field)
 
-        // TODO: Global imports
+        for glbl in imports.Globals do
+            let name = mangleMemberName glbl.Name
+            let globalFieldType = rtlib.InstantiatedGlobal glbl.Type.Type
+
+            let field =
+                DefinitionHelpers.addFieldDefinition
+                    importClassDefinition
+                    globalFieldType.FieldSignature
+                    FieldAttributes.InitOnly
+                    name
+
+            let globalImportInitializer =
+                let index = importParameterIndex.Next()
+                match glbl.Type.Mutability with
+                | Wasm.Format.Mutability.Const ->
+                    CilHelpers.emitArgumentStoreWithNullCheck syslib index glbl.Name field
+                | Wasm.Format.Mutability.Var -> fun (il: CilInstructionCollection) ->
+                    let globalNotNull = CilInstruction(CilOpCodes.Call, globalFieldType.MutableAccessor)
+                    let store = CilInstruction(CilOpCodes.Stfld, field)
+                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                    il.Add(CilInstruction.CreateLdarg index)
+                    il.Add(CilInstruction CilOpCodes.Dup)
+                    il.Add(CilInstruction CilOpCodes.Dup)
+                    CilHelpers.emitArgumentNullCheck syslib glbl.Name (CilInstructionLabel globalNotNull) il
+                    il.Add globalNotNull
+                    il.Add(CilInstruction(CilOpCodes.Brfalse_S, CilInstructionLabel store))
+                    il.Add(CilInstruction(CilOpCodes.Ldstr, "Imported global variable was expected to be mutable"))
+                    il.Add(CilInstruction(CilOpCodes.Ldstr, glbl.Name))
+                    il.Add(CilInstruction(CilOpCodes.Newobj, syslib.ArgumentExceptionConstructor))
+                    il.Add(CilInstruction CilOpCodes.Throw)
+                    il.Add store
+            
+            importMemberInitializers.Add globalImportInitializer
+            members.Globals[int32 glbl.Index] <- GlobalMember.Imported(importInstanceField, field)
 
         let importConstructorDefinition =
             DefinitionHelpers.addInstanceConstructor

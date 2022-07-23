@@ -199,6 +199,13 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         members
         mainInstanceConstructor.CilMethodBody
 
+    // TODO: Generate the globals
+
+    // TODO: Emit calls to global initializers in mainInstanceConstructor
+    // TODO: Emit calls to the things with element segments
+
+    // TODO: Generate function definitions
+
     mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
     mdle

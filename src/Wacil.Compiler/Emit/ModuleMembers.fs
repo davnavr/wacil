@@ -13,7 +13,12 @@ type MemoryMember =
     | Defined of memory: FieldDefinition
     | Imported of import: FieldDefinition * memory: FieldDefinition
 
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type GlobalMember =
+    | Imported of import: FieldDefinition * variable: FieldDefinition
+
 [<NoComparison; NoEquality>]
 type ModuleMembers =
     { Functions: FunctionMember[]
-      Memories: MemoryMember[] }
+      Memories: MemoryMember[]
+      Globals: GlobalMember[] }

@@ -48,7 +48,19 @@ module internal CilHelpers =
         il.Add(CilInstruction CilOpCodes.Ldarg_0)
         il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))
 
-    /// Generates code to store a parameter into an instance field, performing a null check.
+    /// <summary>Generates code to check that the value on top of the stack is not <see langword="null"/>.</summary>
+    let emitArgumentNullCheck
+        (syslib: SystemLibrary.References)
+        (nullArgumentName: string)
+        (label: CilInstructionLabel)
+        (il: Instructions)
+        =
+        il.Add(CilInstruction(CilOpCodes.Brtrue_S, label))
+        il.Add(CilInstruction(CilOpCodes.Ldstr, nullArgumentName))
+        il.Add(CilInstruction(CilOpCodes.Newobj, syslib.ArgumentNullExceptionConstructor))
+        il.Add(CilInstruction CilOpCodes.Throw)
+
+    /// <summary>Generates code to store a parameter into an instance field, performing a<see langword="null"/> check.</summary>
     let emitArgumentStoreWithNullCheck
         (syslib: SystemLibrary.References)
         parameter
@@ -60,8 +72,5 @@ module internal CilHelpers =
         il.Add(CilInstruction CilOpCodes.Ldarg_0)
         il.Add(CilInstruction.CreateLdarg parameter)
         il.Add(CilInstruction CilOpCodes.Dup) // Duplicate the object reference to store
-        il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel store))
-        il.Add(CilInstruction(CilOpCodes.Ldstr, nullArgumentName))
-        il.Add(CilInstruction(CilOpCodes.Newobj, syslib.ArgumentNullExceptionConstructor))
-        il.Add(CilInstruction CilOpCodes.Throw)
+        emitArgumentNullCheck syslib nullArgumentName (CilInstructionLabel store) il
         il.Add store

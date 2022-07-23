@@ -20,7 +20,12 @@ type TableInstantiation =
 type GlobalInstantiation =
     { Instantiation: GenericInstanceTypeSignature
       Specification: TypeSpecification
+      FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef
+      /// <summary>
+      /// The <c>get_Mutable</c> instance method that returns a boolean that is true if the global variable is mutable.
+      /// </summary>
+      MutableAccessor: IMethodDefOrRef
       /// <summary>
       /// The <c>get_Value</c> instance method used to retrieve the value of a global variable.
       /// </summary>
@@ -132,16 +137,25 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                 let instantiation' =
                     { GlobalInstantiation.Instantiation = instantiation
                       Specification = specification
+                      FieldSignature = FieldSignature instantiation
                       Constructor =
                         ImportHelpers.importConstructor
                             mdle
                             [| globalValueTypeParameter; mdle.CorLibTypeFactory.Boolean |]
                             specification
+                      MutableAccessor =
+                        ImportHelpers.importMethod
+                            mdle.DefaultImporter
+                            CallingConventionAttributes.HasThis
+                            globalValueTypeParameter
+                            Seq.empty
+                            "get_Mutable"
+                            specification
                       ValueAccessor =
                         ImportHelpers.importMethod
                             mdle.DefaultImporter
                             CallingConventionAttributes.HasThis
-                            mdle.CorLibTypeFactory.Void
+                            globalValueTypeParameter
                             Seq.empty
                             "get_Value"
                             specification

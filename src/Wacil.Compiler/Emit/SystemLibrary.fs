@@ -51,6 +51,11 @@ type References =
       Delegate: DelegateClass
       MulticastDelegate: MulticastDelegateClass
       Type: TypeClass
+      /// <summary>
+      /// References the <see cref="T:System.ArgumentException"/> constructor that takes a <see langword="string"/> message and
+      /// paramter name.
+      /// </summary>
+      ArgumentExceptionConstructor: IMethodDefOrRef
       ArgumentNullExceptionConstructor: IMethodDefOrRef
       RuntimeHelpers: RuntimeHelpersClass
       TargetFrameworkAttributeConstructor: ICustomAttributeType
@@ -76,6 +81,9 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
       Object =
         { ObjectClass.Type = tyObject
           ObjectClass.Constructor = ImportHelpers.importConstructor mdle Seq.empty tyObject }
+      ArgumentExceptionConstructor =
+        importSystemType "ArgumentException"
+        |> ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String; mdle.CorLibTypeFactory.String |]
       ArgumentNullExceptionConstructor =
         ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String |] (importSystemType "ArgumentNullException")
       Delegate =
