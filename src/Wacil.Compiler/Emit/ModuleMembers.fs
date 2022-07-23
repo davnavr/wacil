@@ -5,7 +5,7 @@ open AsmResolver.DotNet
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type FunctionMember =
-    | Defined of MethodDefinition * Wacil.Compiler.Wasm.Format.FuncType
+    | Defined of instance: MethodDefinition * indirect: MethodDefinition * Wacil.Compiler.Wasm.Format.FuncType
     | Imported of import: FieldDefinition * func: FieldDefinition * invoke: IMethodDefOrRef
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]

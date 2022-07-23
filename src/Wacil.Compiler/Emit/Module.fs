@@ -81,8 +81,6 @@ type BranchTargetStack =
         | BranchTarget.Loop label
         | BranchTarget.If(_, label) -> label
 
-let methodImplAggressiveInlining: MethodImplAttributes = LanguagePrimitives.EnumOfValue 256us
-
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let mscorlib =
         match options.TargetFramework with
@@ -213,10 +211,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         members
         mainInstanceConstructor.CilMethodBody
 
-    // TODO: Emit calls to global initializers in mainInstanceConstructor
+    // TODO: Translate tables
+
     // TODO: Emit calls to the things with element segments
 
     // TODO: Generate function definitions
+    //FunctionTranslator.
+
+    // TODO: Have a transpiler module to translate WASM expressions
 
     mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
