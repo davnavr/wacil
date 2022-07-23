@@ -21,6 +21,7 @@ let translateGlobalVariables
     (mainClassSignature: TypeDefOrRefSignature)
     (wasm: Wasm.Validation.ValidModule)
     (members: ModuleMembers)
+    (transpilerInputBuilder: ResizeArray<Transpiler.Input>)
     (moduleInstanceConstructor: CilMethodBody)
     =
     let firstDefinedIndex = wasm.Imports.Imports.Globals.Length
@@ -46,9 +47,7 @@ let translateGlobalVariables
                 MethodAttributes.CompilerControlled
                 ("__global_init@" + globalIndexString)
 
-        initialValueMethod.CilMethodBody <- CilMethodBody initialValueMethod // TODO: Remove when expression translation is finished
-        initialValueMethod.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ldnull)
-        initialValueMethod.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Throw)
+        Transpiler.includeMethodInput initialValueMethod glbl.Value transpilerInputBuilder
 
         match wasm.Exports.GetGlobalName(Wasm.Format.GlobalIdx index) with
         | true, globalExportName ->

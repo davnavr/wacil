@@ -23,6 +23,7 @@ let translateGlobalVariables
     (moduleClassSignature: TypeDefOrRefSignature)
     (wasm: Wasm.Validation.ValidModule)
     (members: ModuleMembers)
+    (transpilerInputBuilder: ResizeArray<Transpiler.Input>)
     =
     let firstDefinedIndex = wasm.Imports.Imports.Functions.Length
     let mutable parameterTypeBuilder = ArrayBuilder<TypeSignature>.Create()
@@ -45,6 +46,8 @@ let translateGlobalVariables
                 translatedFunctionSignature
                 (MethodAttributes.HideBySig ||| accessibility)
                 name
+
+        Transpiler.includeMethodInput translatedInstanceMethod func.Body transpilerInputBuilder
 
         let staticHelperMethod =
             let signature =

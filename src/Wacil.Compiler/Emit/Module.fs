@@ -181,6 +181,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let delegateTypeCache = DelegateCache.create mdle mscorlib
 
+    let webAssemblyExpressions = ResizeArray<Transpiler.Input>(input.Globals.Length + input.Functions.Length)
+
     let mainInstanceConstructor =
         ImportTranslator.translateModuleImports
             mangleMemberName
@@ -209,6 +211,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         mainClassSignature
         input
         members
+        webAssemblyExpressions
         mainInstanceConstructor.CilMethodBody
 
     // TODO: Translate tables
@@ -223,8 +226,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         mainClassSignature
         input
         members
+        webAssemblyExpressions
 
-    // TODO: Have a transpiler module to translate WASM expressions
+    Transpiler.translateWebAssembly rtlib members webAssemblyExpressions
 
     mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
