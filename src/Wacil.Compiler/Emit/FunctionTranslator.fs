@@ -13,8 +13,6 @@ open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
 open AsmResolver.DotNet.Code.Cil
 
-let private methodImplAggressiveInlining: MethodImplAttributes = LanguagePrimitives.EnumOfValue 256us
-
 let translateGlobalVariables
     mangleMemberName
     (translateFuncType: _ -> MethodSignature)
@@ -67,7 +65,7 @@ let translateGlobalVariables
                     ("__call_function@" + functionIndexString)
 
             definition.CilMethodBody <- CilMethodBody definition
-            definition.ImplAttributes <- methodImplAggressiveInlining
+            definition.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
             let il = definition.CilMethodBody.Instructions
             let originalParameterCount = translatedFunctionSignature.ParameterTypes.Count
             il.Add(CilInstruction.CreateLdarg(Checked.uint16 originalParameterCount))

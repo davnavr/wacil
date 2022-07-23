@@ -140,16 +140,24 @@ let translateWebAssembly
                     il.Add endBranchLabel.Instruction
                     if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchLabel.Instruction
             | Call(FuncIdx callee) ->
+                // TODO: Reduce code duplication (may when opting to generate a direct call, as it needs to be handled differently for imports and definitions)
                 match members.Functions[callee] with
                 | FunctionMember.Defined(_, indirect, originalFunctionType) ->
                     // TODO: Handle calling a multi-return function (need to insert a byref to a local here)
                     if originalFunctionType.Results.Length > 1 then
-                        failwith "TODO: Handle calling a multi-return function"
+                        failwith "TODO: Handle calling a multi-return function definition"
 
                     // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction(CilOpCodes.Call, indirect))
-                // TODO: Generate a static method for imported methods, and can move common code below
+                | FunctionMember.Imported(_, _, _, indirect, originalFunctionType) ->
+                    // TODO: Handle calling a multi-return function (need to insert a byref to a local here)
+                    if originalFunctionType.Results.Length > 1 then
+                        failwith "TODO: Handle calling a multi-return function import"
+
+                    // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
+                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                    il.Add(CilInstruction(CilOpCodes.Call, indirect))
             //| CallIndirect
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->

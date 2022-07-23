@@ -191,6 +191,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             syslib
             rtlib
             mainClassDefinition
+            mainClassSignature
             input
             mainClassNamespace
             members

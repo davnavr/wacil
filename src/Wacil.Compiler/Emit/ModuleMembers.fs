@@ -8,7 +8,8 @@ open AsmResolver.DotNet
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type FunctionMember =
     | Defined of instance: MethodDefinition * indirect: MethodDefinition * Wasm.Format.FuncType
-    | Imported of import: FieldDefinition * func: FieldDefinition * invoke: IMethodDefOrRef * Wasm.Format.FuncType
+    | Imported of import: FieldDefinition * func: FieldDefinition * invoke: IMethodDefOrRef * indirect: MethodDefinition *
+        Wasm.Format.FuncType
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MemoryMember =

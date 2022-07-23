@@ -118,4 +118,4 @@ let translateGlobalVariables
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction CilOpCodes.Dup)
             il.Add(CilInstruction(CilOpCodes.Call, initialValueMethod))
-            il.Add(CilInstruction CilOpCodes.Stfld)
+            il.Add(CilInstruction(CilOpCodes.Stfld, field))

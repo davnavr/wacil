@@ -44,6 +44,9 @@ module internal CilInstructionExtensions =
 module internal CilHelpers =
     type Instructions = CilInstructionCollection
 
+    let methodImplAggressiveInlining: AsmResolver.PE.DotNet.Metadata.Tables.Rows.MethodImplAttributes =
+        LanguagePrimitives.EnumOfValue 256us
+
     let emitObjectCtorCall (syslib: SystemLibrary.References) (il: Instructions) =
         il.Add(CilInstruction CilOpCodes.Ldarg_0)
         il.Add(CilInstruction(CilOpCodes.Call, syslib.Object.Constructor))

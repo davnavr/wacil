@@ -36,6 +36,7 @@ let translateModuleImports
     (syslib: SystemLibrary.References)
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
+    (moduleClassSignature: TypeSignature)
     (wasm: Wasm.Validation.ValidModule)
     (ns: string)
     (members: ModuleMembers)
@@ -91,8 +92,48 @@ let translateModuleImports
             let index = importParameterIndex.Next()
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index func.Name field)
 
-            members.Functions[int32 func.Index] <-
-                FunctionMember.Imported(importInstanceField, field, functionDelegateType.Invoke, func.Type)
+            let staticInvocationHelper =
+                let originalParameterCount = translatedFunctionSignature.ParameterTypes.Count
+
+                let definition =
+                    let mutable helperParameterTypes = ArrayBuilder.Create(originalParameterCount + 1)
+                    for ty in translatedFunctionSignature.ParameterTypes do helperParameterTypes.Add ty
+                    helperParameterTypes.Add moduleClassSignature
+
+                    let signature =
+                        MethodSignature(
+                            CallingConventionAttributes.Default,
+                            translatedFunctionSignature.ReturnType,
+                            helperParameterTypes.ToArray()
+                        )
+
+                    DefinitionHelpers.addMethodDefinition
+                        moduleClassDefinition
+                        signature
+                        MethodAttributes.Static
+                        ("__call_function@" + string func.Index)
+
+                definition.CilMethodBody <- CilMethodBody definition
+                definition.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
+
+                let il = definition.CilMethodBody.Instructions
+                il.Add(CilInstruction.CreateLdarg(Checked.uint16 originalParameterCount))
+                il.Add(CilInstruction(CilOpCodes.Ldfld, importInstanceField))
+                il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+                for i = 0 to originalParameterCount - 1 do il.Add(CilInstruction.CreateLdarg(uint16 i))
+                il.Add(CilInstruction CilOpCodes.Tailcall)
+                il.Add(CilInstruction(CilOpCodes.Call, functionDelegateType.Invoke))
+                il.Add(CilInstruction CilOpCodes.Ret)
+
+                definition
+
+            members.Functions[int32 func.Index] <- FunctionMember.Imported(
+                importInstanceField,
+                field,
+                functionDelegateType.Invoke,
+                staticInvocationHelper,
+                func.Type
+            )
 
         // TODO: table imports
 
