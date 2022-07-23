@@ -1,9 +1,5 @@
 module Wacil.Compiler.Emit.Module
 
-open System.Collections.Generic
-open System.Collections.Immutable
-open System.Runtime.CompilerServices
-
 open AsmResolver
 open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
 
@@ -11,75 +7,14 @@ open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
 
-open AsmResolver.PE.DotNet.Cil
 open AsmResolver.DotNet.Code.Cil
+open AsmResolver.PE.DotNet.Cil
 
 open Wacil.Compiler.Helpers
 open Wacil.Compiler.Helpers.Collections
 
 open Wacil.Compiler.Wasm.Format
 open Wacil.Compiler.Wasm.Validation
-
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-type LocalIndex =
-    | Arg of a: int32
-    | Loc of int32
-
-[<RequireQualifiedAccess; NoComparison; NoEquality>]
-type TranslatedGlobal =
-    { Field: FieldDefinition
-      Initializer: MethodDefinition
-      Setter: MethodDefinition voption }
-
-[<RequireQualifiedAccess; NoComparison; NoEquality>]
-type TranslatedTable =
-    { ElementType: RefType
-      Field: FieldDefinition
-      Operations: RuntimeLibrary.TableInstantiation }
-
-[<NoComparison; NoEquality>]
-type TranslatedFunctionImport =
-    { Delegate: TypeDefinition
-      Field: FieldDefinition
-      Invoke: MethodDefinition }
-
-[<NoComparison; NoEquality>]
-type ModuleImport =
-    { Class: TypeDefinition
-      Signature: TypeDefOrRefSignature
-      Field: FieldDefinition
-      Functions: ImmutableArray<TranslatedFunctionImport> }
-
-[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
-type BranchTarget =
-    | Loop of CilInstructionLabel
-    | Block of CilInstructionLabel
-    | If of elseBranchLabel: CilInstructionLabel * endBranchLabel: CilInstructionLabel
-
-[<IsByRefLike; Struct; NoComparison; NoEquality>]
-type BranchTargetStack =
-    { mutable Targets: ArrayBuilder<BranchTarget> }
-
-    member this.PushBlock() =
-        this.Targets.Add(BranchTarget.Block(CilInstructionLabel()))
-
-    member this.PushLoop start =
-        this.Targets.Add(BranchTarget.Loop(CilInstructionLabel start))
-
-    member this.PushIf(): CilInstructionLabel =
-        let elseBranchTarget = CilInstructionLabel()
-        this.Targets.Add(BranchTarget.If(elseBranchTarget, CilInstructionLabel()))
-        elseBranchTarget
-
-    member this.Pop() =
-        let target = this.Targets.Pop()
-        target
-
-    member this.GetLabel (LabelIdx target): CilInstructionLabel =
-        match this.Targets.ItemFromEnd target with
-        | BranchTarget.Block label
-        | BranchTarget.Loop label
-        | BranchTarget.If(_, label) -> label
 
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let mscorlib =
@@ -153,7 +88,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         { Functions = Array.zeroCreate(input.Imports.Imports.Functions.Length + input.Functions.Length)
           //Tables =
           Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length)
-          Globals = Array.zeroCreate(input.Imports.Imports.Globals.Length + input.Globals.Length) }
+          Globals = Array.zeroCreate(input.Imports.Imports.Globals.Length + input.Globals.Length)
+          DataSegments = Array.zeroCreate input.Data.Length }
 
     let tupleTypeCache = TupleCache.create mdle mscorlib translateValType
 
@@ -215,10 +151,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         webAssemblyExpressions
         mainInstanceConstructor.CilMethodBody
 
-    // TODO: Translate tables
-
-    // TODO: Emit calls to the things with element segments
-
     FunctionTranslator.translateGlobalVariables
         mangleMemberName
         translateFuncType
@@ -228,6 +160,28 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         input
         members
         webAssemblyExpressions
+
+    // TODO: Translate tables
+
+    let mainStaticInitializer =
+        DefinitionHelpers.addMethodDefinition
+            mainClassDefinition
+            (MethodSignature(CallingConventionAttributes.Default, mdle.CorLibTypeFactory.Void, Seq.empty))
+            (MethodAttributes.Static ||| MethodAttributes.RuntimeSpecialName ||| MethodAttributes.SpecialName)
+            ".cctor"
+
+    mainStaticInitializer.CilMethodBody <- CilMethodBody mainStaticInitializer
+
+    // TODO: Emit calls in the constructor to the element segment things
+
+    let constantByteFactory = ConstantBytes.createFieldFactory implementationDetailsClass syslib
+
+    DataSegmentMember.translateDataSegments
+        constantByteFactory
+        mainClassDefinition
+        input.Data members.DataSegments
+        mainInstanceConstructor.CilMethodBody
+        mainStaticInitializer.CilMethodBody
 
     Transpiler.translateWebAssembly translateValType rtlib members webAssemblyExpressions
 
@@ -243,6 +197,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     | ValueNone -> ()
 
     mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
+    mainStaticInitializer.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
     mdle
 

@@ -26,8 +26,14 @@ type GlobalMember =
     | DefinedExport of container: FieldDefinition * accessor: IMethodDescriptor * setter: IMethodDescriptor
     | Imported of import: FieldDefinition * variable: FieldDefinition * accessor: IMethodDescriptor * setter: IMethodDescriptor
 
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type DataSegmentMember =
+    | Passive of data: FieldDefinition
+    | Active
+
 [<NoComparison; NoEquality>]
 type ModuleMembers =
     { Functions: FunctionMember[]
       Memories: MemoryMember[]
-      Globals: GlobalMember[] }
+      Globals: GlobalMember[]
+      DataSegments: DataSegmentMember[] }
