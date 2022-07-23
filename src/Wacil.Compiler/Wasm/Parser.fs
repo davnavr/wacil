@@ -181,6 +181,14 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             | bad -> failwithf "%A is not a valid reference type" bad
           TableType.Limits = this.ReadLimits() }
 
+    member this.ReadGlobalType() =
+        { GlobalType.Type = this.ReadValType()
+          GlobalType.Mutability =
+            match this.ReadByte() with
+            | 0uy -> Mutability.Const
+            | 1uy -> Mutability.Var
+            | bad -> failwithf "0x%02X is not a valid global mutability value" bad }
+
 [<Sealed>]
 type InvalidMagicException (actual: ImmutableArray<byte>) =
     inherit Exception("Not a WebAssembly module")
@@ -531,7 +539,7 @@ let parseFromStream (stream: Stream) =
                             | 0uy -> reader.ReadIndex() |> ImportDesc.Func
                             | 1uy -> reader.ReadTableType() |> ImportDesc.Table
                             | 2uy -> reader.ReadLimits() |> ImportDesc.Mem
-                            //| 3uy -> reader.Global
+                            | 3uy -> reader.ReadGlobalType() |> ImportDesc.Global
                             | bad -> failwithf "0x%02X is not a valid import descriptor" bad}
                 sections.Add(Section.Import(Unsafe.Array.toImmutable imports))
             | SectionId.Function ->
@@ -550,13 +558,7 @@ let parseFromStream (stream: Stream) =
                 let glbls = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to glbls.Length - 1 do
                     glbls[i] <-
-                        { Global.Type =
-                            { GlobalType.Type = reader.ReadValType()
-                              Mutability =
-                                match reader.ReadByte() with
-                                | 0uy -> Mutability.Const
-                                | 1uy -> Mutability.Var
-                                | bad -> failwithf "0x%02X is not a valid global mutability value" bad }
+                        { Global.Type = reader.ReadGlobalType()
                           Global.Expression = parseExpression reader &instructionSequenceBuilder }
                 sections.Add(Section.Global(Unsafe.Array.toImmutable glbls))
             | SectionId.Export ->
