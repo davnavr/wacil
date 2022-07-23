@@ -183,7 +183,7 @@ let translateWebAssembly
             | GlobalSet(GlobalIndex glbl) ->
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
                 match glbl with
-                | GlobalMember.Defined(_, setter) ->
+                | GlobalMember.Defined(_, ValueSome(setter)) ->
                     il.Add(CilInstruction(CilOpCodes.Call, setter))
                 | GlobalMember.DefinedExport(field, _, setter) ->
                     il.Add(CilInstruction(CilOpCodes.Ldfld, field))
@@ -192,6 +192,8 @@ let translateWebAssembly
                     il.Add(CilInstruction(CilOpCodes.Ldfld, import))
                     il.Add(CilInstruction(CilOpCodes.Ldfld, field))
                     il.Add(CilInstruction(CilOpCodes.Call, setter))
+                | GlobalMember.Defined(_, ValueNone) ->
+                    invalidOp "attempt to generate code to mutate constant global variable"
             | I32Load arg ->
                 // Top of stack is address to load, which is first parameter
                 emitPushMemArg arg il
