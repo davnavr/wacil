@@ -10,6 +10,7 @@ open AsmResolver.PE.DotNet.Cil;
 
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
+open AsmResolver.DotNet.Signatures.Types
 open AsmResolver.DotNet.Code.Cil
 
 let translateGlobalVariables
@@ -17,6 +18,7 @@ let translateGlobalVariables
     translateValType
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
+    (mainClassSignature: TypeDefOrRefSignature)
     (wasm: Wasm.Validation.ValidModule)
     (members: ModuleMembers)
     (moduleInstanceConstructor: CilMethodBody)
@@ -32,6 +34,8 @@ let translateGlobalVariables
             match glbl.Type.Mutability with
             | Wasm.Format.Mutability.Const -> false
             | Wasm.Format.Mutability.Var -> true
+
+        //let initialValueMethod = // TODO: Generate a method that produces the inital value
 
         match wasm.Exports.GetGlobalName(Wasm.Format.GlobalIdx index) with
         | true, globalExportName ->
@@ -51,14 +55,39 @@ let translateGlobalVariables
                 (MethodAttributes.Public ||| MethodAttributes.HideBySig)
                 field
                 (mangleMemberName globalExportName)
+
+            members.Globals[index] <- GlobalMember.DefinedExport field
             
+            let il = moduleInstanceConstructor.Instructions
             failwith "TODO: Other initialization stuff for exported global"
         | false, _ ->
+            let translatedGlobalType = translateValType glbl.Type.Type
+
             let field =
                 DefinitionHelpers.addFieldDefinition
                     moduleClassDefinition
-                    (FieldSignature(translateValType glbl.Type.Type))
+                    (FieldSignature translatedGlobalType)
                     (if isMutableGlobal then FieldAttributes.PrivateScope else FieldAttributes.InitOnly)
                     memoryFieldName
 
+            let setter =
+                if isMutableGlobal then
+                    let signature = MethodSignature(
+                        CallingConventionAttributes.Default,
+                        moduleClassDefinition.Module.CorLibTypeFactory.Void,
+                        [| translatedGlobalType; mainClassSignature |]
+                    )
+
+                    DefinitionHelpers.addMethodDefinition
+                        moduleClassDefinition
+                        signature
+                        MethodAttributes.Static
+                        ("__global_set@" + string index)
+                    |> ValueSome
+                else
+                    ValueNone
+
+            members.Globals[index] <- GlobalMember.Defined(field, setter)
+
+            let il = moduleInstanceConstructor.Instructions
             failwith "TODO: Generate setter and other stuff for non exported global"

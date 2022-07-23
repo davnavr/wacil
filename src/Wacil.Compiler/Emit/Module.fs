@@ -149,6 +149,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         |> String.defaultValue outputModuleName
         |> DefinitionHelpers.addNormalClass syslib mdle (TypeAttributes.Sealed ||| TypeAttributes.Public) mainClassNamespace
         
+    let mainClassSignature = TypeDefOrRefSignature mainClassDefinition
+
     let members =
         { Functions = Array.zeroCreate(input.Imports.Imports.Functions.Length + input.Functions.Length)
           //Tables =
@@ -201,7 +203,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         members
         mainInstanceConstructor.CilMethodBody
 
-    // TODO: Generate the globals
+    GlobalTranslator.translateGlobalVariables
+        mangleMemberName
+        translateValType
+        rtlib
+        mainClassDefinition
+        mainClassSignature
+        input
+        members
+        mainInstanceConstructor.CilMethodBody
 
     // TODO: Emit calls to global initializers in mainInstanceConstructor
     // TODO: Emit calls to the things with element segments
