@@ -15,6 +15,12 @@ type MemoryMember =
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type GlobalMember =
+    /// <summary>
+    /// <p>Represents a WebAssembly global variable that is not exported.</p>
+    /// <p>The compiler can optimize in this case, and can generate a field to directly contain the value.</p>
+    /// </summary>
+    | Defined of FieldDefinition * setter: MethodDefinition
+    | DefinedExport of FieldDefinition
     | Imported of import: FieldDefinition * variable: FieldDefinition
 
 [<NoComparison; NoEquality>]

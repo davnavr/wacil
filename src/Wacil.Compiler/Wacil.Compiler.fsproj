@@ -39,6 +39,7 @@
     <Compile Include="Emit\ModuleMembers.fs" />
     <Compile Include="Emit\ImportTranslator.fs" />
     <Compile Include="Emit\MemoryTranslator.fs" />
+    <Compile Include="Emit\GlobalTranslator.fs" />
     <Compile Include="Emit\Module.fsi" />
     <Compile Include="Emit\Module.fs" />
   </ItemGroup>
