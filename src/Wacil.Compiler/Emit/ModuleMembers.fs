@@ -22,8 +22,8 @@ type GlobalMember =
     /// <p>The compiler can optimize in this case, and can generate a field to directly contain the value.</p>
     /// </summary>
     | Defined of FieldDefinition * setter: MethodDefinition voption
-    | DefinedExport of FieldDefinition
-    | Imported of import: FieldDefinition * variable: FieldDefinition
+    | DefinedExport of container: FieldDefinition * accessor: IMethodDescriptor * setter: IMethodDescriptor
+    | Imported of import: FieldDefinition * variable: FieldDefinition * accessor: IMethodDescriptor * setter: IMethodDescriptor
 
 [<NoComparison; NoEquality>]
 type ModuleMembers =

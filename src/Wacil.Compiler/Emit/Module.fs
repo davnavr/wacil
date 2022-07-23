@@ -228,7 +228,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         members
         webAssemblyExpressions
 
-    Transpiler.translateWebAssembly rtlib members webAssemblyExpressions
+    Transpiler.translateWebAssembly translateValType rtlib members webAssemblyExpressions
 
     mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 

@@ -149,7 +149,8 @@ let translateModuleImports
             constructorParameterTypes.Add globalFieldType.Instantiation
             constructorParameterNames.Add name
             importMemberInitializers.Add globalImportInitializer
-            members.Globals[int32 glbl.Index] <- GlobalMember.Imported(importInstanceField, field)
+            members.Globals[int32 glbl.Index] <-
+                GlobalMember.Imported(importInstanceField, field, globalFieldType.ValueAccessor, globalFieldType.SetValueHelper)
 
         let importConstructorDefinition =
             DefinitionHelpers.addInstanceConstructor

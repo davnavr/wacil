@@ -68,7 +68,8 @@ let translateGlobalVariables
                 field
                 (mangleMemberName globalExportName)
 
-            members.Globals[index] <- GlobalMember.DefinedExport field
+            members.Globals[index] <-
+                GlobalMember.DefinedExport(field, globalTypeInstantiation.ValueAccessor, globalTypeInstantiation.SetValueHelper)
             
             let il = moduleInstanceConstructor.Instructions
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
