@@ -73,7 +73,8 @@ let translateGlobalVariables
             il.Add(CilInstruction.CreateLdarg(Checked.uint16 originalParameterCount))
             for i = 0 to originalParameterCount - 1 do il.Add(CilInstruction.CreateLdarg(Checked.uint16 i))
             // TODO: Figure out if tail.call is valid even if byref parameters are used
-            il.Add(CilInstruction(CilOpCodes.Tailcall, translatedInstanceMethod))
+            il.Add(CilInstruction CilOpCodes.Tailcall)
+            il.Add(CilInstruction(CilOpCodes.Call, translatedInstanceMethod))
             il.Add(CilInstruction CilOpCodes.Ret)
 
             definition

@@ -241,4 +241,3 @@ let translateWebAssembly
             // TODO: Handle implicit multi-return
             if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
                 il.Add(CilInstruction CilOpCodes.Ret)
-        ()
