@@ -92,7 +92,7 @@ let translateModuleImports
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index func.Name field)
 
             members.Functions[int32 func.Index] <-
-                FunctionMember.Imported(importInstanceField, field, functionDelegateType.Invoke)
+                FunctionMember.Imported(importInstanceField, field, functionDelegateType.Invoke, func.Type)
 
         // TODO: table imports
 

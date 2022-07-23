@@ -1,12 +1,14 @@
 [<AutoOpen>]
 module internal Wacil.Compiler.Emit.ModuleMembers
 
+open Wacil.Compiler
+
 open AsmResolver.DotNet
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type FunctionMember =
-    | Defined of instance: MethodDefinition * indirect: MethodDefinition * Wacil.Compiler.Wasm.Format.FuncType
-    | Imported of import: FieldDefinition * func: FieldDefinition * invoke: IMethodDefOrRef
+    | Defined of instance: MethodDefinition * indirect: MethodDefinition * Wasm.Format.FuncType
+    | Imported of import: FieldDefinition * func: FieldDefinition * invoke: IMethodDefOrRef * Wasm.Format.FuncType
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MemoryMember =
