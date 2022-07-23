@@ -28,14 +28,23 @@ let translateGlobalVariables
     for i in 0..wasm.Memories.Length - 1 do
         let glbl = wasm.Globals[i]
         let index = firstDefinedIndex + i
-        let memoryFieldName = "__global@" + string index
+        let memoryIndexString = string index
+        let memoryFieldName = "__global@" + memoryIndexString
 
         let isMutableGlobal =
             match glbl.Type.Mutability with
             | Wasm.Format.Mutability.Const -> false
             | Wasm.Format.Mutability.Var -> true
 
-        //let initialValueMethod = // TODO: Generate a method that produces the inital value
+        let translatedGlobalType = translateValType glbl.Type.Type
+
+        let initialValueMethod =
+            // TODO: Keep a list somewhere that keeps track of which WASM expressions need to be translated
+            DefinitionHelpers.addMethodDefinition
+                moduleClassDefinition
+                (MethodSignature(CallingConventionAttributes.HasThis, translatedGlobalType, Seq.empty))
+                Unchecked.defaultof<MethodAttributes>
+                ("__global_init@" + memoryIndexString)
 
         match wasm.Exports.GetGlobalName(Wasm.Format.GlobalIdx index) with
         | true, globalExportName ->
@@ -59,10 +68,13 @@ let translateGlobalVariables
             members.Globals[index] <- GlobalMember.DefinedExport field
             
             let il = moduleInstanceConstructor.Instructions
-            failwith "TODO: Other initialization stuff for exported global"
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction CilOpCodes.Dup)
+            il.Add(CilInstruction(CilOpCodes.Call, initialValueMethod))
+            il.Add(CilInstruction(if isMutableGlobal then CilOpCodes.Ldc_I4_1 else CilOpCodes.Ldc_I4_0))
+            il.Add(CilInstruction(CilOpCodes.Newobj, globalTypeInstantiation.Constructor))
+            il.Add(CilInstruction CilOpCodes.Stfld)
         | false, _ ->
-            let translatedGlobalType = translateValType glbl.Type.Type
-
             let field =
                 DefinitionHelpers.addFieldDefinition
                     moduleClassDefinition
@@ -78,16 +90,28 @@ let translateGlobalVariables
                         [| translatedGlobalType; mainClassSignature |]
                     )
 
-                    DefinitionHelpers.addMethodDefinition
-                        moduleClassDefinition
-                        signature
-                        MethodAttributes.Static
-                        ("__global_set@" + string index)
-                    |> ValueSome
+                    let definition =
+                        DefinitionHelpers.addMethodDefinition
+                            moduleClassDefinition
+                            signature
+                            MethodAttributes.Static
+                            ("__global_set@" + memoryIndexString)
+
+                    definition.CilMethodBody <- CilMethodBody definition
+                    let il = definition.CilMethodBody.Instructions
+                    il.Add(CilInstruction CilOpCodes.Ldarg_1)
+                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                    il.Add(CilInstruction(CilOpCodes.Stfld, field))
+                    il.Add(CilInstruction CilOpCodes.Ret)
+
+                    ValueSome definition
                 else
                     ValueNone
 
             members.Globals[index] <- GlobalMember.Defined(field, setter)
 
             let il = moduleInstanceConstructor.Instructions
-            failwith "TODO: Generate setter and other stuff for non exported global"
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction CilOpCodes.Dup)
+            il.Add(CilInstruction(CilOpCodes.Call, initialValueMethod))
+            il.Add(CilInstruction CilOpCodes.Stfld)
