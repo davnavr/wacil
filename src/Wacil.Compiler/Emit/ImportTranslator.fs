@@ -140,7 +140,7 @@ let translateModuleImports
                     CilHelpers.emitArgumentNullCheck syslib glbl.Name (CilInstructionLabel globalNotNull) il
                     il.Add globalNotNull
                     il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel store))
-                    il.Add(CilInstruction(CilOpCodes.Ldstr, "Imported global variable was expected to be mutable"))
+                    il.Add(CilInstruction(CilOpCodes.Ldstr, "Imported global variable was expected to be mutable."))
                     il.Add(CilInstruction(CilOpCodes.Ldstr, glbl.Name))
                     il.Add(CilInstruction(CilOpCodes.Newobj, syslib.ArgumentExceptionConstructor))
                     il.Add(CilInstruction CilOpCodes.Throw)

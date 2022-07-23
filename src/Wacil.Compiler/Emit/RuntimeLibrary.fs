@@ -124,6 +124,8 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                 "SetValue"
                 tyGlobalHelpers
 
+        helperSetValueTemplate.Signature.GenericParameterCount <- 1
+
         let lookup = System.Collections.Generic.Dictionary()
         let globalValueTypeParameter = GenericParameterSignature(GenericParameterType.Type, 0)
         fun ty ->
