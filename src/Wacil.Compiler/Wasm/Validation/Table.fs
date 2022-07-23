@@ -164,15 +164,17 @@ type ModuleExport =
 [<Sealed>]
 type ModuleExportLookup internal
     (
-        memories: Dictionary<MemIdx, string>,
         functions: Dictionary<FuncIdx, string>,
         tables: Dictionary<TableIdx, string>,
+        memories: Dictionary<MemIdx, string>,
+        globals: Dictionary<GlobalIdx, string>,
         lookup: Dictionary<string, ModuleExport>
     )
     =
-    member _.GetMemoryName(index, name: outref<_>) = memories.TryGetValue(index, &name)
     member _.GetFunctionName(index, name: outref<_>) = functions.TryGetValue(index, &name)
     member _.GetTableName(index, name: outref<_>) = tables.TryGetValue(index, &name)
+    member _.GetMemoryName(index, name: outref<_>) = memories.TryGetValue(index, &name)
+    member _.GetGlobalName(index, name: outref<_>) = globals.TryGetValue(index, &name)
     member _.Item with get name = lookup[name]
 
 [<RequireQualifiedAccess>]

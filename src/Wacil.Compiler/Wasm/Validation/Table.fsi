@@ -124,15 +124,16 @@ type ModuleExport =
 [<Sealed>]
 type ModuleExportLookup =
     internal new:
-        memories: Dictionary<Format.MemIdx, string> *
         functions: Dictionary<Format.FuncIdx, string> *
         tables: Dictionary<Format.TableIdx, string> *
+        memories: Dictionary<Format.MemIdx, string> *
+        globals: Dictionary<Format.GlobalIdx, string> *
         lookup: Dictionary<string, ModuleExport> -> ModuleExportLookup
 
     member GetMemoryName: index: Format.MemIdx * name: outref<string> -> bool
     member GetFunctionName: index: Format.FuncIdx * name: outref<string> -> bool
     member GetTableName: index: Format.TableIdx * name: outref<string> -> bool
-    //member GetGlobalName: index: Format.GlobalIdx * name: outref<string> -> bool
+    member GetGlobalName: index: Format.GlobalIdx * name: outref<string> -> bool
     /// <summary>Gets an export corresponding to the specified <paramref name="name"/>.</summary>
     member Item: name: string -> ModuleExport with get
 

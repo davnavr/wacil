@@ -885,9 +885,10 @@ module Validate =
 
         let originalModuleExports = ValueOption.defaultValue ImmutableArray.Empty contents.Exports
         let moduleExportLookup = Dictionary(originalModuleExports.Length, System.StringComparer.Ordinal)
-        let memoryExportNames = Dictionary() // TODO: Use arrays in export lookup
-        let functionExportNames = Dictionary()
+        let functionExportNames = Dictionary() // TODO: Use arrays in export lookup
         let tableExportNames = Dictionary()
+        let memoryExportNames = Dictionary()
+        let globalExportNames = Dictionary()
 
         let validated = ValidModule(
             custom = contents.CustomSections.ToImmutableArray(),
@@ -897,7 +898,7 @@ module Validate =
             tables = tables,
             memories = memories,
             globals = globals,
-            exports = ModuleExportLookup(memoryExportNames, functionExportNames, tableExportNames, moduleExportLookup),
+            exports = ModuleExportLookup(functionExportNames, tableExportNames, memoryExportNames, globalExportNames, moduleExportLookup),
             start = contents.Start,
             data = data
         )
@@ -918,8 +919,8 @@ module Validate =
                         memoryExportNames.Add(index, e.Name)
                         ModuleExport.Memory(index, validated.GetMemory index)
                     | Format.ExportDesc.Global index ->
-                        //ModuleExport.Global
-                        failwith "TODO: Export global"
+                        globalExportNames.Add(index, e.Name)
+                        ModuleExport.Global(index, validated.GetGlobal index)
 
         let instructionSequenceValidator = InstructionValidator validated
 
