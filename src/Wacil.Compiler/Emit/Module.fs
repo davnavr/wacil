@@ -178,8 +178,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     DataSegmentMember.translateDataSegments
         constantByteFactory
+        syslib
         mainClassDefinition
         input.Data members.DataSegments
+        webAssemblyExpressions
         mainInstanceConstructor.CilMethodBody
         mainStaticInitializer.CilMethodBody
 
