@@ -131,7 +131,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
             | true, existing -> existing
             | false, _ ->
                 let translatedValueType = wasmTypeTranslator ty
-                let instantiation = tyTable1.MakeGenericInstanceType [| translatedValueType |]
+                let instantiation = tyGlobal1.MakeGenericInstanceType [| translatedValueType |]
                 let specification = TypeSpecification instantiation
 
                 let instantiation' =
