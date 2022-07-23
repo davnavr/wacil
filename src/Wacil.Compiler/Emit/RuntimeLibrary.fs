@@ -8,13 +8,28 @@ open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
 
-/// <summary>Represents an instantiation of the <c>Wacil.Runtime.Table</c> class.</summary>
+/// <summary>Represents an instantiation of the <c>Wacil.Runtime.Table&lt;T&gt;</c> class for a particular element type.</summary>
 [<NoComparison; NoEquality>]
 type TableInstantiation =
     { Instantiation: GenericInstanceTypeSignature
       Specification: TypeSpecification
       Constructor: IMethodDefOrRef
       Get: IMethodDefOrRef }
+
+/// <summary>Represents an instantiation of the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
+type GlobalInstantiation =
+    { Instantiation: GenericInstanceTypeSignature
+      Specification: TypeSpecification
+      Constructor: IMethodDefOrRef
+      /// <summary>
+      /// The <c>get_Value</c> instance method used to retrieve the value of a global variable.
+      /// </summary>
+      ValueAccessor: IMethodDefOrRef
+      /// <summary>
+      /// The <c>Wacil.Runtime.GlobalHelpers.SetValue&lt;T&gt;</c> helper method used to set the value
+      /// of a global variable.
+      /// </summary>
+      SetValueHelper: MethodSpecification }
 
 [<NoComparison; NoEquality>]
 type MemoryClass =
@@ -33,8 +48,10 @@ type References =
     { UnreachableExceptionConstructor: IMethodDefOrRef
       Memory: MemoryClass
       Table: ITypeDefOrRef
-      /// <summary>Instantiates the <c>Wacil.Runtime.Table</c> class for a given element type.</summary>
-      InstantiatedTable: Wasm.Format.RefType -> TableInstantiation }
+      /// <summary>Instantiates the <c>Wacil.Runtime.Table&lt;T&gt;</c> class for a given element type.</summary>
+      InstantiatedTable: Wasm.Format.RefType -> TableInstantiation
+      /// <summary>Instantiates the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
+      InstantiatedGlobal: Wasm.Format.ValType -> GlobalInstantiation }
 
 let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrary.References) (mdle: ModuleDefinition) =
     let name = "Wacil.Runtime"
@@ -46,6 +63,8 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
     let tyUnreachableException = importRuntimeType "UnreachableException"
     let tyMemory = importRuntimeType "Memory"
     let tyTable1 = importRuntimeType "Table`1"
+    let tyGlobal1 = importRuntimeType "Global`1"
+    let tyGlobalHelpers = importRuntimeType "GlobalHelpers"
 
     let sigMemory = TypeDefOrRefSignature tyMemory
 
@@ -68,7 +87,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                 let specification = TypeSpecification instantiation
 
                 container.Value <-
-                    { Instantiation = instantiation
+                    { TableInstantiation.Instantiation = instantiation
                       Specification = specification
                       Constructor =
                         ImportHelpers.importConstructor
@@ -87,6 +106,49 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                     |> ValueSome
 
             container.Value.Value
+
+    let globalInstanceFactory =
+        let helperSetValueTemplate =
+            let helperValueTypeParameter = GenericParameterSignature(GenericParameterType.Method, 0)
+            let helperGlobalType = tyGlobal1.MakeGenericInstanceType [| helperValueTypeParameter :> TypeSignature |]
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Generic
+                mdle.CorLibTypeFactory.Void
+                [| helperValueTypeParameter; helperGlobalType |]
+                "SetValue"
+                tyGlobalHelpers
+
+        let lookup = System.Collections.Generic.Dictionary()
+        let globalValueTypeParameter = GenericParameterSignature(GenericParameterType.Type, 0)
+        fun ty ->
+            match lookup.TryGetValue ty with
+            | true, existing -> existing
+            | false, _ ->
+                let translatedValueType = wasmTypeTranslator ty
+                let instantiation = tyTable1.MakeGenericInstanceType [| translatedValueType |]
+                let specification = TypeSpecification instantiation
+
+                let instantiation' =
+                    { GlobalInstantiation.Instantiation = instantiation
+                      Specification = specification
+                      Constructor =
+                        ImportHelpers.importConstructor
+                            mdle
+                            [| globalValueTypeParameter; mdle.CorLibTypeFactory.Boolean |]
+                            specification
+                      ValueAccessor =
+                        ImportHelpers.importMethod
+                            mdle.DefaultImporter
+                            CallingConventionAttributes.HasThis
+                            mdle.CorLibTypeFactory.Void
+                            Seq.empty
+                            "get_Value"
+                            specification
+                      SetValueHelper = helperSetValueTemplate.MakeGenericInstanceMethod [| translatedValueType |] }
+
+                lookup[ty] <- instantiation'
+                instantiation'
 
     { UnreachableExceptionConstructor =
         ImportHelpers.importConstructor
@@ -142,4 +204,5 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                 "Write"
                 tyMemory
           }
-      InstantiatedTable = tableInstanceFactory }
+      InstantiatedTable = tableInstanceFactory
+      InstantiatedGlobal = globalInstanceFactory }
