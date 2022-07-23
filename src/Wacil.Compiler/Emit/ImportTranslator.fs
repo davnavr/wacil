@@ -145,7 +145,9 @@ let translateModuleImports
                     il.Add(CilInstruction(CilOpCodes.Newobj, syslib.ArgumentExceptionConstructor))
                     il.Add(CilInstruction CilOpCodes.Throw)
                     il.Add store
-            
+
+            constructorParameterTypes.Add globalFieldType.Instantiation
+            constructorParameterNames.Add name
             importMemberInitializers.Add globalImportInitializer
             members.Globals[int32 glbl.Index] <- GlobalMember.Imported(importInstanceField, field)
 
