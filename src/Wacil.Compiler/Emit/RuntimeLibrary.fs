@@ -147,7 +147,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                         ImportHelpers.importMethod
                             mdle.DefaultImporter
                             CallingConventionAttributes.HasThis
-                            globalValueTypeParameter
+                            mdle.CorLibTypeFactory.Boolean
                             Seq.empty
                             "get_Mutable"
                             specification
