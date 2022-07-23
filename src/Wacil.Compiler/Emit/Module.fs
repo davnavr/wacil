@@ -231,6 +231,17 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     Transpiler.translateWebAssembly translateValType rtlib members webAssemblyExpressions
 
+    // Generate call to the start function after all initialization has been done
+    match input.Start with
+    | ValueSome(FuncIdx start) ->
+        let il = mainInstanceConstructor.CilMethodBody.Instructions
+        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+
+        match members.Functions[start] with
+        | FunctionMember.Defined(invoke, _, _)
+        | FunctionMember.Imported(_, _, _, invoke, _) -> il.Add(CilInstruction(CilOpCodes.Call, invoke))
+    | ValueNone -> ()
+
     mainInstanceConstructor.CilMethodBody.Instructions.Add(CilInstruction CilOpCodes.Ret)
 
     mdle
