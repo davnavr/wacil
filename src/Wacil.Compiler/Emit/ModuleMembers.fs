@@ -13,8 +13,8 @@ type FunctionMember =
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type TableMember =
-    | Defined of table: FieldDefinition
-    | Imported of import: FieldDefinition * table: FieldDefinition
+    | Defined of RuntimeLibrary.TableInstantiation * table: FieldDefinition
+    | Imported of RuntimeLibrary.TableInstantiation * import: FieldDefinition * table: FieldDefinition
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MemoryMember =

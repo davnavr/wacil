@@ -189,15 +189,23 @@ let translateWebAssembly
 
                 // Parameters are already on the stack in the correct order
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                match table with
-                | TableMember.Defined table ->
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
-                | TableMember.Imported(import, table) ->
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, import))
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+                
+                let instantiation =
+                    match table with
+                    | TableMember.Defined(instantiation, table) ->
+                        il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+                        instantiation
+                    | TableMember.Imported(instantiation, import, table) ->
+                        il.Add(CilInstruction(CilOpCodes.Ldfld, import))
+                        il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+                        instantiation
 
-                failwith "TODO: Call Get on the table"
+                // At this point, the index of the function is on the top of the stack
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.Get))
 
+                // TODO: Store optimized version of delegate here
+
+                // At this point, the delegate is on the top of the stack, so invoke helper can be called
                 il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.InvokeHelper))
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
