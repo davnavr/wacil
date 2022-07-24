@@ -15,6 +15,7 @@ type TableInstantiation =
       Specification: TypeSpecification
       FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef
+      /// <summary>The <c>Get</c> method used to obtain the element at a specific index</summary>
       Get: IMethodDefOrRef }
 
 /// <summary>Represents an instantiation of the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
@@ -48,18 +49,23 @@ type MemoryClass =
       Grow: IMethodDefOrRef
       WriteArray: IMethodDefOrRef }
 
+[<NoComparison; NoEquality>]
+type TableHelpersClass =
+    { GetFunction: TypeSignature -> IMethodDescriptor }
+
 /// <summary>Represents the references to the runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type References =
     { UnreachableExceptionConstructor: IMethodDefOrRef
       Memory: MemoryClass
       Table: ITypeDefOrRef
+      TableHelpers: TableHelpersClass
       /// <summary>Instantiates the <c>Wacil.Runtime.Table&lt;T&gt;</c> class for a given element type.</summary>
       InstantiatedTable: Wasm.Format.RefType -> TableInstantiation
       /// <summary>Instantiates the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
       InstantiatedGlobal: Wasm.Format.ValType -> GlobalInstantiation }
 
-let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrary.References) (mdle: ModuleDefinition) =
+let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.References) (mdle: ModuleDefinition) =
     let name = "Wacil.Runtime"
     let assembly = AssemblyReference(name, runtimeLibraryVersion)
     mdle.AssemblyReferences.Add assembly
@@ -69,6 +75,8 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
     let tyUnreachableException = importRuntimeType "UnreachableException"
     let tyMemory = importRuntimeType "Memory"
     let tyTable1 = importRuntimeType "Table`1"
+    let tyTableHelpers = importRuntimeType "TableHelpers"
+    let specFunctionTable = tyTable1.MakeGenericInstanceType syslib.MulticastDelegate.Signature
     let tyGlobal1 = importRuntimeType "Global`1"
     let tyGlobalHelpers = importRuntimeType "GlobalHelpers"
 
@@ -223,4 +231,18 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                 tyMemory
           }
       InstantiatedTable = tableInstanceFactory
-      InstantiatedGlobal = globalInstanceFactory }
+      InstantiatedGlobal = globalInstanceFactory
+      TableHelpers =
+        let getFunctionTypeParameter = GenericParameterSignature(GenericParameterType.Method, 0)
+        let getFunctionTemplate =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Generic
+                getFunctionTypeParameter
+                [| mdle.CorLibTypeFactory.Int32; specFunctionTable |]
+                "GetFunction"
+                tyTableHelpers
+
+        getFunctionTemplate.Signature.GenericParameterCount <- 1
+
+        { GetFunction = fun tyDelegate -> getFunctionTemplate.MakeGenericInstanceMethod [| tyDelegate |] } }

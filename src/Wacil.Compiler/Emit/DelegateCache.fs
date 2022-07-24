@@ -36,7 +36,7 @@ type Instantiation =
       FieldSignature: FieldSignature
       Invoke: IMethodDefOrRef
       InvokeHelper: MethodDefinition
-      ConvertHelper: MethodDefinition }
+      TableGetHelper: IMethodDescriptor }
 
 /// <summary>
 /// Creates a factory for delegate types.
@@ -46,7 +46,7 @@ type Instantiation =
 /// <see cref="T:System.Func`1"/>. In some cases (e.g. when <see langword="ref"/> parameters are present), a new delegate type is
 /// generated.
 /// </remarks>
-let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) (syslib: SystemLibrary.References) =
+let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) (rtlib: RuntimeLibrary.References) =
     let systemDelegateCache =
         let lookup = Dictionary<struct(int * bool), Template>()
         let funcTypeName = sprintf "Func`%i"
@@ -137,48 +137,11 @@ let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) (syslib: Syste
                 il.Add(CilInstruction CilOpCodes.Ret)
                 definition
 
-            let staticConversionHelper =
-                let definition =
-                    let signature =
-                        MethodSignature(
-                            CallingConventionAttributes.Default,
-                            instantiation,
-                            [| syslib.MulticastDelegate.Signature |]
-                        )
-
-                    DefinitionHelpers.addMethodDefinition
-                        (mdle.GetModuleType())
-                        signature
-                        MethodAttributes.Static
-                        "Convert"
-
-                definition.CilMethodBody <- CilMethodBody definition
-                let il = definition.CilMethodBody.Instructions
-                let convertDelegateBranch = CilInstruction CilOpCodes.Pop
-                il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                il.Add(CilInstruction(CilOpCodes.Isinst, specification :> ITypeDefOrRef))
-                il.Add(CilInstruction(CilOpCodes.Brfalse_S, convertDelegateBranch))
-
-                // Delegate is already of the correct type
-                il.Add(CilInstruction CilOpCodes.Ret)
-
-                // A new delegate needs to be created
-                il.Add convertDelegateBranch
-                il.Add(CilInstruction(CilOpCodes.Ldtoken, specification :> ITypeDefOrRef))
-                il.Add(CilInstruction(CilOpCodes.Call, syslib.Type.GetTypeFromHandle))
-                il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                il.Add(CilInstruction(CilOpCodes.Call, syslib.Delegate.GetTarget))
-                il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                il.Add(CilInstruction(CilOpCodes.Call, syslib.Delegate.GetMethod))
-                il.Add(CilInstruction(CilOpCodes.Call, syslib.Delegate.CreateDelegate))
-                il.Add(CilInstruction CilOpCodes.Ret)
-                definition
-
             // TODO: Maybe cache the instantiations?
             { TypeSignature = instantiation
               FieldSignature = FieldSignature instantiation
               Invoke = invoke
               InvokeHelper = staticInvocationHelper
-              ConvertHelper = staticConversionHelper }
+              TableGetHelper = rtlib.TableHelpers.GetFunction instantiation }
         else
             failwith "TODO: generatedDelegateCache"

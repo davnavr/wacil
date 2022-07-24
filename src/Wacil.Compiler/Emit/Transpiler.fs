@@ -190,21 +190,15 @@ let translateWebAssembly
                 // Parameters are already on the stack in the correct order
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
                 
-                let instantiation =
-                    match table with
-                    | TableMember.Defined(instantiation, table) ->
-                        il.Add(CilInstruction(CilOpCodes.Ldfld, table))
-                        instantiation
-                    | TableMember.Imported(instantiation, import, table) ->
-                        il.Add(CilInstruction(CilOpCodes.Ldfld, import))
-                        il.Add(CilInstruction(CilOpCodes.Ldfld, table))
-                        instantiation
+                match table with
+                | TableMember.Defined table ->
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+                | TableMember.Imported(import, table) ->
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, import))
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
 
                 // At this point, the index of the function is on the top of the stack
-                il.Add(CilInstruction(CilOpCodes.Call, instantiation.Get))
-
-                failwith "TODO: Store optimized/converted version of delegate here"
-                // TODO: Need to store again, how will this work?
+                il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.TableGetHelper))
 
                 // At this point, the delegate is on the top of the stack, so invoke helper can be called
                 il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.InvokeHelper))

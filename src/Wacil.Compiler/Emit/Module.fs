@@ -115,7 +115,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
         MethodSignature(CallingConventionAttributes.HasThis, firstReturnType, parameterTypes.ToImmutableArray())
 
-    let delegateTypeCache = DelegateCache.create mdle mscorlib syslib
+    let delegateTypeCache = DelegateCache.create mdle mscorlib rtlib
 
     let webAssemblyExpressions = ResizeArray<Transpiler.Input>(input.Globals.Length + input.Functions.Length)
 
