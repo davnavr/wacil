@@ -90,6 +90,7 @@ let translateWebAssembly
 
     let inline (|TypeIndex|) (TypeIdx index) = wasm.Types[index]
     let inline (|GlobalIndex|) (GlobalIdx index) = members.Globals[index]
+    let inline (|ElementIndex|) (ElemIdx index) = members.ElementSegments[index]
 
     let emitPushMemory (MemIdx index) (il: CilInstructionCollection) =
         il.Add(CilInstruction CilOpCodes.Ldarg_0)
@@ -294,8 +295,21 @@ let translateWebAssembly
             | I32And -> il.Add(CilInstruction CilOpCodes.And)
             | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
-            | ElemDrop element ->
-                match members.ElementSegments[int32 element] with
+            | TableInit(ElementIndex element, table) ->
+                match element with
+                | ElementSegmentMember.Passive(field, _) ->
+                    // The count, element index, and table index are on top of the stack
+                    let tableTypeInstantiation = emitPushTable table il
+
+                    // Table is on top of the stack
+                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+
+                    il.Add(CilInstruction(CilOpCodes.Call, tableTypeInstantiation.Initialize))
+                | ElementSegmentMember.Active | ElementSegmentMember.Declarative ->
+                    invalidOp "Attempt to initialize with element segment that is not passive"
+            | ElemDrop(ElementIndex element) ->
+                match element with
                 | ElementSegmentMember.Passive(field, _) ->
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction CilOpCodes.Ldnull)
