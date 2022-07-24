@@ -77,3 +77,19 @@ module internal CilHelpers =
         il.Add(CilInstruction CilOpCodes.Dup) // Duplicate the object reference to store
         emitArgumentNullCheck syslib nullArgumentName (CilInstructionLabel store) il
         il.Add store
+
+    /// Emits code that creates a new array, with elements originating from the specified field, and leaving the array on the top
+    /// of the stack.
+    let emitArrayFromModuleData
+        (syslib: SystemLibrary.References)
+        count
+        (arrayElementType: ITypeDefOrRef)
+        (source: IFieldDescriptor)
+        (il: Instructions)
+        =
+        // TODO: Optimize for empty case, use System.Array.Empty<T>()
+        il.Add(CilInstruction.CreateLdcI4 count)
+        il.Add(CilInstruction(CilOpCodes.Newarr, arrayElementType))
+        il.Add(CilInstruction CilOpCodes.Dup)
+        il.Add(CilInstruction(CilOpCodes.Ldtoken, source))
+        il.Add(CilInstruction(CilOpCodes.Call, syslib.RuntimeHelpers.InitalizeArray))

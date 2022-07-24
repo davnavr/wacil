@@ -176,11 +176,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let constantByteFactory = ConstantBytes.createFieldFactory implementationDetailsClass syslib
 
+    // Translates the module data segments
+    // Note that this depends on the memories already being translated, as active data segments copy themselves to a memory
     DataSegmentMember.translateDataSegments
         constantByteFactory
         syslib
+        rtlib
         mainClassDefinition
-        input.Data members.DataSegments
+        input.Data
+        members
         webAssemblyExpressions
         mainInstanceConstructor.CilMethodBody
         mainStaticInitializer.CilMethodBody
