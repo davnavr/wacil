@@ -36,6 +36,18 @@ public sealed class Table<E> where E : class {
         table.elements[index] = item;
     }
 
+    /// <summary>Copies elements in to the <paramref name="table"/>.</summary>
+    /// <remarks>This method provides the implementation for the <c>table.init</c> WebAssembly instruction.</remarks>
+    public static void Initialize(int count, int elementStartIndex, int tableStartIndex, Table<E> table, E?[] elements) {
+        if (elementStartIndex + count > table.elements.Count || count > elements.Length) {
+            throw new System.ArgumentOutOfRangeException(nameof(count));
+        }
+
+        for (int index = 0; index < count; index++) {
+            table.elements[tableStartIndex + index] = elements[elementStartIndex + index];
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Grow(E? initial, int delta, Table<E> table) {
         if (delta >= 0) {

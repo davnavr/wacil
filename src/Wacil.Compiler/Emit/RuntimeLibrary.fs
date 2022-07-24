@@ -16,7 +16,8 @@ type TableInstantiation =
       FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef
       /// <summary>The <c>Get</c> method used to obtain the element at a specific index</summary>
-      Get: IMethodDefOrRef }
+      Get: IMethodDefOrRef
+      Initialize: IMethodDefOrRef }
 
 /// <summary>Represents an instantiation of the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
 type GlobalInstantiation =
@@ -117,7 +118,20 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                             [| mdle.CorLibTypeFactory.Int32; specTable1 |]
                             "Get"
                             specification
-                        }
+                      Initialize =
+                        ImportHelpers.importMethod
+                            mdle.DefaultImporter
+                            CallingConventionAttributes.Default
+                            mdle.CorLibTypeFactory.Void
+                            [|
+                                mdle.CorLibTypeFactory.Int32
+                                mdle.CorLibTypeFactory.Int32
+                                mdle.CorLibTypeFactory.Int32
+                                specTable1
+                                elementTypeParameter.MakeSzArrayType()
+                            |]
+                            "Initialize"
+                            specification }
                     |> ValueSome
 
             container.Value.Value
