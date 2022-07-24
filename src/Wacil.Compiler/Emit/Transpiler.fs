@@ -140,7 +140,7 @@ let translateWebAssembly
             | Unreachable ->
                 il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.UnreachableExceptionConstructor))
                 il.Add(CilInstruction CilOpCodes.Throw)
-            | Nop -> il.Add(CilInstruction CilOpCodes.Nop)
+            | Nop | DataDrop _ -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
             | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
             | Return ->
@@ -294,4 +294,12 @@ let translateWebAssembly
             | I32And -> il.Add(CilInstruction CilOpCodes.And)
             | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
+            | ElemDrop element ->
+                match members.ElementSegments[int32 element] with
+                | ElementSegmentMember.Passive(field, _) ->
+                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                    il.Add(CilInstruction CilOpCodes.Ldnull)
+                    il.Add(CilInstruction(CilOpCodes.Stfld, field))
+                | ElementSegmentMember.Active | ElementSegmentMember.Declarative ->
+                    il.Add(CilInstruction CilOpCodes.Nop)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
