@@ -63,6 +63,17 @@ let includeMethodInput (definition: AsmResolver.DotNet.MethodDefinition) express
     definition.CilMethodBody <- CilMethodBody definition
     inputs.Add { Expression = expression; Body = definition.CilMethodBody }
 
+let private emitComplexComparison comparison (il: CilInstructionCollection) =
+    let trueBranchLabel = CilInstructionLabel()
+    let endBranchLabel = CilInstructionLabel()
+    il.Add(CilInstruction(comparison, trueBranchLabel))
+    il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+    il.Add(CilInstruction(CilOpCodes.Br_S, trueBranchLabel))
+    trueBranchLabel.Instruction <- CilInstruction CilOpCodes.Ldc_I4_1
+    endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
+    il.Add trueBranchLabel.Instruction
+    il.Add endBranchLabel.Instruction
+
 let translateWebAssembly
     (translateValType: _ -> TypeSignature)
     (rtlib: RuntimeLibrary.References)
@@ -232,10 +243,10 @@ let translateWebAssembly
             | I32LtU | I64LtU -> il.Add(CilInstruction CilOpCodes.Clt_Un)
             | I32GtS | I64GtS -> il.Add(CilInstruction CilOpCodes.Cgt)
             | I32GtU | I64GtU -> il.Add(CilInstruction CilOpCodes.Cgt_Un)
-            //| I32LeS | I64LeS -> pushComplexComparison CilOpCodes.Ble_S
-            //| I32LeU | I64LeU -> pushComplexComparison CilOpCodes.Ble_Un_S
-            //| I32GeS | I64GeS -> pushComplexComparison CilOpCodes.Bge_S
-            //| I32GeU | I64GeU -> pushComplexComparison CilOpCodes.Bge_Un_S
+            | I32LeS | I64LeS -> emitComplexComparison CilOpCodes.Ble_S il
+            | I32LeU | I64LeU -> emitComplexComparison CilOpCodes.Ble_Un_S il
+            | I32GeS | I64GeS -> emitComplexComparison CilOpCodes.Bge_S il
+            | I32GeU | I64GeU -> emitComplexComparison CilOpCodes.Bge_Un_S il
             | I32Add | I64Add -> il.Add(CilInstruction CilOpCodes.Add)
             | I32Sub | I64Sub -> il.Add(CilInstruction CilOpCodes.Sub)
             | I32Mul | I64Mul -> il.Add(CilInstruction CilOpCodes.Mul)
