@@ -296,6 +296,16 @@ let translateWebAssembly
             | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
             | RefNull _ -> il.Add(CilInstruction CilOpCodes.Ldnull)
+            | RefFunc(FuncIdx func) ->
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                match members.Functions[int32 func] with
+                | FunctionMember.Imported(import, field, _, _, _) ->
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, import))
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+                | FunctionMember.Defined(method, _, _) ->
+                    let delegateTypeInstance = delegateTypeCache method.Signature
+                    il.Add(CilInstruction(CilOpCodes.Ldftn, method))
+                    il.Add(CilInstruction(CilOpCodes.Newobj, delegateTypeInstance.Constructor))
             | TableInit(ElementIndex element, table) ->
                 match element with
                 | ElementSegmentMember.Passive(field, _) ->

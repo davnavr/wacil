@@ -34,6 +34,7 @@ type private Template = { Type: ITypeDefOrRef; Invoke: IMethodDefOrRef }
 type Instantiation =
     { TypeSignature: TypeSignature
       FieldSignature: FieldSignature
+      Constructor: IMethodDefOrRef
       Invoke: IMethodDefOrRef
       InvokeHelper: MethodDefinition
       TableGetHelper: IMethodDescriptor }
@@ -47,6 +48,13 @@ type Instantiation =
 /// generated.
 /// </remarks>
 let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) (rtlib: RuntimeLibrary.References) =
+    let delegateConstructorSignature =
+        MethodSignature(
+            CallingConventionAttributes.HasThis,
+            mdle.CorLibTypeFactory.Void,
+            [| mdle.CorLibTypeFactory.Object; mdle.CorLibTypeFactory.IntPtr |]
+        )
+
     let systemDelegateCache =
         let lookup = Dictionary<struct(int * bool), Template>()
         let funcTypeName = sprintf "Func`%i"
@@ -140,6 +148,9 @@ let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) (rtlib: Runtim
             // TODO: Maybe cache the instantiations?
             { TypeSignature = instantiation
               FieldSignature = FieldSignature instantiation
+              Constructor =
+                specification.CreateMemberReference(".ctor", delegateConstructorSignature)
+                |> mdle.DefaultImporter.ImportMethodOrNull
               Invoke = invoke
               InvokeHelper = staticInvocationHelper
               TableGetHelper = rtlib.TableHelpers.GetFunction instantiation }
