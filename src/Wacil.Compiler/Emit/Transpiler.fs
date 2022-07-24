@@ -308,13 +308,13 @@ let translateWebAssembly
                     il.Add(CilInstruction(CilOpCodes.Newobj, delegateTypeInstance.Constructor))
             | TableInit(ElementIndex element, table) ->
                 match element with
-                | ElementSegmentMember.Passive(field, _) ->
+                | ElementSegmentMember.Passive(_, getter) ->
                     // The count, element index, and table index are on top of the stack
                     let tableTypeInstantiation = emitPushTable table il
 
                     // Table is on top of the stack
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+                    il.Add(CilInstruction(CilOpCodes.Call, getter))
 
                     il.Add(CilInstruction(CilOpCodes.Call, tableTypeInstantiation.Initialize))
                 | ElementSegmentMember.Active | ElementSegmentMember.Declarative ->
