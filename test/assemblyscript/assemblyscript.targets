@@ -11,6 +11,7 @@
     <ShrinkLevel Condition="'$(ShrinkLevel)'==''">2</ShrinkLevel>
     <Runtime Condition="'$(Runtime)'==''">incremental</Runtime>
     <AscCompilerFlags>-o &quot;$(ModuleFile)&quot; --runtime &quot;$(Runtime)&quot; --optimizeLevel &quot;$(OptimizeLevel)&quot; --shrinkLevel &quot;$(ShrinkLevel)&quot;</AscCompilerFlags>
+    <AscCompilerFlags Condition="'$(ExportTable)'=='true'">$(AscCompilerFlags) --exportTable</AscCompilerFlags>
   </PropertyGroup>
 
   <Target Name="CoreCompile" AfterTargets="Clean" Inputs="@(Compile)" Outputs="$(ModuleFile)">
