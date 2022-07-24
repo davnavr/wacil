@@ -138,6 +138,11 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
 
     member this.ReadValType() = this.ReadByte() |> getValType
 
+    member this.ReadRefType() =
+        match this.ReadValType() with
+        | ValType.Ref r -> r
+        | bad -> failwithf "%A is not a valid reference type" bad
+
     member this.ReadBlockType() =
         match this.ReadSignedIntegerOrNegativeZero() with
         | ValueNone -> BlockType.Void
@@ -175,10 +180,7 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         | bad -> failwithf "bad limit kind 0x%02X" bad
 
     member this.ReadTableType() =
-        { TableType.ElementType =
-            match this.ReadValType() with
-            | ValType.Ref r -> r
-            | bad -> failwithf "%A is not a valid reference type" bad
+        { TableType.ElementType = this.ReadRefType()
           TableType.Limits = this.ReadLimits() }
 
     member this.ReadGlobalType() =
@@ -483,6 +485,18 @@ let parseCodeEntry (reader: Reader) (instructions: byref<ArrayBuilder<_>>) =
 
     code
 
+let parseExpressionVec (reader: Reader) (instructions: byref<_>) =
+    let mutable expressions = Array.zeroCreate<Expression>(reader.ReadUnsignedInteger() |> Checked.int32)
+    for i = 0 to expressions.Length - 1 do
+        expressions[i] <- parseExpression reader &instructions
+    Unsafe.Array.toImmutable expressions
+
+let parseFunctionIndicesAsExpressions (reader: Reader) =
+    let mutable elements = Array.zeroCreate<Expression>(reader.ReadUnsignedInteger() |> Checked.int32)
+    for i = 0 to elements.Length - 1 do
+        elements[i] <- ImmutableArray.Create(RefFunc(reader.ReadIndex()), End)
+    Unsafe.Array.toImmutable elements
+
 let parseFromStream (stream: Stream) =
     if isNull stream then nullArg (nameof stream)
     try
@@ -577,6 +591,62 @@ let parseFromStream (stream: Stream) =
                             | _ -> failwithf "0x%02X is not a valid export kind" kind }
                 sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
             | SectionId.Start -> sections.Add(Section.Start(reader.ReadIndex()))
+            | SectionId.Element ->
+                let elements = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                for i = 0 to elements.Length - 1 do
+                    elements[i] <-
+                        match reader.ReadUnsignedInteger() |> Checked.uint32 with
+                        | 0u ->
+                            let offset = parseExpression reader &instructionSequenceBuilder
+                            let elements = parseFunctionIndicesAsExpressions reader
+                            { Element.Type = FuncRef
+                              Element.Expressions = elements
+                              Element.Mode = ElementMode.Active(TableIdx 0, offset) }
+                        | 1u ->
+                            match reader.ReadByte() with
+                            | 0uy ->
+                                { Element.Type = FuncRef
+                                  Element.Expressions = parseFunctionIndicesAsExpressions reader
+                                  Element.Mode = ElementMode.Passive }
+                            | bad -> failwithf "0x%02X is not a valid element kind" bad
+                        | 2u ->
+                            let table = reader.ReadIndex()
+                            let offset = parseExpression reader &instructionSequenceBuilder
+                            match reader.ReadByte() with
+                            | 0uy ->
+                                { Element.Type = FuncRef
+                                  Element.Expressions = parseFunctionIndicesAsExpressions reader
+                                  Element.Mode = ElementMode.Active(table, offset) }
+                            | bad -> failwithf "0x%02X is not a valid element kind" bad
+                        | 3u ->
+                            match reader.ReadByte() with
+                            | 0uy ->
+                                { Element.Type = FuncRef
+                                  Element.Expressions = parseFunctionIndicesAsExpressions reader
+                                  Element.Mode = ElementMode.Declarative }
+                            | bad -> failwithf "0x%02X is not a valid element kind" bad
+                        | 4u ->
+                            let offset = parseExpression reader &instructionSequenceBuilder
+                            { Element.Type = FuncRef
+                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
+                              Element.Mode = ElementMode.Active(TableIdx 0, offset) }
+                        | 5u ->
+                            { Element.Type = reader.ReadRefType()
+                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
+                              Element.Mode = ElementMode.Passive }
+                        | 6u ->
+                            let table = reader.ReadIndex()
+                            let offset = parseExpression reader &instructionSequenceBuilder
+                            let etype = reader.ReadRefType()
+                            { Element.Type = etype
+                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
+                              Element.Mode = ElementMode.Active(table, offset) }
+                        | 7u ->
+                            { Element.Type = reader.ReadRefType()
+                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
+                              Element.Mode = ElementMode.Declarative }
+                        | bad -> failwithf "%i is not a valid element flags combination" bad
+                sections.Add(Section.Element(Unsafe.Array.toImmutable elements))
             | SectionId.Code ->
                 let code = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                 for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionSequenceBuilder
