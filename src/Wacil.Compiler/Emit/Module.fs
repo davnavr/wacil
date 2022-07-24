@@ -195,7 +195,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         mainInstanceConstructor.CilMethodBody
         mainStaticInitializer.CilMethodBody
 
-    Transpiler.translateWebAssembly translateValType rtlib members webAssemblyExpressions
+    Transpiler.translateWebAssembly
+        translateValType
+        translateFuncType
+        delegateTypeCache
+        rtlib
+        input
+        members
+        webAssemblyExpressions
 
     // Generate call to the start function after all initialization has been done
     match input.Start with

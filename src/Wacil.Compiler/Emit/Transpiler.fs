@@ -9,6 +9,7 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm.Format
 open Wacil.Compiler.Wasm.Validation.Table
 
+open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
 
 open AsmResolver.PE.DotNet.Cil
@@ -77,13 +78,18 @@ let private emitComplexComparison comparison (il: CilInstructionCollection) =
     il.Add endBranchLabel.Instruction
 
 let translateWebAssembly
-    (translateValType: _ -> TypeSignature)
+    (translateValType: ValType -> TypeSignature)
+    (translateFuncType: FuncType -> MethodSignature)
+    (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
     (rtlib: RuntimeLibrary.References)
+    (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
     (members: ModuleMembers)
     (inputs: ResizeArray<Input>)
     =
     let mutable branchTargetStack = BranchTargetStack(ArrayBuilder.Create())
 
+    let inline (|TypeIndex|) (TypeIdx index) = wasm.Types[index]
+    let inline (|TableIndex|) (TableIdx index) = members.Tables[index]
     let inline (|GlobalIndex|) (GlobalIdx index) = members.Globals[index]
 
     let emitPushMemory (MemIdx index) (il: CilInstructionCollection) =
@@ -177,7 +183,22 @@ let translateWebAssembly
                     // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction(CilOpCodes.Call, indirect))
-            //| CallIndirect
+            | CallIndirect(TypeIndex originalFunctionType, TableIndex table) ->
+                // TODO: If no arguments, can optimize and call Invoke directly instaed of using the InvokeHelper
+                let functionTypeInstantiation = delegateTypeCache(translateFuncType originalFunctionType)
+
+                // Parameters are already on the stack in the correct order
+                il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                match table with
+                | TableMember.Defined table ->
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+                | TableMember.Imported(import, table) ->
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, import))
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+
+                failwith "TODO: Call Get on the table"
+
+                il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.InvokeHelper))
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with

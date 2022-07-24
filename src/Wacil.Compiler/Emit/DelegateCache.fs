@@ -6,6 +6,11 @@ open System.Collections.Generic
 
 open Wacil.Compiler.Helpers.Collections
 
+open AsmResolver.PE.DotNet.Metadata.Tables.Rows;
+
+open AsmResolver.DotNet.Code.Cil
+open AsmResolver.PE.DotNet.Cil
+
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
@@ -29,7 +34,8 @@ type private Template = { Type: ITypeDefOrRef; Invoke: IMethodDefOrRef }
 type Instantiation =
     { TypeSignature: TypeSignature
       FieldSignature: FieldSignature
-      Invoke: IMethodDefOrRef }
+      Invoke: IMethodDefOrRef
+      InvokeHelper: MethodDefinition }
 
 /// <summary>
 /// Creates a factory for delegate types.
@@ -90,23 +96,50 @@ let create (mdle: ModuleDefinition) (mscorlib: AssemblyReference) =
             
         if signatureHasPredefinedDelegate signature then
             let template = systemDelegateCache signature
+            let originalParameterCount = signature.ParameterTypes.Count
             
             let instantiation =
-                let mutable genericTemplateArguments = ArrayBuilder.Create(signature.ParameterTypes.Count + 1)
+                let mutable genericTemplateArguments = ArrayBuilder.Create(originalParameterCount + 1)
                 for ty in signature.ParameterTypes do genericTemplateArguments.Add ty
                 if signature.ReturnsValue then genericTemplateArguments.Add signature.ReturnType
                 template.Type.MakeGenericInstanceType(genericTemplateArguments.ToArray())
 
             let specification = TypeSpecification instantiation
 
-            // TODO: Maybe cache the instantiations?
-            { TypeSignature = instantiation
-              FieldSignature = FieldSignature instantiation
-              Invoke =
+            let invoke =
                 specification.CreateMemberReference(
                     template.Invoke.Name,
                     template.Invoke.Signature
                 )
-                |> mdle.DefaultImporter.ImportMethodOrNull }
+                |> mdle.DefaultImporter.ImportMethodOrNull
+
+            let staticInvocationHelper =
+                let invokeHelperSignature =
+                    let mutable ptypes = ArrayBuilder.Create(originalParameterCount + 1)
+                    for ty in signature.ParameterTypes do ptypes.Add ty
+                    ptypes.Add instantiation
+                    MethodSignature(CallingConventionAttributes.Default, signature.ReturnType, ptypes.ToArray())
+
+                let definition =
+                    DefinitionHelpers.addMethodDefinition
+                        (mdle.GetModuleType())
+                        invokeHelperSignature
+                        MethodAttributes.Static
+                        "InvocationHelper"
+
+                definition.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
+                definition.CilMethodBody <- CilMethodBody definition
+                let il = definition.CilMethodBody.Instructions
+                il.Add(CilInstruction.CreateLdarg(uint16 originalParameterCount))
+                for i = 0 to originalParameterCount - 1 do il.Add(CilInstruction.CreateLdarg(uint16 i))
+                il.Add(CilInstruction(CilOpCodes.Callvirt, invoke))
+                il.Add(CilInstruction CilOpCodes.Ret)
+                definition
+
+            // TODO: Maybe cache the instantiations?
+            { TypeSignature = instantiation
+              FieldSignature = FieldSignature instantiation
+              Invoke = invoke
+              InvokeHelper = staticInvocationHelper }
         else
             failwith "TODO: generatedDelegateCache"
