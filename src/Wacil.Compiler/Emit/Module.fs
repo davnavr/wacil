@@ -151,7 +151,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         webAssemblyExpressions
         mainInstanceConstructor.CilMethodBody
 
-    FunctionTranslator.translateGlobalVariables
+    FunctionTranslator.translateFunctionDefinitions
         mangleMemberName
         translateFuncType
         rtlib

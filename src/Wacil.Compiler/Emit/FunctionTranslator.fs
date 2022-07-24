@@ -13,7 +13,7 @@ open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
 open AsmResolver.DotNet.Code.Cil
 
-let translateGlobalVariables
+let translateFunctionDefinitions
     mangleMemberName
     (translateFuncType: _ -> MethodSignature)
     (rtlib: RuntimeLibrary.References)
