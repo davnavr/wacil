@@ -41,6 +41,7 @@ type ValidModule
         globals: ImmutableArray<Global>,
         exports: ModuleExportLookup,
         start: Format.FuncIdx voption,
+        elements: ImmutableArray<ValidElement>,
         data: ImmutableArray<ValidData>
     )
     =
@@ -65,6 +66,7 @@ type ValidModule
     member _.Globals = globals
     member _.Exports = exports
     member _.Start = start
+    member _.Elements = elements
     member _.Data = data
 
     member _.GetFunction(index: Format.FuncIdx) = anyFunctionLookup index
@@ -204,7 +206,7 @@ module Validate =
           mutable Globals: ImmutableArray<Format.Global> voption
           mutable Exports: ImmutableArray<Format.Export> voption
           mutable Start: Format.FuncIdx voption
-          mutable Element: ImmutableArray<Format.Element> voption 
+          mutable Elements: ImmutableArray<Format.Element> voption 
           mutable Code: ImmutableArray<Format.Code> voption
           mutable DataCount: uint32 voption
           mutable Data: ImmutableArray<Format.Data> voption }
@@ -606,7 +608,7 @@ module Validate =
               Globals = ValueNone
               Exports = ValueNone
               Start = ValueNone
-              Element = ValueNone
+              Elements = ValueNone
               DataCount = ValueNone
               Code = ValueNone
               Data = ValueNone }
@@ -668,10 +670,10 @@ module Validate =
                         contents.Start <- ValueSome start
                 | Format.Section.Element elements ->
                     if order > SectionOrder.Element then raise(InvalidSectionOrderException(Format.SectionId.Element, order.Id))
-                    else if contents.Element.IsSome then raise(DuplicateSectionException Format.SectionId.Element)
+                    else if contents.Elements.IsSome then raise(DuplicateSectionException Format.SectionId.Element)
                     else
                         order <- SectionOrder.DataCount
-                        contents.Element <- ValueSome elements
+                        contents.Elements <- ValueSome elements
                 | Format.Section.DataCount count ->
                     if order > SectionOrder.DataCount then
                         raise(InvalidSectionOrderException(Format.SectionId.DataCount, order.Id))
@@ -883,6 +885,44 @@ module Validate =
                                   ) } }
             Unsafe.Array.toImmutable segments
 
+        let elements =
+            let elements = itemsOrEmpty contents.Elements
+            let mutable segments = Array.zeroCreate elements.Length
+            let mutable elementInitializationExpressions = ArrayBuilder.Create()
+            for i = 0 to elements.Length - 1 do
+                let elementSegment = elements[i]
+
+                elementInitializationExpressions.Clear()
+                for init in elementSegment.Expressions do
+                    elementInitializationExpressions.Add(ValidExpression(
+                        init,
+                        ImmutableArray.Empty,
+                        ImmutableArray.Empty,
+                        Format.ValType.singleOfRefType elementSegment.Type
+                    ))
+
+                segments[i] <-
+                    { ValidElement.Type = elementSegment.Type
+                      ValidElement.Elements = elementInitializationExpressions.ToImmutableArray()
+                      ValidElement.Mode =
+                        match elementSegment.Mode with
+                        | Format.ElementMode.Declarative -> ValidElementMode.Declarative
+                        | Format.ElementMode.Passive -> ValidElementMode.Passive
+                        | Format.ElementMode.Active(table, offset) ->
+                            if int32 table >= imports.Imports.Tables.Length + tables.Length then
+                                failwithf "TODO: Error for table %i does not exist" (int32 table)
+                            
+                            let segmentOffsetExpression =
+                                ValidExpression(
+                                    offset,
+                                    ImmutableArray.Empty,
+                                    ImmutableArray.Empty,
+                                    Format.ValType.singleI32
+                                )
+
+                            ValidElementMode.Active(table, segmentOffsetExpression) }
+            Unsafe.Array.toImmutable segments
+
         let originalModuleExports = ValueOption.defaultValue ImmutableArray.Empty contents.Exports
         let moduleExportLookup = Dictionary(originalModuleExports.Length, System.StringComparer.Ordinal)
         let functionExportNames = Dictionary() // TODO: Use arrays in export lookup
@@ -900,6 +940,7 @@ module Validate =
             globals = globals,
             exports = ModuleExportLookup(functionExportNames, tableExportNames, memoryExportNames, globalExportNames, moduleExportLookup),
             start = contents.Start,
+            elements = elements,
             data = data
         )
 
@@ -933,5 +974,12 @@ module Validate =
             match segment.Mode with
             | ValueNone -> ()
             | ValueSome activeDataSegment -> instructionSequenceValidator.Validate activeDataSegment.Offset
+
+        for segment in elements do
+            for expr in segment.Elements do instructionSequenceValidator.Validate expr
+
+            match segment.Mode with
+            | ValidElementMode.Passive | ValidElementMode.Declarative -> ()
+            | ValidElementMode.Active(_, offset) -> instructionSequenceValidator.Validate offset
 
         validated

@@ -186,3 +186,10 @@ type ValidActiveData = { Memory: MemIdx; Offset: ValidExpression }
 
 [<RequireQualifiedAccess>]
 type ValidData = { Bytes: ImmutableArray<byte>; Mode: ValidActiveData voption }
+
+type ValidElementMode =
+    | Active of TableIdx * offset: ValidExpression
+    | Passive
+    | Declarative
+
+type ValidElement = { Type: RefType; Elements: ImmutableArray<ValidExpression>; Mode: ValidElementMode }

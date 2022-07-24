@@ -36,9 +36,6 @@ type ValType = | Num of n: NumType | Vec of v: VecType | Ref of r: RefType
 
 [<RequireQualifiedAccess>]
 module ValType =
-    val singleI32 : ImmutableArray<ValType>
-    val singleI64 : ImmutableArray<ValType>
-
     val i32 : ValType
     val i64 : ValType
     val f32 : ValType
@@ -50,6 +47,13 @@ module ValType =
     val ofNumType : NumType -> ValType
     val ofVecType : VecType -> ValType
     val ofRefType : RefType -> ValType
+
+    val singleI32 : ImmutableArray<ValType>
+    val singleI64 : ImmutableArray<ValType>
+    val singleFuncRef : ImmutableArray<ValType>
+    val singleExternRef : ImmutableArray<ValType>
+
+    val internal singleOfRefType : RefType -> ImmutableArray<ValType>
 
 type ResultType = ImmutableArray<ValType>
 

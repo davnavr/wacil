@@ -15,6 +15,7 @@ type ValidModule =
     member Globals: ImmutableArray<Table.Global>
     member Exports: Table.ModuleExportLookup
     member Start: Format.FuncIdx voption
+    member Elements: ImmutableArray<Table.ValidElement>
     member Data: ImmutableArray<Table.ValidData>
     
     member GetFunction: index: Format.FuncIdx -> Table.AnyFunction

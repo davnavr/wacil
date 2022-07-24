@@ -148,3 +148,15 @@ type ValidData =
     { /// The content of the data segment.
       Bytes: ImmutableArray<byte>
       Mode: ValidActiveData voption }
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type ValidElementMode =
+    | Active of Format.TableIdx * offset: ValidExpression
+    | Passive
+    | Declarative
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type ValidElement =
+    { Type: Format.RefType
+      Elements: ImmutableArray<ValidExpression>
+      Mode: ValidElementMode }

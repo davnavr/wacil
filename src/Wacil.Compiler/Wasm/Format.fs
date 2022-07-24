@@ -42,6 +42,8 @@ module ValType =
 
     let singleI32 = ImmutableArray.Create i32 
     let singleI64 = ImmutableArray.Create i64
+    let singleFuncRef = ImmutableArray.Create funcref
+    let singleExternRef = ImmutableArray.Create externref
 
     let ofNumType n =
         match n with
@@ -56,6 +58,11 @@ module ValType =
         | ExternRef -> externref
 
     let ofVecType v = ValType.Vec v
+
+    let singleOfRefType r =
+        match r with
+        | FuncRef -> singleFuncRef
+        | ExternRef -> singleExternRef
 
 type ResultType = ImmutableArray<ValType>
 
