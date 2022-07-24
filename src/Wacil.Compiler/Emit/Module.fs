@@ -86,7 +86,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     let members =
         { Functions = Array.zeroCreate(input.Imports.Imports.Functions.Length + input.Functions.Length)
-          //Tables =
+          Tables = Array.zeroCreate(input.Imports.Imports.Tables.Length + input.Tables.Length)
           Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length)
           Globals = Array.zeroCreate(input.Imports.Imports.Globals.Length + input.Globals.Length)
           DataSegments = Array.zeroCreate input.Data.Length }

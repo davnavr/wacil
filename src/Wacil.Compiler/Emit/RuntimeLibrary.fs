@@ -13,6 +13,7 @@ open AsmResolver.DotNet.Signatures.Types
 type TableInstantiation =
     { Instantiation: GenericInstanceTypeSignature
       Specification: TypeSpecification
+      FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef
       Get: IMethodDefOrRef }
 
@@ -94,6 +95,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (mscorlib: SystemLibrar
                 container.Value <-
                     { TableInstantiation.Instantiation = instantiation
                       Specification = specification
+                      FieldSignature = FieldSignature instantiation
                       Constructor =
                         ImportHelpers.importConstructor
                             mdle

@@ -12,6 +12,11 @@ type FunctionMember =
         Wasm.Format.FuncType
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
+type TableMember =
+    | Defined of table: FieldDefinition
+    | Imported of import: FieldDefinition * table: FieldDefinition
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MemoryMember =
     | Defined of memory: FieldDefinition
     | Imported of import: FieldDefinition * memory: FieldDefinition
@@ -34,6 +39,7 @@ type DataSegmentMember =
 [<NoComparison; NoEquality>]
 type ModuleMembers =
     { Functions: FunctionMember[]
+      Tables: TableMember[]
       Memories: MemoryMember[]
       Globals: GlobalMember[]
       DataSegments: DataSegmentMember[] }

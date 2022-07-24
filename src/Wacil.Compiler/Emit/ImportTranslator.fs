@@ -135,7 +135,25 @@ let translateModuleImports
                 func.Type
             )
 
-        // TODO: table imports
+        for table in imports.Tables do
+            let name = mangleMemberName table.Name
+            let instantiatedTableType = rtlib.InstantiatedTable table.Type.ElementType
+
+            let field =
+                DefinitionHelpers.addFieldDefinition
+                    importClassDefinition
+                    instantiatedTableType.FieldSignature
+                    FieldAttributes.InitOnly
+                    name
+
+            constructorParameterTypes.Add instantiatedTableType.Instantiation
+            constructorParameterNames.Add name
+
+            let index = importParameterIndex.Next()
+            // TODO: Need to check that table limits are correct
+            importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index table.Name field)
+
+            members.Tables[int32 table.Index] <- TableMember.Imported(importInstanceField, field)
 
         for memory in imports.Memories do
             let name = mangleMemberName memory.Name
@@ -151,6 +169,7 @@ let translateModuleImports
             constructorParameterNames.Add name
 
             let index = importParameterIndex.Next()
+            // TODO: Need to check that memory limits are correct
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index memory.Name field)
 
             members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field)
