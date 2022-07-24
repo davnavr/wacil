@@ -36,10 +36,17 @@ type DataSegmentMember =
     | Passive of data: FieldDefinition
     | Active
 
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type ElementSegmentMember =
+    | Passive of elements: FieldDefinition * getter: MethodDefinition
+    | Active
+    | Declarative
+
 [<NoComparison; NoEquality>]
 type ModuleMembers =
     { Functions: FunctionMember[]
       Tables: TableMember[]
       Memories: MemoryMember[]
       Globals: GlobalMember[]
+      ElementSegments: ElementSegmentMember[]
       DataSegments: DataSegmentMember[] }

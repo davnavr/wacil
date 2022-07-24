@@ -89,6 +89,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
           Tables = Array.zeroCreate(input.Imports.Imports.Tables.Length + input.Tables.Length)
           Memories = Array.zeroCreate(input.Imports.Imports.Memories.Length + input.Memories.Length)
           Globals = Array.zeroCreate(input.Imports.Imports.Globals.Length + input.Globals.Length)
+          ElementSegments = Array.zeroCreate input.Elements.Length
           DataSegments = Array.zeroCreate input.Data.Length }
 
     let tupleTypeCache = TupleCache.create mdle mscorlib translateValType
@@ -178,7 +179,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     mainStaticInitializer.CilMethodBody <- CilMethodBody mainStaticInitializer
 
-    // TODO: Emit calls in the constructor to the element segment things
+    ElementSegmentMember.translateElementSegments
+        translateValType
+        rtlib
+        mainClassDefinition
+        input.Elements
+        members
+        webAssemblyExpressions
+        mainInstanceConstructor.CilMethodBody
 
     let constantByteFactory = ConstantBytes.createFieldFactory implementationDetailsClass syslib
 

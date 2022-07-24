@@ -61,6 +61,8 @@ type internal ArrayBuilder<'a> =
     /// Returns a mutable reference to the last element of the array.
     member this.LastRef() = &this.buffer[this.length - 1]
 
+    member this.Item with get index = this.buffer[index]
+
     member this.ItemFromEnd index = this.buffer[this.length - index - 1]
 
     member this.ResizeWithDefault newLength =
