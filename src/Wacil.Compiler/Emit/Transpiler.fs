@@ -53,6 +53,8 @@ type private BranchTargetStack =
 
     member this.Last() = this.targets.ItemFromEnd 0
 
+    member this.Depth = this.targets.Length
+
     member this.GetLabel (LabelIdx target): CilInstructionLabel =
         match this.targets.ItemFromEnd target with
         | BranchTarget.Block label
@@ -117,7 +119,8 @@ let translateWebAssembly
                 Loc(Checked.uint16(index - expression.ParameterTypes.Length))
 
         for i = 0 to wasm.Length - 1 do
-            match wasm[i].Instruction with
+            let instruction = wasm[i]
+            match instruction.Instruction with
             | Unreachable ->
                 il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.UnreachableExceptionConstructor))
                 il.Add(CilInstruction CilOpCodes.Throw)
@@ -146,6 +149,11 @@ let translateWebAssembly
                 | BranchTarget.Block label ->
                     label.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add label.Instruction
+
+                    // TODO: Reuse code for handler of Ret
+                    // TODO: Handle implicit multi-return
+                    if branchTargetStack.Depth = 0 && not instruction.Unreachable then
+                        il.Add(CilInstruction CilOpCodes.Ret)
                 | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
                     endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add endBranchLabel.Instruction
@@ -256,9 +264,3 @@ let translateWebAssembly
             | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
-
-        // TODO: TODO TODO: Move implicit return code to the handler for End, End handler could just reuse code for Ret
-        // TODO: Properly handle implicit returns (maybe assume all items are there)
-        // TODO: Handle implicit multi-return
-        if wasm.Length >= 2 && true (*there is a return somewhere back there*) then
-            il.Add(CilInstruction CilOpCodes.Ret)
