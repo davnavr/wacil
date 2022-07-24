@@ -295,6 +295,7 @@ let translateWebAssembly
             | I32And -> il.Add(CilInstruction CilOpCodes.And)
             | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
+            | RefNull _ -> il.Add(CilInstruction CilOpCodes.Ldnull)
             | TableInit(ElementIndex element, table) ->
                 match element with
                 | ElementSegmentMember.Passive(field, _) ->
