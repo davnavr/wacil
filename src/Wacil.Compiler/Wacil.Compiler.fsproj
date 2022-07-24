@@ -40,6 +40,7 @@
     <Compile Include="Emit\ImportTranslator.fs" />
     <Compile Include="Emit\Transpiler.fs" />
     <Compile Include="Emit\MemoryTranslator.fs" />
+    <Compile Include="Emit\TableMember.fs" />
     <Compile Include="Emit\GlobalTranslator.fs" />
     <Compile Include="Emit\FunctionTranslator.fs" />
     <Compile Include="Emit\DataSegmentMember.fs" />

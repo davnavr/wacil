@@ -140,6 +140,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         members
         mainInstanceConstructor.CilMethodBody
 
+    TableMember.translateModuleTables
+        mangleMemberName
+        rtlib
+        mainClassDefinition
+        input
+        members
+        mainInstanceConstructor.CilMethodBody
+
     GlobalTranslator.translateGlobalVariables
         mangleMemberName
         translateValType
@@ -160,8 +168,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         input
         members
         webAssemblyExpressions
-
-    // TODO: Translate tables
 
     let mainStaticInitializer =
         DefinitionHelpers.addMethodDefinition
