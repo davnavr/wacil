@@ -47,7 +47,7 @@ let translateElementSegments
                 definition.CilMethodBody <- CilMethodBody definition
                 let il = definition.CilMethodBody.Instructions
                 il.Add(CilInstruction.CreateLdcI4 element.Elements.Length)
-                il.Add(CilInstruction(CilOpCodes.Newarr, translatedElementType :> ITypeDescriptor))
+                il.Add(CilInstruction(CilOpCodes.Newarr, TypeSpecification translatedElementType))
 
                 for elementExpressionIndex in 0..element.Elements.Length - 1 do
                     let initializer =
@@ -94,7 +94,7 @@ let translateElementSegments
                     let returnElementSegment = CilInstruction CilOpCodes.Ret
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction(CilOpCodes.Ldfld, elementSegmentField))
-                    il.Add(CilInstruction(CilOpCodes.Brtrue_S, returnElementSegment))
+                    il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel returnElementSegment))
                     
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction CilOpCodes.Dup)
