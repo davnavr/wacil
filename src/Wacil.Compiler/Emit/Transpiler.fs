@@ -203,7 +203,8 @@ let translateWebAssembly
                 // At this point, the index of the function is on the top of the stack
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.Get))
 
-                // TODO: Store optimized version of delegate here
+                failwith "TODO: Store optimized/converted version of delegate here"
+                // TODO: Need to store again, how will this work?
 
                 // At this point, the delegate is on the top of the stack, so invoke helper can be called
                 il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.InvokeHelper))
