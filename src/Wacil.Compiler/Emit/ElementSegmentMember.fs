@@ -91,7 +91,7 @@ let translateElementSegments
 
                     definition.CilMethodBody <- CilMethodBody definition
                     let il = definition.CilMethodBody.Instructions
-                    let returnElementSegment = CilInstruction CilOpCodes.Ret
+                    let returnElementSegment = CilInstruction CilOpCodes.Ldarg_0
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction(CilOpCodes.Ldfld, elementSegmentField))
                     il.Add(CilInstruction(CilOpCodes.Brtrue_S, CilInstructionLabel returnElementSegment))
@@ -101,9 +101,9 @@ let translateElementSegments
                     il.Add(CilInstruction(CilOpCodes.Call, generateElementsHelper))
                     il.Add(CilInstruction(CilOpCodes.Stfld, elementSegmentField))
 
-                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, elementSegmentField))
                     il.Add returnElementSegment
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, elementSegmentField))
+                    il.Add(CilInstruction CilOpCodes.Ret)
 
                     definition
 
