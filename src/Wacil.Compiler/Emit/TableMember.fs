@@ -46,7 +46,7 @@ let translateModuleTables
                 (mangleMemberName memoryExportName)
         | false, _ -> ()
 
-        members.Tables[index] <- TableMember.Defined field
+        members.Tables[index] <- TableMember.Defined(field, instantiatedTableType)
 
         let maximum =
             match table.Limits.Maximum with

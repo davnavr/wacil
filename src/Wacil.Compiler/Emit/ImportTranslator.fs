@@ -153,7 +153,7 @@ let translateModuleImports
             // TODO: Need to check that table limits are correct
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index table.Name field)
 
-            members.Tables[int32 table.Index] <- TableMember.Imported(importInstanceField, field)
+            members.Tables[int32 table.Index] <- TableMember.Imported(importInstanceField, field, instantiatedTableType)
 
         for memory in imports.Memories do
             let name = mangleMemberName memory.Name

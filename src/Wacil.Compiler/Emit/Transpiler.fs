@@ -89,7 +89,6 @@ let translateWebAssembly
     let mutable branchTargetStack = BranchTargetStack(ArrayBuilder.Create())
 
     let inline (|TypeIndex|) (TypeIdx index) = wasm.Types[index]
-    let inline (|TableIndex|) (TableIdx index) = members.Tables[index]
     let inline (|GlobalIndex|) (GlobalIdx index) = members.Globals[index]
 
     let emitPushMemory (MemIdx index) (il: CilInstructionCollection) =
@@ -101,6 +100,17 @@ let translateWebAssembly
         | MemoryMember.Imported(import, memory) ->
             il.Add(CilInstruction(CilOpCodes.Ldfld, import))
             il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+
+    let emitPushTable (TableIdx index) (il: CilInstructionCollection) =
+        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+        match members.Tables[index] with
+        | TableMember.Defined(table, instantiation) ->
+            il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+            instantiation
+        | TableMember.Imported(import, table, instantiation) ->
+            il.Add(CilInstruction(CilOpCodes.Ldfld, import))
+            il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+            instantiation
 
     let emitPushMemArg (arg: MemArg) il =
         emitPushMemory arg.Memory il
@@ -183,19 +193,12 @@ let translateWebAssembly
                     // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction(CilOpCodes.Call, indirect))
-            | CallIndirect(TypeIndex originalFunctionType, TableIndex table) ->
+            | CallIndirect(TypeIndex originalFunctionType, table) ->
                 // TODO: If no arguments, can optimize and call Invoke directly instaed of using the InvokeHelper
                 let functionTypeInstantiation = delegateTypeCache(translateFuncType originalFunctionType)
 
                 // Parameters are already on the stack in the correct order
-                il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                
-                match table with
-                | TableMember.Defined table ->
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
-                | TableMember.Imported(import, table) ->
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, import))
-                    il.Add(CilInstruction(CilOpCodes.Ldfld, table))
+                emitPushTable table il |> ignore
 
                 // At this point, the index of the function is on the top of the stack
                 il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.TableGetHelper))
@@ -237,6 +240,10 @@ let translateWebAssembly
                     il.Add(CilInstruction(CilOpCodes.Call, setter))
                 | GlobalMember.Defined(_, ValueNone) ->
                     invalidOp "attempt to generate code to mutate constant global variable"
+            | TableGet table ->
+                // Index of the element to retrieve is on the top of the stack.
+                let instantiation = emitPushTable table il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.Get))
             | I32Load arg ->
                 // Top of stack is address to load, which is first parameter
                 emitPushMemArg arg il
