@@ -49,7 +49,7 @@ let translateElementSegments
                 il.Add(CilInstruction.CreateLdcI4 element.Elements.Length)
                 il.Add(CilInstruction(CilOpCodes.Newarr, translatedElementType :> ITypeDescriptor))
 
-                for elementExpressionIndex in 0..element.Elements.Length do
+                for elementExpressionIndex in 0..element.Elements.Length - 1 do
                     let initializer =
                         DefinitionHelpers.addMethodDefinition
                             moduleClassDefinition
