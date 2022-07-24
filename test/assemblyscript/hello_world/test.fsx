@@ -1,7 +1,7 @@
 #r "./out/Wacil.Runtime.dll"
 #r "./out/hello_world.dll"
 
-let mutable instance: hello__world = null
+let mutable instance: hello_world.hello_world = null
 
 let console_log(address: int32) =
     let address = uint32 address
@@ -22,5 +22,5 @@ let console_log(address: int32) =
 let abort (_: int32) (_: int32) (_: int32) (_: int32) =
     failwith "ABORTED"
 
-instance <- hello__world(hello__world.env(hello__world.env.console_log(console_log), hello__world.env.abort(abort)))
+instance <- hello_world.hello_world(hello_world.env(console_log, abort))
 instance.hello()

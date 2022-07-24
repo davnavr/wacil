@@ -6,16 +6,16 @@ open System.Collections.Generic
 open Wacil.Compiler.Wasm
 
 [<RequireQualifiedAccess>]
-type FunctionImport = { Name: string; Type: Format.FuncType }
+type FunctionImport = { Index: Format.FuncIdx; Name: string; Type: Format.FuncType }
 
 [<RequireQualifiedAccess>]
-type TableImport = { Name: string; Type: Format.TableType }
+type TableImport = { Index: Format.TableIdx; Name: string; Type: Format.TableType }
 
 [<RequireQualifiedAccess>]
-type MemoryImport = { Name: string; Limits: Format.Limits }
+type MemoryImport = { Index: Format.MemIdx; Name: string; Limits: Format.Limits }
 
 [<RequireQualifiedAccess>]
-type GlobalImport = { Name: string; Type: Format.GlobalType }
+type GlobalImport = { Index: Format.GlobalIdx; Name: string; Type: Format.GlobalType }
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type ModuleImports =
@@ -26,16 +26,13 @@ type ModuleImports =
       
 [<Sealed>]
 type ModuleImportLookup =
-    internal new:
-        lookup: Dictionary<string, ModuleImports> *
-        functions: ImmutableArray<struct(string * FunctionImport)> -> ModuleImportLookup
+    internal new: lookup: SortedDictionary<string, ModuleImports> * imports: ModuleImports -> ModuleImportLookup
 
-    member Item: moduleImportName: string -> ModuleImports with get
-    member Functions: ImmutableArray<struct(string * FunctionImport)>
-
-    member Count: int
-
-    interface IReadOnlyDictionary<string, ModuleImports>
+    /// <summary>Gets the imports corresponding to the specified module <paramref name="name"/>.</summary>
+    member Item: name: string -> ModuleImports with get
+    /// Gets the names of all imported modules, in a consistent order.
+    member Modules: IReadOnlyCollection<string>
+    member Imports: ModuleImports
 
 [<NoComparison; StructuralEquality>]
 type OperandType =
@@ -87,28 +84,56 @@ type ValidExpression =
 type Function = { Type: Format.FuncType; Body: ValidExpression }
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
-type Global =
-    { Type: Format.GlobalType
-      Value: ValidExpression }
+type Global = { Type: Format.GlobalType; Value: ValidExpression }
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyFunction =
+    | Defined of int * Function
+    | Import of int * FunctionImport
+
+    member Type : Format.FuncType
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyMemory =
+    | Defined of int * Format.Limits
+    | Import of int * MemoryImport
+
+    member Limits : Format.Limits
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyTable =
+    | Defined of int * Format.TableType
+    | Import of int * TableImport
+
+    member Type : Format.TableType
+
+[<RequireQualifiedAccess; NoComparison; ReferenceEquality>]
+type AnyGlobal =
+    | Defined of int * Global
+    | Import of int * GlobalImport
+
+    member Type : Format.GlobalType
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type ModuleExport =
-    | Function of Function
-    | Table
-    | Memory of Format.MemIdx
-    | Global
+    | Function of Format.FuncIdx * AnyFunction
+    | Table of Format.TableIdx * AnyTable
+    | Memory of Format.MemIdx * AnyMemory
+    | Global of Format.GlobalIdx * AnyGlobal
 
 [<Sealed>]
 type ModuleExportLookup =
     internal new:
-        memories: Dictionary<Format.MemIdx, string> *
         functions: Dictionary<Format.FuncIdx, string> *
         tables: Dictionary<Format.TableIdx, string> *
+        memories: Dictionary<Format.MemIdx, string> *
+        globals: Dictionary<Format.GlobalIdx, string> *
         lookup: Dictionary<string, ModuleExport> -> ModuleExportLookup
 
     member GetMemoryName: index: Format.MemIdx * name: outref<string> -> bool
     member GetFunctionName: index: Format.FuncIdx * name: outref<string> -> bool
     member GetTableName: index: Format.TableIdx * name: outref<string> -> bool
+    member GetGlobalName: index: Format.GlobalIdx * name: outref<string> -> bool
     /// <summary>Gets an export corresponding to the specified <paramref name="name"/>.</summary>
     member Item: name: string -> ModuleExport with get
 
