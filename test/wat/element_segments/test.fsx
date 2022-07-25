@@ -5,4 +5,10 @@
 open Swensen.Unquote
 
 do
-    test <@ false @>
+    let instance = element_segments.element_segments()
+
+    test <@ instance.CallTheFunction() = 1234 + 42 @>
+
+    instance.UseIdentityFunction()
+
+    test <@ instance.CallTheFunction() = 1234 @>
