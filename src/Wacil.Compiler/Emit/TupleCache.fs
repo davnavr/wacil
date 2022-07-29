@@ -95,6 +95,13 @@ let create
                     MethodAttributes.Static
                     "ReverseConstructor"
 
+            for i = 1 to template.FieldNames.Length do
+                reverseConstructorHelper.ParameterDefinitions.Add(ParameterDefinition(
+                    uint16 i,
+                    template.FieldNames[i - 1],
+                    Unchecked.defaultof<_>
+                ))
+
             do
                 reverseConstructorHelper.CilMethodBody <- CilMethodBody reverseConstructorHelper
                 let il = reverseConstructorHelper.CilMethodBody.Instructions
