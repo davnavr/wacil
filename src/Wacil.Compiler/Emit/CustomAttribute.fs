@@ -8,5 +8,5 @@ open AsmResolver.DotNet.Signatures
 type Marker = IHasCustomAttribute -> unit
 
 let markCompilerGenerated (syslib: SystemLibrary.References): Marker =
-    let attribute = CustomAttribute(syslib.CompilerGeneratedAttributeConstructor, CustomAttributeSignature())
-    fun parent -> parent.CustomAttributes.Add attribute
+    let signature = CustomAttributeSignature()
+    fun parent -> parent.CustomAttributes.Add(CustomAttribute(syslib.CompilerGeneratedAttributeConstructor, signature))
