@@ -7,14 +7,24 @@ open System.Collections.Immutable
 open Wacil.Compiler
 open Wacil.Compiler.Helpers.Collections
 
+open AsmResolver.PE.DotNet.Metadata.Tables.Rows
+
+open AsmResolver.DotNet.Code.Cil
+open AsmResolver.PE.DotNet.Cil
+
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
 
 type private Template =
-    { Type: ITypeDefOrRef; Fields: ImmutableArray<IFieldDescriptor> }
+    { Type: ITypeDefOrRef
+      Constructor: IMethodDefOrRef
+      Fields: ImmutableArray<IFieldDescriptor> }
 
-type Instantiation = { Signature: TypeSignature; Fields: ImmutableArray<IFieldDescriptor> }
+type Instantiation =
+    { Signature: TypeSignature
+      ReverseConstructor: IMethodDefOrRef
+      Fields: ImmutableArray<IFieldDescriptor> }
 
 let create
     (mdle: ModuleDefinition)
@@ -34,12 +44,18 @@ let create
 
                 let vtype = ImportHelpers.importType mdle.DefaultImporter mscorlib "System" (valueTupleName count)
                 let mutable fields = ArrayBuilder<IFieldDescriptor>.Create count
+                let mutable constructorParameterTypes = ArrayBuilder<TypeSignature>.Create count
 
                 for i in 1..count do
-                    let tupleFieldSignature = GenericParameterSignature(GenericParameterType.Type, i - 1) |> FieldSignature
-                    fields.Add(ImportHelpers.importField mdle.DefaultImporter tupleFieldSignature (tupleFieldName i) vtype)
+                    let tupleFieldType = GenericParameterSignature(GenericParameterType.Type, i - 1)
+                    fields.Add(ImportHelpers.importField mdle.DefaultImporter (FieldSignature tupleFieldType) (tupleFieldName i) vtype)
+                    constructorParameterTypes.Add tupleFieldType
 
-                let template = { Type = vtype; Fields = fields.ToImmutableArray() }
+                let template =
+                    { Type = vtype
+                      Constructor = ImportHelpers.importConstructor mdle (constructorParameterTypes.ToArray()) vtype
+                      Fields = fields.ToImmutableArray() }
+
                 lookup[count] <- template
                 template
 
@@ -54,7 +70,23 @@ let create
             tupleFieldTypes.Value.Clear()
             for ty in types do tupleFieldTypes.Value.Add(translateValType ty)
 
-            let instantiation = template.Type.MakeGenericInstanceType(tupleFieldTypes.Value.ToArray())
-            let info = { Signature = instantiation; Fields = template.Fields }
+            let actualFieldTypes = tupleFieldTypes.Value.ToArray()
+            let instantiation = template.Type.MakeGenericInstanceType actualFieldTypes
+
+            let mutable reverseConstructorHelper =
+                DefinitionHelpers.addMethodDefinition
+                    (mdle.GetModuleType())
+                    (MethodSignature(CallingConventionAttributes.Default, instantiation, actualFieldTypes))
+                    MethodAttributes.Static
+                    "ReverseConstructor"
+
+            do
+                reverseConstructorHelper.CilMethodBody <- CilMethodBody reverseConstructorHelper
+                let il = reverseConstructorHelper.CilMethodBody.Instructions
+                for i = types.Length - 1 downto 0 do il.Add(CilInstruction.CreateLdarg(uint16 i))
+                il.Add(CilInstruction(CilOpCodes.Newobj, template.Constructor))
+                il.Add(CilInstruction CilOpCodes.Ret)
+
+            let info = { Signature = instantiation; ReverseConstructor = reverseConstructorHelper; Fields = template.Fields }
             lookup[types] <- info
             info

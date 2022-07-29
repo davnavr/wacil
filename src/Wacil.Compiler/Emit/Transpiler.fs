@@ -2,6 +2,7 @@
 [<RequireQualifiedAccess>]
 module internal Wacil.Compiler.Emit.Transpiler
 
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open Wacil.Compiler.Helpers.Collections
@@ -133,22 +134,29 @@ let translateWebAssembly
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
-    let emitMultiValueDeconstruct
-        (types: System.Collections.Immutable.ImmutableArray<ValType>)
-        temporaryLocalCache
-        (il: CilInstructionCollection)
-        =
+    let emitMultiValueDeconstruct (types: ImmutableArray<ValType>) temporaryLocalCache (il: CilInstructionCollection) =
         let tupleTypeInstantiation = tupleTypeCache types
 
         if tupleTypeInstantiation.Fields.Length <> types.Length then invalidOp "tuple field count mismatch"
 
-        // Assume that the tuple is on top of the stack.
+        // Assume that the tuple is on top of the stack
         let temporary = temporaryLocalCache tupleTypeInstantiation.Signature
         il.Add(CilInstruction.CreateStloc temporary)
 
         for field in tupleTypeInstantiation.Fields do
             il.Add(CilInstruction.CreateLdloc temporary)
             il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+
+    let emitFunctionReturn (originalReturnTypes: ImmutableArray<ValType>) (il: CilInstructionCollection) =
+        // Assume all return values (if there are any) are on top of the stack
+        if originalReturnTypes.Length >= 2 then
+            // CIL store instructions cannot be used as address cannot be inserted between return values
+            // A helper function to store the values into a tuple is used instead
+            let tupleTypeInstantiation = tupleTypeCache originalReturnTypes
+            il.Add(CilInstruction CilOpCodes.Tailcall)
+            il.Add(CilInstruction(CilOpCodes.Call, tupleTypeInstantiation.ReverseConstructor))
+        
+        il.Add(CilInstruction CilOpCodes.Ret)
 
     for { Expression = expression; Body = cil } in inputs do
         let wasm = expression.Instructions
@@ -171,8 +179,7 @@ let translateWebAssembly
             else
                 Loc(Checked.uint16(index - expression.ParameterTypes.Length))
 
-        // Note that translation works out even with multi-value
-
+        // Note that translation of most instructions works out even with multi-value
         for i = 0 to wasm.Length - 1 do
             let instruction = wasm[i]
             match instruction.Instruction with
@@ -182,9 +189,7 @@ let translateWebAssembly
             | Nop | DataDrop _ -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
             | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
-            | Return ->
-                // TODO: Return will need to be changed when multiple return values are involved (make helper that is used here and in the implicit return added later)
-                il.Add(CilInstruction CilOpCodes.Ret)
+            | Return -> emitFunctionReturn expression.ResultTypes il
             | Block _ -> branchTargetStack.PushBlock()
             | Loop _ ->
                 let start = CilInstruction CilOpCodes.Nop
@@ -204,11 +209,9 @@ let translateWebAssembly
                 | BranchTarget.Block label ->
                     label.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add label.Instruction
-
-                    // TODO: Reuse code for handler of Ret
-                    // TODO: Handle implicit multi-return
+                    
                     if branchTargetStack.Depth = 0 && not instruction.Unreachable then
-                        il.Add(CilInstruction CilOpCodes.Ret)
+                        emitFunctionReturn expression.ResultTypes il
                 | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
                     endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add endBranchLabel.Instruction
