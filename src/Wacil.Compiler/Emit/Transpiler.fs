@@ -135,6 +135,8 @@ let translateWebAssembly
             else
                 Loc(Checked.uint16(index - expression.ParameterTypes.Length))
 
+        // Note that translation works out even with multi-value
+
         for i = 0 to wasm.Length - 1 do
             let instruction = wasm[i]
             match instruction.Instruction with
