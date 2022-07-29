@@ -80,6 +80,7 @@ let private emitComplexComparison comparison (il: CilInstructionCollection) =
 let translateWebAssembly
     (translateValType: ValType -> TypeSignature)
     (translateFuncType: FuncType -> MethodSignature)
+    (tupleTypeCache: _ -> TupleCache.Instantiation)
     (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
     (rtlib: RuntimeLibrary.References)
     (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
@@ -87,6 +88,20 @@ let translateWebAssembly
     (inputs: ResizeArray<Input>)
     =
     let mutable branchTargetStack = BranchTargetStack(ArrayBuilder.Create())
+
+    let temporaryLocalCacheFactory, clearTemporaryLocalCache =
+        let lookup = System.Collections.Generic.Dictionary<TypeSignature, uint16>()
+
+        let cache (body: CilMethodBody) ty =
+            match lookup.TryGetValue ty with
+            | true, existing -> existing
+            | false, _ ->
+                let index = Checked.uint16 body.LocalVariables.Count
+                body.LocalVariables.Add(CilLocalVariable ty)
+                lookup[ty] <- index
+                index
+
+        cache, fun() -> lookup.Clear()
 
     let inline (|TypeIndex|) (TypeIdx index) = wasm.Types[index]
     let inline (|GlobalIndex|) (GlobalIdx index) = members.Globals[index]
@@ -118,6 +133,23 @@ let translateWebAssembly
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
+    let emitMultiValueDeconstruct
+        (types: System.Collections.Immutable.ImmutableArray<ValType>)
+        temporaryLocalCache
+        (il: CilInstructionCollection)
+        =
+        let tupleTypeInstantiation = tupleTypeCache types
+
+        if tupleTypeInstantiation.Fields.Length <> types.Length then invalidOp "tuple field count mismatch"
+
+        // Assume that the tuple is on top of the stack.
+        let temporary = temporaryLocalCache tupleTypeInstantiation.Signature
+        il.Add(CilInstruction.CreateStloc temporary)
+
+        for field in tupleTypeInstantiation.Fields do
+            il.Add(CilInstruction.CreateLdloc temporary)
+            il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+
     for { Expression = expression; Body = cil } in inputs do
         let wasm = expression.Instructions
         let il = cil.Instructions
@@ -127,6 +159,10 @@ let translateWebAssembly
 
         branchTargetStack.Reset()
         branchTargetStack.PushBlock() // Note that WASM functions implicitly introduce a block
+
+        let temporaryLocalCache =
+            clearTemporaryLocalCache()
+            temporaryLocalCacheFactory cil
 
         let (|LocalIndex|) (LocalIdx index) =
             if index < expression.ParameterTypes.Length then
@@ -196,6 +232,8 @@ let translateWebAssembly
                     // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
                     il.Add(CilInstruction CilOpCodes.Ldarg_0)
                     il.Add(CilInstruction(CilOpCodes.Call, indirect))
+
+                // Return value is now on top of the stack.
             | CallIndirect(TypeIndex originalFunctionType, table) ->
                 // TODO: If no arguments, can optimize and call Invoke directly instaed of using the InvokeHelper
                 let functionTypeInstantiation = delegateTypeCache(translateFuncType originalFunctionType)

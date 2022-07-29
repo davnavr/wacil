@@ -26,7 +26,7 @@ let create
         let valueTupleName = sprintf "ValueTuple`%i"
         let tupleFieldName = sprintf "Item%i"
         fun count ->
-            if count <= 1 then invalidArg (nameof count) "tuple field count must be greater than zero"
+            if count <= 1 then invalidArg (nameof count) "tuple field count must be greater than one"
             match lookup.TryGetValue count with
             | true, existing -> existing
             | false, _ ->

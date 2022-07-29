@@ -195,6 +195,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     Transpiler.translateWebAssembly
         translateValType
         translateFuncType
+        tupleTypeCache
         delegateTypeCache
         rtlib
         input
