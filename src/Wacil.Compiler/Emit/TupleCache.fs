@@ -103,7 +103,7 @@ let create
             for i = 1 to template.FieldNames.Length do
                 reverseConstructorHelper.ParameterDefinitions.Add(ParameterDefinition(
                     uint16 i,
-                    template.FieldNames[i - 1],
+                    template.FieldNames[template.FieldNames.Length - i],
                     Unchecked.defaultof<_>
                 ))
 
