@@ -5,6 +5,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 
 open Wacil.Compiler
+open Wacil.Compiler.Helpers
 open Wacil.Compiler.Helpers.Collections
 
 open AsmResolver.PE.DotNet.Metadata.Tables.Rows
@@ -18,8 +19,8 @@ open AsmResolver.DotNet.Signatures.Types
 
 type private Template =
     { Type: ITypeDefOrRef
-      Constructor: IMethodDefOrRef
-      Fields: ImmutableArray<IFieldDescriptor> }
+      FieldNames: string[]
+      FieldTypes: TypeSignature[] }
 
 type Instantiation =
     { Signature: TypeSignature
@@ -44,18 +45,17 @@ let create
 
                 let vtype = ImportHelpers.importType mdle.DefaultImporter mscorlib "System" (valueTupleName count)
 
-                let mutable fields = ArrayBuilder<IFieldDescriptor>.Create count
-                let mutable constructorParameterTypes = ArrayBuilder<TypeSignature>.Create count
+                let mutable tupleFieldNames = ArrayBuilder<string>.Create count
+                let mutable tupleFieldTypes = ArrayBuilder<TypeSignature>.Create count
 
                 for i in 1..count do
-                    let tupleFieldType = GenericParameterSignature(GenericParameterType.Type, i - 1)
-                    fields.Add(ImportHelpers.importField mdle.DefaultImporter (FieldSignature tupleFieldType) (tupleFieldName i) vtype)
-                    constructorParameterTypes.Add tupleFieldType
+                    tupleFieldNames.Add(tupleFieldName i)
+                    tupleFieldTypes.Add(GenericParameterSignature(GenericParameterType.Type, i - 1))
 
                 let template =
                     { Type = vtype
-                      Constructor = ImportHelpers.importConstructor mdle (constructorParameterTypes.ToArray()) vtype
-                      Fields = fields.ToImmutableArray() }
+                      FieldNames = tupleFieldNames.ToArray()
+                      FieldTypes = tupleFieldTypes.ToArray() }
 
                 lookup[count] <- template
                 template
@@ -74,11 +74,24 @@ let create
                 tupleFieldTypes.contents.ToArray()
 
             let instantiation = template.Type.MakeGenericInstanceType actualFieldTypes
+            let specification = TypeSpecification instantiation
+
+            let actualTupleConstructor =
+                ImportHelpers.importConstructor mdle template.FieldTypes specification
+
+            let mutable actualTupleFields = Array.zeroCreate template.FieldTypes.Length
+            for i = 0 to template.FieldTypes.Length - 1 do
+                actualTupleFields[i] <-
+                    ImportHelpers.importField
+                        mdle.DefaultImporter
+                        (FieldSignature template.FieldTypes[i])
+                        template.FieldNames[i]
+                        specification
 
             let reverseConstructorHelper =
                 DefinitionHelpers.addMethodDefinition
                     (mdle.GetModuleType())
-                    (MethodSignature(CallingConventionAttributes.Default, instantiation, actualFieldTypes))
+                    (MethodSignature(CallingConventionAttributes.Default, instantiation, Array.rev actualFieldTypes))
                     MethodAttributes.Static
                     "ReverseConstructor"
 
@@ -86,9 +99,13 @@ let create
                 reverseConstructorHelper.CilMethodBody <- CilMethodBody reverseConstructorHelper
                 let il = reverseConstructorHelper.CilMethodBody.Instructions
                 for i = types.Length - 1 downto 0 do il.Add(CilInstruction.CreateLdarg(uint16 i))
-                il.Add(CilInstruction(CilOpCodes.Newobj, template.Constructor))
+                il.Add(CilInstruction(CilOpCodes.Newobj, actualTupleConstructor))
                 il.Add(CilInstruction CilOpCodes.Ret)
 
-            let info = { Signature = instantiation; ReverseConstructor = reverseConstructorHelper; Fields = template.Fields }
+            let info =
+                { Signature = instantiation
+                  ReverseConstructor = reverseConstructorHelper
+                  Fields = Unsafe.Array.toImmutable actualTupleFields }
+
             lookup[types] <- info
             info
