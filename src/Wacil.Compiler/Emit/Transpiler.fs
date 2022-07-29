@@ -150,11 +150,8 @@ let translateWebAssembly
     let emitFunctionReturn (originalReturnTypes: ImmutableArray<ValType>) (il: CilInstructionCollection) =
         // Assume all return values (if there are any) are on top of the stack
         if originalReturnTypes.Length >= 2 then
-            // CIL store instructions cannot be used as address cannot be inserted between return values
-            // A helper function to store the values into a tuple is used instead
             let tupleTypeInstantiation = tupleTypeCache originalReturnTypes
-            il.Add(CilInstruction CilOpCodes.Tailcall)
-            il.Add(CilInstruction(CilOpCodes.Call, tupleTypeInstantiation.ReverseConstructor))
+            il.Add(CilInstruction(CilOpCodes.Newobj, tupleTypeInstantiation.Constructor))
         
         il.Add(CilInstruction CilOpCodes.Ret)
 

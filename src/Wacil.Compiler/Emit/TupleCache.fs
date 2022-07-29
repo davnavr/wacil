@@ -24,7 +24,7 @@ type private Template =
 
 type Instantiation =
     { Signature: TypeSignature
-      ReverseConstructor: IMethodDefOrRef
+      Constructor: IMethodDefOrRef
       Fields: ImmutableArray<IFieldDescriptor> }
 
 let create
@@ -89,34 +89,9 @@ let create
                         template.FieldNames[i]
                         specification
 
-            let reverseConstructorHelper =
-                DefinitionHelpers.addMethodDefinition
-                    (mdle.GetModuleType())
-                    (MethodSignature(CallingConventionAttributes.Default, instantiation, Array.rev actualFieldTypes))
-                    MethodAttributes.Static
-                    "ReverseConstructor"
-
-            reverseConstructorHelper.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
-
-            markCompilerGenerated reverseConstructorHelper
-
-            for i = 1 to template.FieldNames.Length do
-                reverseConstructorHelper.ParameterDefinitions.Add(ParameterDefinition(
-                    uint16 i,
-                    template.FieldNames[template.FieldNames.Length - i],
-                    Unchecked.defaultof<_>
-                ))
-
-            do
-                reverseConstructorHelper.CilMethodBody <- CilMethodBody reverseConstructorHelper
-                let il = reverseConstructorHelper.CilMethodBody.Instructions
-                for i = types.Length - 1 downto 0 do il.Add(CilInstruction.CreateLdarg(uint16 i))
-                il.Add(CilInstruction(CilOpCodes.Newobj, actualTupleConstructor))
-                il.Add(CilInstruction CilOpCodes.Ret)
-
             let info =
                 { Signature = instantiation
-                  ReverseConstructor = reverseConstructorHelper
+                  Constructor = actualTupleConstructor
                   Fields = Unsafe.Array.toImmutable actualTupleFields }
 
             lookup[types] <- info
