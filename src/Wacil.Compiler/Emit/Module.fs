@@ -25,6 +25,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let mdle = new ModuleDefinition(outputModuleName + ".dll", mscorlib)
 
     let syslib = SystemLibrary.importTypes mscorlib mdle
+    let markCompilerGenerated = CustomAttribute.markCompilerGenerated syslib
 
     mdle.GetOrCreateModuleType().BaseType <- syslib.Object.Type
 
@@ -92,7 +93,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
           ElementSegments = Array.zeroCreate input.Elements.Length
           DataSegments = Array.zeroCreate input.Data.Length }
 
-    let tupleTypeCache = TupleCache.create mdle mscorlib translateValType
+    let tupleTypeCache = TupleCache.create mdle mscorlib markCompilerGenerated translateValType
 
     let translateFuncType (ty: FuncType) =
         let actualReturnType =

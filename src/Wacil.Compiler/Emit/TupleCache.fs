@@ -30,6 +30,7 @@ type Instantiation =
 let create
     (mdle: ModuleDefinition)
     (mscorlib: AssemblyReference)
+    (markCompilerGenerated: CustomAttribute.Marker)
     (translateValType: Wasm.Format.ValType -> TypeSignature)
     =
     let sizeTemplateLookup =
@@ -96,6 +97,8 @@ let create
                     "ReverseConstructor"
 
             reverseConstructorHelper.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
+
+            markCompilerGenerated reverseConstructorHelper
 
             for i = 1 to template.FieldNames.Length do
                 reverseConstructorHelper.ParameterDefinitions.Add(ParameterDefinition(
