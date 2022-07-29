@@ -344,13 +344,11 @@ type MemArg =
       Offset: uint32
       Memory: MemIdx }
 
-// TODO: Or should this be FuncType? It seems multi-value proposal might have been merged?
 [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type BlockType =
     | Void
     | Index of index: TypeIdx
     | Val of ValType
-    //| Func of FuncType
 
 /// Contains instructions that don't mark the start of nested blocks.
 [<NoComparison; StructuralEquality>]

@@ -2,6 +2,7 @@ namespace Wacil.Compiler.Wasm.Validation
 
 open System.Collections.Immutable
 open System.Collections.Generic
+open System.Runtime.CompilerServices
 
 open Wacil.Compiler.Helpers
 open Wacil.Compiler.Helpers.Collections
@@ -136,13 +137,10 @@ type ControlFrameStackUnderflowException () =
     inherit ValidationException(sprintf "The control frame stack was unexpectedly empty")
 
 [<Sealed>]
-type ElseInstructionMismatchException (index: int, previous: Format.Instruction) =
-    inherit ValidationException(
-        sprintf "Expected matching if instruction for this else instruction at index %i, but got %A" index previous
-    )
+type ElseInstructionMismatchException (index: int) =
+    inherit ValidationException(sprintf "Expected matching if instruction for else instruction at index %i" index)
 
     member _.Index = index
-    member _.PreviousStructuredInstruction = previous
 
 [<Sealed>]
 type GlobalIsNotMutableException (index: Format.GlobalIdx) =
@@ -165,7 +163,7 @@ type ExpectedPassiveDataSegmentException (index: Format.DataIdx) =
     member _.Index = index
 
 module Validate =
-    [<Struct; RequireQualifiedAccess; StructuralComparison; StructuralEquality>]
+    [<IsReadOnly; Struct; RequireQualifiedAccess; StructuralComparison; StructuralEquality>]
     type SectionOrder =
         | Type
         | Import
@@ -195,7 +193,7 @@ module Validate =
             | Code -> Format.SectionId.Code
             | Data -> Format.SectionId.Data
 
-    [<System.Runtime.CompilerServices.IsByRefLike; Struct; NoComparison; NoEquality>]
+    [<IsByRefLike; Struct; NoComparison; NoEquality>]
     type ValidModuleBuilder =
         { mutable CustomSections: ArrayBuilder<Format.Custom>
           mutable Types: ImmutableArray<Format.FuncType> voption
@@ -211,13 +209,21 @@ module Validate =
           mutable DataCount: uint32 voption
           mutable Data: ImmutableArray<Format.Data> voption }
 
+    [<IsReadOnly; Struct; RequireQualifiedAccess; NoComparison; StructuralEquality>]
+    type ControlFlow =
+        | Block
+        | If
+        | Else
+        | Loop
+        | Normal
+
     [<NoComparison; ReferenceEquality>]
     type ControlFrame =
-        { Instruction: Format.Instruction
-          /// The types at the top of the operand stack when the block is entered.
+        { /// The types at the top of the operand stack when the block is entered.
           StartTypes: ImmutableArray<Format.ValType>
           EndTypes: ImmutableArray<Format.ValType>
           StartHeight: uint32
+          ControlFlow: ControlFlow
           mutable Unreachable: bool }
 
     let mapToOperandTypes (types: ImmutableArray<Format.ValType>) =
@@ -268,12 +274,12 @@ module Validate =
             for i = expected.Length - 1 downto 0 do
                 this.PopValue(ValType expected.[i])
 
-        member this.PushControlFrame(instruction, input, output) =
+        member this.PushControlFrame(controlFlowKind, input, output) =
             controlFrameStack.Add
-                { ControlFrame.Instruction = instruction
-                  StartTypes = input
+                { ControlFrame.StartTypes = input
                   EndTypes = output
                   StartHeight = uint32 valueTypeStack.Length
+                  ControlFlow = controlFlowKind
                   Unreachable = false }
 
             this.PushManyValues input
@@ -289,10 +295,10 @@ module Validate =
             frame
 
         member _.LabelTypes frame =
-            match frame.Instruction with
-            | Format.Loop _ -> frame.StartTypes
-            | Format.Block _ | Format.If _ | Format.Else _ -> frame.EndTypes
-            | bad -> failwithf "TODO: Error for not %A is not a valid structured instruction" bad
+            match frame.ControlFlow with
+            | ControlFlow.Loop _ -> frame.StartTypes
+            | ControlFlow.Block _ | ControlFlow.If _ | ControlFlow.Else _ -> frame.EndTypes
+            | ControlFlow.Normal -> invalidOp "cannot obtain label types for instructio that does not affect control flow"
 
         member _.MarkUnreachable() =
             if controlFrameStack.IsEmpty then raise(ControlFrameStackUnderflowException())
@@ -336,13 +342,7 @@ module Validate =
 
             // All expressions implictly define a block
             controlFrameStack.Add
-                { ControlFrame.Instruction =
-                    match expression.ResultTypes.Length with
-                    | 0 -> Format.BlockType.Void
-                    | 1 -> Format.BlockType.Val expression.ResultTypes[0]
-                    | _ ->
-                        raise(System.NotSupportedException "TODO: Multiple return values for expressions are not yet supported")
-                    |> Format.Block
+                { ControlFrame.ControlFlow = ControlFlow.Block
                   StartTypes = ImmutableArray.Empty
                   EndTypes = expression.ResultTypes
                   StartHeight = 0u
@@ -354,20 +354,24 @@ module Validate =
                 match instruction with
                 | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
                 | Format.Nop | Format.DataDrop _ | Format.ElemDrop _ -> ()
-                | Format.Block ty | Format.Loop ty ->
+                | Format.Block ty ->
                     let ty' = this.GetBlockType ty
                     this.PopManyValues ty'.Parameters
-                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
+                    this.PushControlFrame(ControlFlow.Block, ty'.Parameters, ty'.Results)
+                | Format.Loop ty ->
+                    let ty' = this.GetBlockType ty
+                    this.PopManyValues ty'.Parameters
+                    this.PushControlFrame(ControlFlow.Loop, ty'.Parameters, ty'.Results)
                 | Format.If ty ->
                     let ty' = this.GetBlockType ty
                     this.PopValue OperandType.i32
                     this.PopManyValues ty'.Parameters
-                    this.PushControlFrame(instruction, ty'.Parameters, ty'.Results)
+                    this.PushControlFrame(ControlFlow.If, ty'.Parameters, ty'.Results)
                 | Format.Else ->
                     let frame = this.PopControlFrame()
-                    match frame.Instruction with
-                    | Format.If _ -> this.PushControlFrame(instruction, frame.StartTypes, frame.EndTypes)
-                    | _ -> raise(ElseInstructionMismatchException(index, frame.Instruction))
+                    match frame.ControlFlow with
+                    | ControlFlow.If -> this.PushControlFrame(ControlFlow.Else, frame.StartTypes, frame.EndTypes)
+                    | _ -> raise(ElseInstructionMismatchException index)
                 | Format.End -> this.PushManyValues(this.PopControlFrame().EndTypes)
                 | Format.Br target -> this.CheckUnconditionalBranch(this.CheckBranchTarget target)
                 | Format.BrIf target ->

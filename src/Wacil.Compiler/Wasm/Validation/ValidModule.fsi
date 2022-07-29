@@ -86,8 +86,6 @@ type ElseInstructionMismatchException =
     /// <summary>The index of the <c>else</c> instruction.</summary>
     member Index: int
 
-    member PreviousStructuredInstruction: Format.Instruction
-
 [<Sealed; Class>]
 type GlobalIsNotMutableException =
     inherit ValidationException
