@@ -95,6 +95,8 @@ let create
                     MethodAttributes.Static
                     "ReverseConstructor"
 
+            reverseConstructorHelper.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
+
             for i = 1 to template.FieldNames.Length do
                 reverseConstructorHelper.ParameterDefinitions.Add(ParameterDefinition(
                     uint16 i,
