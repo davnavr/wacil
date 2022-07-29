@@ -215,25 +215,21 @@ let translateWebAssembly
                     if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchLabel.Instruction
             | Call(FuncIdx callee) ->
                 // TODO: Reduce code duplication (may when opting to generate a direct call, as it needs to be handled differently for imports and definitions)
-                match members.Functions[callee] with
-                | FunctionMember.Defined(_, indirect, originalFunctionType) ->
-                    // TODO: Handle calling a multi-return function (need to insert a byref to a local here)
-                    if originalFunctionType.Results.Length > 1 then
-                        failwith "TODO: Handle calling a multi-return function definition"
-
+                let originalResultTypes =
                     // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                    il.Add(CilInstruction(CilOpCodes.Call, indirect))
-                | FunctionMember.Imported(_, _, _, indirect, originalFunctionType) ->
-                    // TODO: Handle calling a multi-return function (need to insert a byref to a local here)
-                    if originalFunctionType.Results.Length > 1 then
-                        failwith "TODO: Handle calling a multi-return function import"
+                    match members.Functions[callee] with
+                    | FunctionMember.Defined(_, indirect, originalFunctionType) ->
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Call, indirect))
+                        originalFunctionType.Results
+                    | FunctionMember.Imported(_, _, _, indirect, originalFunctionType) ->
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Call, indirect))
+                        originalFunctionType.Results
 
-                    // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                    il.Add(CilInstruction(CilOpCodes.Call, indirect))
-
-                // Return value is now on top of the stack.
+                // Return value is now on top of the stack
+                if originalResultTypes.Length > 1 then
+                    emitMultiValueDeconstruct originalResultTypes temporaryLocalCache il
             | CallIndirect(TypeIndex originalFunctionType, table) ->
                 // TODO: If no arguments, can optimize and call Invoke directly instaed of using the InvokeHelper
                 let functionTypeInstantiation = delegateTypeCache(translateFuncType originalFunctionType)
@@ -246,6 +242,10 @@ let translateWebAssembly
 
                 // At this point, the delegate is on the top of the stack, so invoke helper can be called
                 il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.InvokeHelper))
+
+                // Return value is now on top of the stack
+                if originalFunctionType.Results.Length > 1 then
+                    emitMultiValueDeconstruct originalFunctionType.Results temporaryLocalCache il
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with
