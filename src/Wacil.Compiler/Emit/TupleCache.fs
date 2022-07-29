@@ -43,6 +43,7 @@ let create
                 if count > 8 then raise(System.NotSupportedException "Returning more than eight values is not yet supported")
 
                 let vtype = ImportHelpers.importType mdle.DefaultImporter mscorlib "System" (valueTupleName count)
+
                 let mutable fields = ArrayBuilder<IFieldDescriptor>.Create count
                 let mutable constructorParameterTypes = ArrayBuilder<TypeSignature>.Create count
 
@@ -67,13 +68,14 @@ let create
         | false, _ ->
             let template = sizeTemplateLookup types.Length
 
-            tupleFieldTypes.Value.Clear()
-            for ty in types do tupleFieldTypes.Value.Add(translateValType ty)
+            let actualFieldTypes =
+                tupleFieldTypes.contents.Clear()
+                for ty in types do tupleFieldTypes.contents.Add(translateValType ty)
+                tupleFieldTypes.contents.ToArray()
 
-            let actualFieldTypes = tupleFieldTypes.Value.ToArray()
             let instantiation = template.Type.MakeGenericInstanceType actualFieldTypes
 
-            let mutable reverseConstructorHelper =
+            let reverseConstructorHelper =
                 DefinitionHelpers.addMethodDefinition
                     (mdle.GetModuleType())
                     (MethodSignature(CallingConventionAttributes.Default, instantiation, actualFieldTypes))
