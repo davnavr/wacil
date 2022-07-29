@@ -95,26 +95,15 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let tupleTypeCache = TupleCache.create mdle mscorlib translateValType
 
     let translateFuncType (ty: FuncType) =
-        let firstReturnType, extraParameterCount =
-            if ty.Results.IsEmpty then
-                mdle.CorLibTypeFactory.Void :> TypeSignature, 0
-            else
-                translateValType ty.Results[0], 1
+        let actualReturnType =
+            match ty.Results.Length with
+            | 0 -> mdle.CorLibTypeFactory.Void :> TypeSignature
+            | 1 -> translateValType ty.Results[0]
+            | _ -> tupleTypeCache(ty.Results).Signature
 
-        let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create(ty.Parameters.Length + extraParameterCount)
-
-        for parameter in ty.Parameters do
-            parameterTypes.Add(translateValType parameter)
-
-        if ty.Results.Length > 1 then
-            let remainingReturnTypes =
-                if ty.Results.Length > 2 then
-                    tupleTypeCache(ty.Results.AsMemory().Slice(1)).Signature
-                else
-                    translateValType ty.Results[1]
-            parameterTypes.Add(remainingReturnTypes.MakeByReferenceType())
-
-        MethodSignature(CallingConventionAttributes.HasThis, firstReturnType, parameterTypes.ToImmutableArray())
+        let mutable parameterTypes = ArrayBuilder<TypeSignature>.Create ty.Parameters.Length
+        for parameter in ty.Parameters do parameterTypes.Add(translateValType parameter)
+        MethodSignature(CallingConventionAttributes.HasThis, actualReturnType, parameterTypes.ToImmutableArray())
 
     let delegateTypeCache = DelegateCache.create mdle mscorlib rtlib
 

@@ -43,17 +43,16 @@ let create
                 lookup[count] <- template
                 template
 
-    let lookup = Dictionary<System.ReadOnlyMemory<Wasm.Format.ValType>, Instantiation>(comparer = LanguagePrimitives.FastGenericEqualityComparer)
+    let lookup = Dictionary<ImmutableArray<_>, Instantiation>(comparer = LanguagePrimitives.FastGenericEqualityComparer)
     let mutable tupleFieldTypes = ref(ArrayBuilder.Create())
-    fun (types: System.ReadOnlyMemory<_>) ->
+    fun types ->
         match lookup.TryGetValue types with
         | true, existing -> existing
         | false, _ ->
             let template = sizeTemplateLookup types.Length
 
             tupleFieldTypes.Value.Clear()
-            for ty in types.Span do
-                tupleFieldTypes.Value.Add(translateValType ty)
+            for ty in types do tupleFieldTypes.Value.Add(translateValType ty)
 
             let instantiation = template.Type.MakeGenericInstanceType(tupleFieldTypes.Value.ToArray())
             let info = { Signature = instantiation; Fields = template.Fields }
