@@ -247,6 +247,22 @@ let translateWebAssembly
                 if originalFunctionType.Results.Length > 1 then
                     emitMultiValueDeconstruct originalFunctionType.Results temporaryLocalCache il
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
+            | Select ->
+                // Types of items to select from are the same, but are not encoded in the instruction
+                match instruction.StackState with
+                | StackState.Omitted ->
+                    if not instruction.Unreachable then failwith "Unable to infer type for select instruction"
+                | StackState.PoppedValues types ->
+                    let storage = temporaryLocalCache (translateValType types[0])
+                    let selectOtherValue = CilInstruction.CreateStloc storage
+                    let endOfSelect = CilInstruction CilOpCodes.Nop
+                    il.Add(CilInstruction(CilOpCodes.Brfalse_S, CilInstructionLabel selectOtherValue))
+                    il.Add(CilInstruction CilOpCodes.Pop) // Selected value is on top of the stack
+                    il.Add(CilInstruction(CilOpCodes.Br_S, CilInstructionLabel endOfSelect))
+                    il.Add selectOtherValue
+                    il.Add(CilInstruction CilOpCodes.Pop)
+                    il.Add(CilInstruction.CreateLdloc storage)
+                    il.Add endOfSelect
             | LocalGet(LocalIndex index) ->
                 match index with
                 | Arg i -> il.Add(CilInstruction.CreateLdarg i)

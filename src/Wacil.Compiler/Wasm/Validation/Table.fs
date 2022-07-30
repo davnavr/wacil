@@ -70,7 +70,19 @@ module OperandType =
         | FuncRef -> funcref
         | ExternRef -> externref
 
-type ValidInstruction = { Instruction: Instruction; Unreachable: bool }
+type StackState =
+    | Omitted
+    | PoppedValues of ImmutableArray<ValType>
+
+    member this.PoppedTypes =
+        match this with
+        | PoppedValues types -> types
+        | Omitted -> invalidOp "stack state information was discarded"
+
+type ValidInstruction =
+    { Instruction: Instruction
+      StackState: StackState
+      Unreachable: bool }
 
 [<Sealed>]
 type ValidExpression =

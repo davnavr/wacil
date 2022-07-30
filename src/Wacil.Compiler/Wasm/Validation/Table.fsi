@@ -54,8 +54,23 @@ module OperandType =
 
     val fromRefType: Format.RefType -> OperandType
 
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
+type StackState =
+    | Omitted
+    | PoppedValues of ImmutableArray<Format.ValType>
+
+    /// <summary>
+    /// Gets the types of the values that were popped from the stack, with the first item representing the value that was popped
+    /// first.
+    /// </summary>
+    /// <exception cref="T:System.InvalidOperationException">Thrown when the stack state was omitted.</exception>
+    member PoppedTypes : ImmutableArray<Format.ValType>
+
 [<NoComparison; StructuralEquality>]
-type ValidInstruction = { Instruction: Format.Instruction; Unreachable: bool }
+type ValidInstruction =
+    { Instruction: Format.Instruction
+      StackState: StackState
+      Unreachable: bool }
 
 [<Sealed>]
 type ValidExpression =

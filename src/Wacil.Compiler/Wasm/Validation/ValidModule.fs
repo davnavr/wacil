@@ -343,6 +343,7 @@ module Validate =
 
             for index = 0 to expression.Source.Length - 1 do
                 let instruction = expression.Source[index]
+                let mutable savedStackState = StackState.Omitted
 
                 match instruction with
                 | Format.Unreachable -> this.MarkUnreachable() // TODO: Will ValidInstruction.PushedTypes be valid here?
@@ -401,13 +402,18 @@ module Validate =
                 | Format.Drop -> this.PopValue() |> ignore
                 | Format.Select ->
                     this.PopValue OperandType.i32
-                    match this.PopValue(), this.PopValue() with
-                    | t1, t2 when not(OperandType.isNumType t1 && OperandType.isNumType t2) || (OperandType.isVecType t1 && OperandType.isVecType t2) ->
+                    let t1, t2 = this.PopValue(), this.PopValue()
+                    if not(OperandType.isNumType t1 && OperandType.isNumType t2) || (OperandType.isVecType t1 && OperandType.isVecType t2) then
                         failwithf "bad select type %A and %A" t1 t2
-                    | t1, t2 when t1 <> t2 && t1 <> UnknownType && t2 <> UnknownType ->
+                    elif t1 <> t2 && t1 <> UnknownType && t2 <> UnknownType then
                         failwithf "select type mismatch (expected %A, got %A)" t1 t2
-                    | UnknownType, t2 -> this.PushValue t2
-                    | t1, _ -> this.PushValue t1
+                    else
+                        let inferredSelectType = if t1 = UnknownType then t2 else t1
+                        this.PushValue inferredSelectType
+
+                        match inferredSelectType with
+                        | ValType ty -> savedStackState <- StackState.PoppedValues(ImmutableArray.Create(ty, ty))
+                        | UnknownType -> ()
                 | Format.LocalGet i -> this.PushValue(getVariableType expression i)
                 | Format.LocalSet i -> this.PopValue(getVariableType expression i)
                 | Format.LocalTee i ->
@@ -587,6 +593,7 @@ module Validate =
 
                 validInstructonBuilder.Add
                     { ValidInstruction.Instruction = instruction
+                      StackState = savedStackState
                       Unreachable =
                         if not controlFrameStack.IsEmpty
                         then controlFrameStack.LastRef().Unreachable
