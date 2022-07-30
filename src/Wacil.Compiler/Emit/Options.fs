@@ -22,7 +22,7 @@ type TargetFramework =
         | Net6 -> ".NETCoreApp,Version=v6.0"
 
 /// Indicates the class used when translating WebAssembly memories.
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type MemoryImplementation =
     /// <summary>
     /// Indicates that the <c>Wacil.Runtime.IMemory32</c> interface is used, allowing any memory implementation at the cost of
@@ -58,3 +58,9 @@ type Options (name) =
 
     /// Indicates the name of the namespace containing the classes generated during compilation.
     member val Namespace = System.String.Empty with get, set
+
+    /// The memory implementation to use for memory definitions.
+    member val MemoryDefinitionImplementation = MemoryImplementation.Array with get, set
+
+    /// The memory implementation to use for memory imports.
+    member val MemoryImportImplementation = MemoryImplementation.Any with get, set
