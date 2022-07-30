@@ -2,6 +2,7 @@
 [<RequireQualifiedAccess>]
 module internal Wacil.Compiler.Emit.Transpiler
 
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open Wacil.Compiler.Helpers.Collections
@@ -80,6 +81,7 @@ let private emitComplexComparison comparison (il: CilInstructionCollection) =
 let translateWebAssembly
     (translateValType: ValType -> TypeSignature)
     (translateFuncType: FuncType -> MethodSignature)
+    (tupleTypeCache: _ -> TupleCache.Instantiation)
     (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
     (rtlib: RuntimeLibrary.References)
     (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
@@ -87,6 +89,20 @@ let translateWebAssembly
     (inputs: ResizeArray<Input>)
     =
     let mutable branchTargetStack = BranchTargetStack(ArrayBuilder.Create())
+
+    let temporaryLocalCacheFactory, clearTemporaryLocalCache =
+        let lookup = System.Collections.Generic.Dictionary<TypeSignature, uint16>()
+
+        let cache (body: CilMethodBody) ty =
+            match lookup.TryGetValue ty with
+            | true, existing -> existing
+            | false, _ ->
+                let index = Checked.uint16 body.LocalVariables.Count
+                body.LocalVariables.Add(CilLocalVariable ty)
+                lookup[ty] <- index
+                index
+
+        cache, fun() -> lookup.Clear()
 
     let inline (|TypeIndex|) (TypeIdx index) = wasm.Types[index]
     let inline (|GlobalIndex|) (GlobalIdx index) = members.Globals[index]
@@ -118,6 +134,27 @@ let translateWebAssembly
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
 
+    let emitMultiValueDeconstruct (types: ImmutableArray<ValType>) temporaryLocalCache (il: CilInstructionCollection) =
+        let tupleTypeInstantiation = tupleTypeCache types
+
+        if tupleTypeInstantiation.Fields.Length <> types.Length then invalidOp "tuple field count mismatch"
+
+        // Assume that the tuple is on top of the stack
+        let temporary = temporaryLocalCache tupleTypeInstantiation.Signature
+        il.Add(CilInstruction.CreateStloc temporary)
+
+        for field in tupleTypeInstantiation.Fields do
+            il.Add(CilInstruction.CreateLdloc temporary)
+            il.Add(CilInstruction(CilOpCodes.Ldfld, field))
+
+    let emitFunctionReturn (originalReturnTypes: ImmutableArray<ValType>) (il: CilInstructionCollection) =
+        // Assume all return values (if there are any) are on top of the stack
+        if originalReturnTypes.Length >= 2 then
+            let tupleTypeInstantiation = tupleTypeCache originalReturnTypes
+            il.Add(CilInstruction(CilOpCodes.Newobj, tupleTypeInstantiation.Constructor))
+        
+        il.Add(CilInstruction CilOpCodes.Ret)
+
     for { Expression = expression; Body = cil } in inputs do
         let wasm = expression.Instructions
         let il = cil.Instructions
@@ -128,6 +165,10 @@ let translateWebAssembly
         branchTargetStack.Reset()
         branchTargetStack.PushBlock() // Note that WASM functions implicitly introduce a block
 
+        let temporaryLocalCache =
+            clearTemporaryLocalCache()
+            temporaryLocalCacheFactory cil
+
         let (|LocalIndex|) (LocalIdx index) =
             if index < expression.ParameterTypes.Length then
                 // Increment offsets by one, as local index 0 refers to `this`
@@ -135,6 +176,7 @@ let translateWebAssembly
             else
                 Loc(Checked.uint16(index - expression.ParameterTypes.Length))
 
+        // Note that translation of most instructions works out even with multi-value
         for i = 0 to wasm.Length - 1 do
             let instruction = wasm[i]
             match instruction.Instruction with
@@ -144,9 +186,7 @@ let translateWebAssembly
             | Nop | DataDrop _ -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
             | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
-            | Return ->
-                // TODO: Return will need to be changed when multiple return values are involved (make helper that is used here and in the implicit return added later)
-                il.Add(CilInstruction CilOpCodes.Ret)
+            | Return -> emitFunctionReturn expression.ResultTypes il
             | Block _ -> branchTargetStack.PushBlock()
             | Loop _ ->
                 let start = CilInstruction CilOpCodes.Nop
@@ -166,34 +206,30 @@ let translateWebAssembly
                 | BranchTarget.Block label ->
                     label.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add label.Instruction
-
-                    // TODO: Reuse code for handler of Ret
-                    // TODO: Handle implicit multi-return
+                    
                     if branchTargetStack.Depth = 0 && not instruction.Unreachable then
-                        il.Add(CilInstruction CilOpCodes.Ret)
+                        emitFunctionReturn expression.ResultTypes il
                 | BranchTarget.If(elseBranchLabel, endBranchLabel) ->
                     endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
                     il.Add endBranchLabel.Instruction
                     if isNull elseBranchLabel.Instruction then elseBranchLabel.Instruction <- endBranchLabel.Instruction
             | Call(FuncIdx callee) ->
                 // TODO: Reduce code duplication (may when opting to generate a direct call, as it needs to be handled differently for imports and definitions)
-                match members.Functions[callee] with
-                | FunctionMember.Defined(_, indirect, originalFunctionType) ->
-                    // TODO: Handle calling a multi-return function (need to insert a byref to a local here)
-                    if originalFunctionType.Results.Length > 1 then
-                        failwith "TODO: Handle calling a multi-return function definition"
-
+                let originalResultTypes =
                     // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                    il.Add(CilInstruction(CilOpCodes.Call, indirect))
-                | FunctionMember.Imported(_, _, _, indirect, originalFunctionType) ->
-                    // TODO: Handle calling a multi-return function (need to insert a byref to a local here)
-                    if originalFunctionType.Results.Length > 1 then
-                        failwith "TODO: Handle calling a multi-return function import"
+                    match members.Functions[callee] with
+                    | FunctionMember.Defined(_, indirect, originalFunctionType) ->
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Call, indirect))
+                        originalFunctionType.Results
+                    | FunctionMember.Imported(_, _, _, indirect, originalFunctionType) ->
+                        il.Add(CilInstruction CilOpCodes.Ldarg_0)
+                        il.Add(CilInstruction(CilOpCodes.Call, indirect))
+                        originalFunctionType.Results
 
-                    // Parameters are already on the stack in the correct order, so "this" pointer needs to be inserted last
-                    il.Add(CilInstruction CilOpCodes.Ldarg_0)
-                    il.Add(CilInstruction(CilOpCodes.Call, indirect))
+                // Return value is now on top of the stack
+                if originalResultTypes.Length > 1 then
+                    emitMultiValueDeconstruct originalResultTypes temporaryLocalCache il
             | CallIndirect(TypeIndex originalFunctionType, table) ->
                 // TODO: If no arguments, can optimize and call Invoke directly instaed of using the InvokeHelper
                 let functionTypeInstantiation = delegateTypeCache(translateFuncType originalFunctionType)
@@ -206,6 +242,10 @@ let translateWebAssembly
 
                 // At this point, the delegate is on the top of the stack, so invoke helper can be called
                 il.Add(CilInstruction(CilOpCodes.Call, functionTypeInstantiation.InvokeHelper))
+
+                // Return value is now on top of the stack
+                if originalFunctionType.Results.Length > 1 then
+                    emitMultiValueDeconstruct originalFunctionType.Results temporaryLocalCache il
             | Drop -> il.Add(CilInstruction CilOpCodes.Pop)
             | LocalGet(LocalIndex index) ->
                 match index with

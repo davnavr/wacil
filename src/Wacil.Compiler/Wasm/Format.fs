@@ -346,13 +346,11 @@ type MemArg =
       Offset: uint32
       Memory: MemIdx }
 
-// TODO: Or should this be FuncType? It seems multi-value proposal might have been merged?
 [<Struct>]
 type BlockType =
     | Void
     | Index of index: TypeIdx
     | Val of ValType
-    //| Func of FuncType
     
 type Instruction =
     | Unreachable

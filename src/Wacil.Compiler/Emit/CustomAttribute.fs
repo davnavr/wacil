@@ -5,6 +5,8 @@ module internal Wacil.Compiler.Emit.CustomAttribute
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 
-let markCompilerGenerated (syslib: SystemLibrary.References) =
-    let attribute = CustomAttribute(syslib.CompilerGeneratedAttributeConstructor, CustomAttributeSignature())
-    fun (parent: IHasCustomAttribute) -> parent.CustomAttributes.Add attribute
+type Marker = IHasCustomAttribute -> unit
+
+let markCompilerGenerated (syslib: SystemLibrary.References): Marker =
+    let signature = CustomAttributeSignature()
+    fun parent -> parent.CustomAttributes.Add(CustomAttribute(syslib.CompilerGeneratedAttributeConstructor, signature))

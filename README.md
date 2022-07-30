@@ -10,6 +10,10 @@ Powered by [`AsmResolver`](https://github.com/Washi1337/AsmResolver/), a high le
 
 Currently, work is focused on supporting most of the features from [version 1.0 of the WebAssembly specification](https://www.w3.org/TR/wasm-core-1/), as well as some features in [the version 2.0 draft](https://www.w3.org/TR/wasm-core-2/).
 
+The following [merged proposals](https://github.com/WebAssembly/proposals/blob/main/finished-proposals.md) are **currently supported**:
+
+- The [multi-value proposal](https://github.com/WebAssembly/multi-value)
+
 The following [proposals](https://github.com/WebAssembly/proposals) (that at the time of writing have not yet been standardized) are **currently supported**:
 
 - The [multiple memories proposal](https://github.com/WebAssembly/multi-memory)
