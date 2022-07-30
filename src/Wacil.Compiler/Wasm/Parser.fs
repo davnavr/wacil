@@ -148,7 +148,7 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
         | ValueNone -> BlockType.Void
         | ValueSome value when value >= 0L -> BlockType.Index(TypeIdx.From value)
         | ValueSome value ->
-            (int8 value * -1y) ||| 0b0100_0000y
+            int8 value &&& 0b0111_1111y
             |> uint8
             |> getValType
             |> BlockType.Val
@@ -196,6 +196,12 @@ type InvalidMagicException (actual: ImmutableArray<byte>) =
     inherit Exception("Not a WebAssembly module")
 
     member _.Magic = actual
+
+[<Sealed>]
+type ParseException (offset: int, inner: exn) =
+    inherit Exception(sprintf "Exception occured while parsing at offset 0x%04X" offset, inner)
+
+    member _.Offset = offset
 
 let parseMemArg (reader: Reader) =
     let flags = reader.ReadUnsignedInteger() |> Checked.uint8
@@ -503,185 +509,188 @@ let parseFromStream (stream: Stream) =
         if not stream.CanRead then invalidArg (nameof stream) "The stream must support reading"
 
         let reader = Reader(stream, ArrayPool.Shared)
-        let magicNumberBuffer = Span.stackalloc 4
+        try
+            let magicNumberBuffer = Span.stackalloc 4
 
-        reader.ReadAll(magicNumberBuffer)
-        if not(Span.equals (Span.readonly magicNumberBuffer) (Preamble.magic.AsSpan())) then
-            magicNumberBuffer.ToArray()
-            |> Unsafe.Array.toImmutable
-            |> InvalidMagicException
-            |> raise
+            reader.ReadAll(magicNumberBuffer)
+            if not(Span.equals (Span.readonly magicNumberBuffer) (Preamble.magic.AsSpan())) then
+                magicNumberBuffer.ToArray()
+                |> Unsafe.Array.toImmutable
+                |> InvalidMagicException
+                |> raise
 
-        reader.ReadAll(magicNumberBuffer)
-        if not(Span.equals (Span.readonly magicNumberBuffer) (Preamble.version.AsSpan())) then
-            failwithf "Invalid WebAssembly format version"
+            reader.ReadAll(magicNumberBuffer)
+            if not(Span.equals (Span.readonly magicNumberBuffer) (Preamble.version.AsSpan())) then
+                failwithf "Invalid WebAssembly format version"
 
-        let mutable sections = ArrayBuilder<Section>.Create()
-        let mutable instructionSequenceBuilder = ArrayBuilder<_>.Create()
-        let sectionTagBuffer = magicNumberBuffer.Slice(0, 1)
-        //use sectionContentBuffer = new MemoryStream();
-        //let sectionContentReader = Reader(sectionContentBuffer, ArrayPool.Shared)
+            let mutable sections = ArrayBuilder<Section>.Create()
+            let mutable instructionSequenceBuilder = ArrayBuilder<_>.Create()
+            let sectionTagBuffer = magicNumberBuffer.Slice(0, 1)
+            //use sectionContentBuffer = new MemoryStream();
+            //let sectionContentReader = Reader(sectionContentBuffer, ArrayPool.Shared)
 
-        while reader.Read sectionTagBuffer > 0 do
-            let size = reader.ReadUnsignedInteger() |> Checked.int32
-            let sectionStartOffset = reader.Offset
+            while reader.Read sectionTagBuffer > 0 do
+                let size = reader.ReadUnsignedInteger() |> Checked.int32
+                let sectionStartOffset = reader.Offset
 
-            //sectionContentBuffer.Capacity <- size
-            //sectionContentBuffer.Seek(0, SeekOrigin.Begin) |> ignore
+                //sectionContentBuffer.Capacity <- size
+                //sectionContentBuffer.Seek(0, SeekOrigin.Begin) |> ignore
 
-            match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
-            | SectionId.Custom ->
-                { Custom.Name = reader.ReadName()
-                  Custom.Contents =
-                    let contents = Array.zeroCreate(size - (reader.Offset - sectionStartOffset))
-                    reader.ReadAll(Span(contents))
-                    Unsafe.Array.toImmutable contents }
-                |> Section.Custom
-                |> sections.Add
-            | SectionId.Type ->
-                let types = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
-                sections.Add(Section.Type(Unsafe.Array.toImmutable types))
-            | SectionId.Import ->
-                let imports = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to imports.Length - 1 do
-                    imports[i] <-
-                        { Import.Module = reader.ReadName()
-                          Import.Name = reader.ReadName()
-                          Import.Description =
-                            match reader.ReadByte() with
-                            | 0uy -> reader.ReadIndex() |> ImportDesc.Func
-                            | 1uy -> reader.ReadTableType() |> ImportDesc.Table
-                            | 2uy -> reader.ReadLimits() |> ImportDesc.Mem
-                            | 3uy -> reader.ReadGlobalType() |> ImportDesc.Global
-                            | bad -> failwithf "0x%02X is not a valid import descriptor" bad}
-                sections.Add(Section.Import(Unsafe.Array.toImmutable imports))
-            | SectionId.Function ->
-                let indices = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadIndex()
-                sections.Add(Section.Function(Unsafe.Array.toImmutable indices))
-            | SectionId.Table ->
-                let tables = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to tables.Length - 1 do tables[i] <- reader.ReadTableType()
-                sections.Add(Section.Table(Unsafe.Array.toImmutable tables))
-            | SectionId.Memory ->
-                let mems = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()
-                sections.Add(Section.Memory(Unsafe.Array.toImmutable mems))
-            | SectionId.Global ->
-                let glbls = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to glbls.Length - 1 do
-                    glbls[i] <-
-                        { Global.Type = reader.ReadGlobalType()
-                          Global.Expression = parseExpression reader &instructionSequenceBuilder }
-                sections.Add(Section.Global(Unsafe.Array.toImmutable glbls))
-            | SectionId.Export ->
-                let exports = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to exports.Length - 1 do
-                    exports[i] <-
-                        { Export.Name = reader.ReadName()
-                          Description =
-                            let kind = reader.ReadByte()
-                            let index = reader.ReadUnsignedInteger()
-                            match kind with
-                            | 0uy -> ExportDesc.Func(FuncIdx.From index)
-                            | 1uy -> ExportDesc.Table(TableIdx.From index)
-                            | 2uy -> ExportDesc.Mem(MemIdx.From index)
-                            | 3uy -> ExportDesc.Global(GlobalIdx.From index)
-                            | _ -> failwithf "0x%02X is not a valid export kind" kind }
-                sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
-            | SectionId.Start -> sections.Add(Section.Start(reader.ReadIndex()))
-            | SectionId.Element ->
-                let elements = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to elements.Length - 1 do
-                    elements[i] <-
-                        match reader.ReadUnsignedInteger() |> Checked.uint32 with
-                        | 0u ->
-                            let offset = parseExpression reader &instructionSequenceBuilder
-                            let elements = parseFunctionIndicesAsExpressions reader
-                            { Element.Type = FuncRef
-                              Element.Expressions = elements
-                              Element.Mode = ElementMode.Active(TableIdx 0, offset) }
-                        | 1u ->
-                            match reader.ReadByte() with
-                            | 0uy ->
+                match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
+                | SectionId.Custom ->
+                    { Custom.Name = reader.ReadName()
+                      Custom.Contents =
+                        let contents = Array.zeroCreate(size - (reader.Offset - sectionStartOffset))
+                        reader.ReadAll(Span(contents))
+                        Unsafe.Array.toImmutable contents }
+                    |> Section.Custom
+                    |> sections.Add
+                | SectionId.Type ->
+                    let types = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
+                    sections.Add(Section.Type(Unsafe.Array.toImmutable types))
+                | SectionId.Import ->
+                    let imports = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to imports.Length - 1 do
+                        imports[i] <-
+                            { Import.Module = reader.ReadName()
+                              Import.Name = reader.ReadName()
+                              Import.Description =
+                                match reader.ReadByte() with
+                                | 0uy -> reader.ReadIndex() |> ImportDesc.Func
+                                | 1uy -> reader.ReadTableType() |> ImportDesc.Table
+                                | 2uy -> reader.ReadLimits() |> ImportDesc.Mem
+                                | 3uy -> reader.ReadGlobalType() |> ImportDesc.Global
+                                | bad -> failwithf "0x%02X is not a valid import descriptor" bad}
+                    sections.Add(Section.Import(Unsafe.Array.toImmutable imports))
+                | SectionId.Function ->
+                    let indices = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to indices.Length - 1 do indices[i] <- reader.ReadIndex()
+                    sections.Add(Section.Function(Unsafe.Array.toImmutable indices))
+                | SectionId.Table ->
+                    let tables = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to tables.Length - 1 do tables[i] <- reader.ReadTableType()
+                    sections.Add(Section.Table(Unsafe.Array.toImmutable tables))
+                | SectionId.Memory ->
+                    let mems = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to mems.Length - 1 do mems[i] <- reader.ReadLimits()
+                    sections.Add(Section.Memory(Unsafe.Array.toImmutable mems))
+                | SectionId.Global ->
+                    let glbls = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to glbls.Length - 1 do
+                        glbls[i] <-
+                            { Global.Type = reader.ReadGlobalType()
+                              Global.Expression = parseExpression reader &instructionSequenceBuilder }
+                    sections.Add(Section.Global(Unsafe.Array.toImmutable glbls))
+                | SectionId.Export ->
+                    let exports = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to exports.Length - 1 do
+                        exports[i] <-
+                            { Export.Name = reader.ReadName()
+                              Description =
+                                let kind = reader.ReadByte()
+                                let index = reader.ReadUnsignedInteger()
+                                match kind with
+                                | 0uy -> ExportDesc.Func(FuncIdx.From index)
+                                | 1uy -> ExportDesc.Table(TableIdx.From index)
+                                | 2uy -> ExportDesc.Mem(MemIdx.From index)
+                                | 3uy -> ExportDesc.Global(GlobalIdx.From index)
+                                | _ -> failwithf "0x%02X is not a valid export kind" kind }
+                    sections.Add(Section.Export(Unsafe.Array.toImmutable exports))
+                | SectionId.Start -> sections.Add(Section.Start(reader.ReadIndex()))
+                | SectionId.Element ->
+                    let elements = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to elements.Length - 1 do
+                        elements[i] <-
+                            match reader.ReadUnsignedInteger() |> Checked.uint32 with
+                            | 0u ->
+                                let offset = parseExpression reader &instructionSequenceBuilder
+                                let elements = parseFunctionIndicesAsExpressions reader
                                 { Element.Type = FuncRef
-                                  Element.Expressions = parseFunctionIndicesAsExpressions reader
+                                  Element.Expressions = elements
+                                  Element.Mode = ElementMode.Active(TableIdx 0, offset) }
+                            | 1u ->
+                                match reader.ReadByte() with
+                                | 0uy ->
+                                    { Element.Type = FuncRef
+                                      Element.Expressions = parseFunctionIndicesAsExpressions reader
+                                      Element.Mode = ElementMode.Passive }
+                                | bad -> failwithf "0x%02X is not a valid element kind" bad
+                            | 2u ->
+                                let table = reader.ReadIndex()
+                                let offset = parseExpression reader &instructionSequenceBuilder
+                                match reader.ReadByte() with
+                                | 0uy ->
+                                    { Element.Type = FuncRef
+                                      Element.Expressions = parseFunctionIndicesAsExpressions reader
+                                      Element.Mode = ElementMode.Active(table, offset) }
+                                | bad -> failwithf "0x%02X is not a valid element kind" bad
+                            | 3u ->
+                                match reader.ReadByte() with
+                                | 0uy ->
+                                    { Element.Type = FuncRef
+                                      Element.Expressions = parseFunctionIndicesAsExpressions reader
+                                      Element.Mode = ElementMode.Declarative }
+                                | bad -> failwithf "0x%02X is not a valid element kind" bad
+                            | 4u ->
+                                let offset = parseExpression reader &instructionSequenceBuilder
+                                { Element.Type = FuncRef
+                                  Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
+                                  Element.Mode = ElementMode.Active(TableIdx 0, offset) }
+                            | 5u ->
+                                { Element.Type = reader.ReadRefType()
+                                  Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
                                   Element.Mode = ElementMode.Passive }
-                            | bad -> failwithf "0x%02X is not a valid element kind" bad
-                        | 2u ->
-                            let table = reader.ReadIndex()
-                            let offset = parseExpression reader &instructionSequenceBuilder
-                            match reader.ReadByte() with
-                            | 0uy ->
-                                { Element.Type = FuncRef
-                                  Element.Expressions = parseFunctionIndicesAsExpressions reader
+                            | 6u ->
+                                let table = reader.ReadIndex()
+                                let offset = parseExpression reader &instructionSequenceBuilder
+                                let etype = reader.ReadRefType()
+                                { Element.Type = etype
+                                  Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
                                   Element.Mode = ElementMode.Active(table, offset) }
-                            | bad -> failwithf "0x%02X is not a valid element kind" bad
-                        | 3u ->
-                            match reader.ReadByte() with
-                            | 0uy ->
-                                { Element.Type = FuncRef
-                                  Element.Expressions = parseFunctionIndicesAsExpressions reader
+                            | 7u ->
+                                { Element.Type = reader.ReadRefType()
+                                  Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
                                   Element.Mode = ElementMode.Declarative }
-                            | bad -> failwithf "0x%02X is not a valid element kind" bad
-                        | 4u ->
-                            let offset = parseExpression reader &instructionSequenceBuilder
-                            { Element.Type = FuncRef
-                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
-                              Element.Mode = ElementMode.Active(TableIdx 0, offset) }
-                        | 5u ->
-                            { Element.Type = reader.ReadRefType()
-                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
-                              Element.Mode = ElementMode.Passive }
-                        | 6u ->
-                            let table = reader.ReadIndex()
-                            let offset = parseExpression reader &instructionSequenceBuilder
-                            let etype = reader.ReadRefType()
-                            { Element.Type = etype
-                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
-                              Element.Mode = ElementMode.Active(table, offset) }
-                        | 7u ->
-                            { Element.Type = reader.ReadRefType()
-                              Element.Expressions = parseExpressionVec reader &instructionSequenceBuilder
-                              Element.Mode = ElementMode.Declarative }
-                        | bad -> failwithf "%i is not a valid element flags combination" bad
-                sections.Add(Section.Element(Unsafe.Array.toImmutable elements))
-            | SectionId.Code ->
-                let code = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionSequenceBuilder
-                sections.Add(Section.Code(Unsafe.Array.toImmutable code))
-            | SectionId.Data ->
-                let data = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                for i = 0 to data.Length - 1 do
-                    data[i] <-
-                        match reader.ReadUnsignedInteger() |> Checked.uint32 with
-                        | 0u ->
-                            let expression = parseExpression reader &instructionSequenceBuilder
-                            let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                            reader.ReadAll(Span bytes)
-                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(MemIdx 0, expression) }
-                        | 1u ->
-                            let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                            reader.ReadAll(Span bytes)
-                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Passive }
-                        | 2u ->
-                            let index = reader.ReadIndex()
-                            let expression = parseExpression reader &instructionSequenceBuilder
-                            let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
-                            reader.ReadAll(Span bytes)
-                            { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(index, expression) }
-                        | bad -> failwithf "0x%02X is not a valid data kind" bad
-                sections.Add(Section.Data(Unsafe.Array.toImmutable data))
-            | SectionId.DataCount -> sections.Add(Section.DataCount(reader.ReadUnsignedInteger() |> Checked.uint32))
-            | unknown -> failwithf "unknown section id 0x%02X" (uint8 unknown)
+                            | bad -> failwithf "%i is not a valid element flags combination" bad
+                    sections.Add(Section.Element(Unsafe.Array.toImmutable elements))
+                | SectionId.Code ->
+                    let code = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to code.Length - 1 do code[i] <- parseCodeEntry reader &instructionSequenceBuilder
+                    sections.Add(Section.Code(Unsafe.Array.toImmutable code))
+                | SectionId.Data ->
+                    let data = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                    for i = 0 to data.Length - 1 do
+                        data[i] <-
+                            match reader.ReadUnsignedInteger() |> Checked.uint32 with
+                            | 0u ->
+                                let expression = parseExpression reader &instructionSequenceBuilder
+                                let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                                reader.ReadAll(Span bytes)
+                                { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(MemIdx 0, expression) }
+                            | 1u ->
+                                let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                                reader.ReadAll(Span bytes)
+                                { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Passive }
+                            | 2u ->
+                                let index = reader.ReadIndex()
+                                let expression = parseExpression reader &instructionSequenceBuilder
+                                let bytes = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
+                                reader.ReadAll(Span bytes)
+                                { Data.Bytes = Unsafe.Array.toImmutable bytes; Mode = DataMode.Active(index, expression) }
+                            | bad -> failwithf "0x%02X is not a valid data kind" bad
+                    sections.Add(Section.Data(Unsafe.Array.toImmutable data))
+                | SectionId.DataCount -> sections.Add(Section.DataCount(reader.ReadUnsignedInteger() |> Checked.uint32))
+                | unknown -> failwithf "unknown section id 0x%02X" (uint8 unknown)
 
-            let actualSectionSize = reader.Offset - sectionStartOffset
-            //assert (int64 actualSectionSize = sectionContentBuffer.Length)
-            if actualSectionSize <> size then
-                failwithf "expected %A section to contain 0x%02X bytes, but got 0x%02X bytes" id size actualSectionSize
+                let actualSectionSize = reader.Offset - sectionStartOffset
+                //assert (int64 actualSectionSize = sectionContentBuffer.Length)
+                if actualSectionSize <> size then
+                    failwithf "expected %A section to contain 0x%02X bytes, but got 0x%02X bytes" id size actualSectionSize
 
-        sections.ToImmutableArray()
+            sections.ToImmutableArray()
+        with
+        | ex -> raise(ParseException(reader.Offset, ex))
     finally
         stream.Close()
 

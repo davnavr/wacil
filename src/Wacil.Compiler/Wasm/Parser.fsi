@@ -11,6 +11,12 @@ type InvalidMagicException =
 
     member Magic : ImmutableArray<byte>
 
+[<Sealed; Class>]
+type ParseException =
+    inherit System.Exception
+
+    member Offset : int
+
 /// <summary>Parses a WebAssembly module from a <see cref="T:System.IO.Stream"/>.</summary>
 /// <exception cref="T:System.ArgumentException">Thrown when the <paramref name="stream"/> does not support reading.</exception>
 val parseFromStream: stream: System.IO.Stream -> Format.Module
