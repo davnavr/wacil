@@ -59,6 +59,7 @@ let translateModuleMemories
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction.CreateLdcI4(int32 memory.Minimum))
             il.Add(CilInstruction.CreateLdcI4 maximum)
+            il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Limits.Constructor))
             il.Add(CilInstruction(CilOpCodes.Newobj, ctor))
             il.Add(CilInstruction(CilOpCodes.Stfld, field))
         | None ->

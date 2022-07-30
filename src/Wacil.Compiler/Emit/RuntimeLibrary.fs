@@ -298,54 +298,6 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
                 tyLimits }
       InstantiatedMemory = memoryInstanceFactory
-    //   Memory =
-    //     { Type = tyMemory
-    //       Signature = sigMemory
-    //       FieldSignature = FieldSignature sigMemory
-    //       Constructor =
-    //         ImportHelpers.importConstructor
-    //             mdle
-    //             [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
-    //             tyMemory
-    //       ReadInt32 =
-    //         ImportHelpers.importMethod
-    //             mdle.DefaultImporter
-    //             CallingConventionAttributes.Default
-    //             mdle.CorLibTypeFactory.Int32
-    //             [| mdle.CorLibTypeFactory.UInt32; sigMemory; mdle.CorLibTypeFactory.UInt32; mdle.CorLibTypeFactory.Byte |]
-    //             "ReadInt32"
-    //             tyMemory
-    //       WriteInt32 =
-    //         ImportHelpers.importMethod
-    //             mdle.DefaultImporter
-    //             CallingConventionAttributes.Default
-    //             mdle.CorLibTypeFactory.Void
-    //             [|
-    //                 mdle.CorLibTypeFactory.UInt32
-    //                 mdle.CorLibTypeFactory.Int32
-    //                 sigMemory
-    //                 mdle.CorLibTypeFactory.UInt32
-    //                 mdle.CorLibTypeFactory.Byte
-    //             |]
-    //             "WriteInt32"
-    //             tyMemory
-    //       Grow =
-    //         ImportHelpers.importMethod
-    //             mdle.DefaultImporter
-    //             CallingConventionAttributes.Default
-    //             mdle.CorLibTypeFactory.Int32
-    //             [| mdle.CorLibTypeFactory.Int32; sigMemory |]
-    //             "Grow"
-    //             tyMemory
-    //       WriteArray =
-    //         ImportHelpers.importMethod
-    //             mdle.DefaultImporter
-    //             CallingConventionAttributes.HasThis
-    //             mdle.CorLibTypeFactory.Void
-    //             [| mdle.CorLibTypeFactory.UInt32; SzArrayTypeSignature mdle.CorLibTypeFactory.Byte |]
-    //             "Write"
-    //             tyMemory
-    //       }
       InstantiatedTable = tableInstanceFactory
       InstantiatedGlobal = globalInstanceFactory
       TableHelpers =
