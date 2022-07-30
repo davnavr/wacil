@@ -16,18 +16,18 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
 
     private byte* address;
 
-    private IntPtr count;
+    private int count;
 
     private bool disposed = false;
 
     public UnmanagedMemory(MemoryType limits) {
         this.limits = limits;
-        count = (IntPtr)limits.Minimum;
+        count = limits.Minimum;
         address = (byte*)Marshal.AllocHGlobal(count);
     }
 
     /// <inheritdoc/>
-    public int PageCount => (int)count;
+    public int PageCount => count;
 
     /// <inheritdoc/>
     public MemoryType Limits => limits;
@@ -40,24 +40,23 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
 
     /// <inheritdoc/>
     public int Grow(int delta) {
-        nint oldPageCount = count;
-        nint newPageCount = count + (nint)delta;
+        int oldPageCount = count;
+        int newPageCount = count + delta;
 
-        if (newPageCount < count || newPageCount < (nint)limits.Maximum) {
+        if (newPageCount < count || !limits.Contains(newPageCount)) {
             return -1;
         }
 
         lock(locker) {
             DisposeCheck();
-            nint newByteSize = newPageCount * (nint)MemoryHelpers.PageSize;
-            address = (byte*)Marshal.ReAllocHGlobal((IntPtr)address, newByteSize);
+            address = (byte*)Marshal.ReAllocHGlobal((nint)address, (nint)MemoryHelpers.ToByteSize(newPageCount));
         }
 
-        return (int)oldPageCount;
+        return oldPageCount;
     }
 
-    private void BoundsCheck(nint index) {
-        if (index > count * (nint)MemoryHelpers.PageSize) {
+    private void BoundsCheck(int index) {
+        if (count == 0 || index >= MemoryHelpers.ToByteSize(count)) {
             throw new IndexOutOfRangeException();
         }
     }
@@ -67,7 +66,7 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
         get {
             lock(locker) {
                 DisposeCheck();
-                BoundsCheck((nint)index);
+                BoundsCheck(index);
                 return *(address + index);
             }
         }
@@ -75,7 +74,7 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
         set {
             lock(locker) {
                 DisposeCheck();
-                BoundsCheck((nint)index);
+                BoundsCheck(index);
                 *(address + index) = value;
             }
         }
@@ -89,7 +88,7 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
 
         lock(locker) {
             DisposeCheck();
-            BoundsCheck((nint)index + (nint)bytes.Length - 1);
+            BoundsCheck(index + bytes.Length - 1);
             bytes.CopyTo(new Span<byte>(address + index, bytes.Length));
         }
     }
@@ -102,7 +101,7 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
 
         lock(locker) {
             DisposeCheck();
-            BoundsCheck((nint)index + (nint)length - 1);
+            BoundsCheck(index + length - 1);
             new Span<byte>(address + index, length).Fill(value);
         }
     }
@@ -114,9 +113,9 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
             }
 
             if (!disposed) {
-                Marshal.FreeHGlobal((IntPtr)address);
+                Marshal.FreeHGlobal((nint)address);
                 address = null;
-                count = IntPtr.Zero;
+                count = 0;
                 disposed = true;
             }
         } finally {

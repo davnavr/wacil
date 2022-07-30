@@ -32,6 +32,8 @@ public readonly struct MemoryType : IEquatable<MemoryType> {
     /// Gets the maximum number of allowed pages.
     public int Count => maximum == -1 ? int.MaxValue : maximum - minimum;
 
+    public bool Contains(int value) => value >= minimum && (maximum == -1 || value <= maximum);
+
     public bool Equals(MemoryType other) => maximum == other.maximum && minimum == other.minimum;
 
     public override bool Equals(object? obj) {

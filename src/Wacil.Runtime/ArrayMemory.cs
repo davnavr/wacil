@@ -15,7 +15,7 @@ public sealed class ArrayMemory : IMemory32 {
     }
 
     /// <inheritdoc/>
-    public int PageCount => buffer.Length / MemoryHelpers.PageSize;
+    public int PageCount => MemoryHelpers.ToPageCount(buffer.Length);
 
     /// <inheritdoc/>
     public byte this[int index] {
@@ -32,7 +32,7 @@ public sealed class ArrayMemory : IMemory32 {
             return -1;
         }
 
-        Array.Resize<byte>(ref buffer, newPageCount * MemoryHelpers.PageSize);
+        Array.Resize<byte>(ref buffer, MemoryHelpers.ToByteSize(newPageCount));
         return oldPageCount;
     }
 

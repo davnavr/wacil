@@ -8,7 +8,10 @@ public static class MemoryHelpers {
     public const int PageSize = 65536;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static int ToPageSize(int bytes) => bytes << 16;
+    internal static int ToPageCount(int bytes) => (int)((uint)bytes >> 16);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int ToByteSize(int pages) => pages << 16;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Grow<T>(int delta, T memory) where T : IMemory32 => memory.Grow(delta);
