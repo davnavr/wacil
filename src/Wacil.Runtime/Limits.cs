@@ -18,7 +18,7 @@ public readonly struct Limits : IEquatable<Limits> {
             throw new ArgumentOutOfRangeException(nameof(maximum));
         }
 
-        if (minimum > maximum) {
+        if (maximum != -1 && minimum > maximum) {
             throw new ArgumentOutOfRangeException(nameof(minimum), minimum, "minimum memory size cannot be greater than maximum size");
         }
 
