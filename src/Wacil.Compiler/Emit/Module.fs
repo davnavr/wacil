@@ -121,6 +121,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             mainClassSignature
             input
             mainClassNamespace
+            options.MemoryImportImplementation
             members
 
     MemoryTranslator.translateModuleMemories
@@ -128,6 +129,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         rtlib
         mainClassDefinition
         input
+        options.MemoryDefinitionImplementation
         members
         mainInstanceConstructor.CilMethodBody
 
