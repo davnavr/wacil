@@ -12,8 +12,7 @@ open AsmResolver.DotNet.Signatures.Types
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type LimitsClass =
-    { Type: ITypeDefOrRef
-      Signature: TypeSignature
+    { Signature: TypeSignature
       Constructor: IMethodDefOrRef }
 
 /// <summary>Represents an instantiation of the <c>Wacil.Runtime.Table&lt;T&gt;</c> class for a particular element type.</summary>
@@ -84,13 +83,15 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
     let importRuntimeType = ImportHelpers.importType mdle.DefaultImporter assembly name
 
     let tyUnreachableException = importRuntimeType "UnreachableException"
-    let tyLimits = importRuntimeType "Limits"
     let tyMemoryHelpers = importRuntimeType "MemoryHelpers"
     let tyTable1 = importRuntimeType "Table`1"
     let tyTableHelpers = importRuntimeType "TableHelpers"
     let specFunctionTable = tyTable1.MakeGenericInstanceType syslib.MulticastDelegate.Signature
     let tyGlobal1 = importRuntimeType "Global`1"
     let tyGlobalHelpers = importRuntimeType "GlobalHelpers"
+
+    let tyLimits = importRuntimeType "Limits"
+    let sigLimits = TypeDefOrRefSignature(tyLimits, isValueType = true)
 
     let tableInstanceFactory =
         let funcRefTable = ref ValueNone
@@ -200,7 +201,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 instantiation'
 
     let memoryInstanceFactory =
-        let constructorParameterTypes = [| TypeDefOrRefSignature tyLimits :> TypeSignature |]
+        let constructorParameterTypes = [| sigLimits :> TypeSignature |]
         let helperTypeParameter = GenericParameterSignature(GenericParameterType.Method, 0)
 
         let readInt32Template =
@@ -273,8 +274,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                       Constructor =
                         match impl with
                         | MemoryImplementation.Any -> None
-                        | _ ->
-                            Some(ImportHelpers.importConstructor mdle constructorParameterTypes memoryTypeReference)
+                        | _ -> Some(ImportHelpers.importConstructor mdle constructorParameterTypes memoryTypeReference)
                       ReadInt32 = readInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
@@ -290,8 +290,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
             tyUnreachableException
       Table = tyTable1
       Limits =
-        { LimitsClass.Type = tyLimits
-          LimitsClass.Signature = TypeDefOrRefSignature tyLimits
+        { LimitsClass.Signature = sigLimits
           LimitsClass.Constructor =
             ImportHelpers.importConstructor
                 mdle
