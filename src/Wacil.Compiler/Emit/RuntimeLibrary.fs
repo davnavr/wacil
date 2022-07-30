@@ -2,11 +2,19 @@
 [<RequireQualifiedAccess>]
 module internal Wacil.Compiler.Emit.RuntimeLibrary
 
+open System.Collections.Generic
+
 open Wacil.Compiler
 
 open AsmResolver.DotNet
 open AsmResolver.DotNet.Signatures
 open AsmResolver.DotNet.Signatures.Types
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type LimitsClass =
+    { Type: ITypeDefOrRef
+      Signature: TypeSignature
+      Constructor: IMethodDefOrRef }
 
 /// <summary>Represents an instantiation of the <c>Wacil.Runtime.Table&lt;T&gt;</c> class for a particular element type.</summary>
 [<NoComparison; NoEquality>]
@@ -20,6 +28,7 @@ type TableInstantiation =
       Initialize: IMethodDefOrRef }
 
 /// <summary>Represents an instantiation of the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
+[<NoComparison; NoEquality>]
 type GlobalInstantiation =
     { Instantiation: GenericInstanceTypeSignature
       Specification: TypeSpecification
@@ -40,15 +49,15 @@ type GlobalInstantiation =
       SetValueHelper: MethodSpecification }
 
 [<NoComparison; NoEquality>]
-type MemoryClass =
+type MemoryInstantiation =
     { Type: ITypeDefOrRef
       Signature: TypeSignature
       FieldSignature: FieldSignature
-      Constructor: IMethodDefOrRef
-      ReadInt32: IMethodDefOrRef
-      WriteInt32: IMethodDefOrRef
-      Grow: IMethodDefOrRef
-      WriteArray: IMethodDefOrRef }
+      Constructor: IMethodDefOrRef option
+      ReadInt32: MethodSpecification
+      WriteInt32: MethodSpecification
+      Grow: MethodSpecification
+      WriteArray: MethodSpecification }
 
 [<NoComparison; NoEquality>]
 type TableHelpersClass =
@@ -58,13 +67,14 @@ type TableHelpersClass =
 [<NoComparison; NoEquality>]
 type References =
     { UnreachableExceptionConstructor: IMethodDefOrRef
-      Memory: MemoryClass
+      Limits: LimitsClass
       Table: ITypeDefOrRef
       TableHelpers: TableHelpersClass
       /// <summary>Instantiates the <c>Wacil.Runtime.Table&lt;T&gt;</c> class for a given element type.</summary>
       InstantiatedTable: Wasm.Format.RefType -> TableInstantiation
       /// <summary>Instantiates the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
-      InstantiatedGlobal: Wasm.Format.ValType -> GlobalInstantiation }
+      InstantiatedGlobal: Wasm.Format.ValType -> GlobalInstantiation
+      InstantiatedMemory: MemoryImplementation -> MemoryInstantiation }
 
 let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.References) (mdle: ModuleDefinition) =
     let name = "Wacil.Runtime"
@@ -74,14 +84,13 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
     let importRuntimeType = ImportHelpers.importType mdle.DefaultImporter assembly name
 
     let tyUnreachableException = importRuntimeType "UnreachableException"
-    let tyMemory = importRuntimeType "Memory"
+    let tyLimits = importRuntimeType "Limits"
+    let tyMemoryHelpers = importRuntimeType "MemoryHelpers"
     let tyTable1 = importRuntimeType "Table`1"
     let tyTableHelpers = importRuntimeType "TableHelpers"
     let specFunctionTable = tyTable1.MakeGenericInstanceType syslib.MulticastDelegate.Signature
     let tyGlobal1 = importRuntimeType "Global`1"
     let tyGlobalHelpers = importRuntimeType "GlobalHelpers"
-
-    let sigMemory = TypeDefOrRefSignature tyMemory
 
     let tableInstanceFactory =
         let funcRefTable = ref ValueNone
@@ -150,7 +159,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
 
         helperSetValueTemplate.Signature.GenericParameterCount <- 1
 
-        let lookup = System.Collections.Generic.Dictionary()
+        let lookup = Dictionary()
         let globalValueTypeParameter = GenericParameterSignature(GenericParameterType.Type, 0)
         fun ty ->
             match lookup.TryGetValue ty with
@@ -190,60 +199,153 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 lookup[ty] <- instantiation'
                 instantiation'
 
+    let memoryInstanceFactory =
+        let constructorParameterTypes = [| TypeDefOrRefSignature tyLimits :> TypeSignature |]
+        let helperTypeParameter = GenericParameterSignature(GenericParameterType.Method, 0)
+
+        let readInt32Template =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Generic
+                mdle.CorLibTypeFactory.Int32
+                [| mdle.CorLibTypeFactory.Int32; helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte |]
+                "ReadInt32"
+                tyMemoryHelpers
+
+        readInt32Template.Signature.GenericParameterCount <- 1
+
+        let createWriteTemplate ty =
+            let reference =
+                ImportHelpers.importMethod
+                    mdle.DefaultImporter
+                    CallingConventionAttributes.Generic
+                    mdle.CorLibTypeFactory.Void
+                    [| mdle.CorLibTypeFactory.Int32; ty; helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte |]
+                    "Write"
+                    tyMemoryHelpers
+            reference.Signature.GenericParameterCount <- 1
+            reference
+
+        let writeInt32Template = createWriteTemplate mdle.CorLibTypeFactory.Int32
+
+        let growHelperTemplate =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Generic
+                mdle.CorLibTypeFactory.Int32
+                [| mdle.CorLibTypeFactory.Int32; helperTypeParameter |]
+                "Grow"
+                tyMemoryHelpers
+
+        growHelperTemplate.Signature.GenericParameterCount <- 1
+
+        let writeArrayTemplate =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Generic
+                mdle.CorLibTypeFactory.Void
+                [| helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte.MakeSzArrayType() |]
+                "Grow"
+                tyMemoryHelpers
+
+        writeArrayTemplate.Signature.GenericParameterCount <- 1
+
+        let lookup = Dictionary<MemoryImplementation, MemoryInstantiation>()
+        fun impl ->
+            match lookup.TryGetValue impl with
+            | true, existing -> existing
+            | false, _ ->
+                let memoryTypeReference =
+                    match impl with
+                    | MemoryImplementation.Any -> "IMemory32"
+                    | MemoryImplementation.Array -> "ArrayMemory"
+                    | MemoryImplementation.Unmanaged -> "UnmanagedMemory"
+                    | MemoryImplementation.Segmented -> "SegmentedMemory"
+                    |> importRuntimeType
+
+                let memoryTypeSignature = TypeDefOrRefSignature memoryTypeReference
+                let memoryTypeArguments = [| memoryTypeSignature :> TypeSignature |]
+
+                let instantiation =
+                    { MemoryInstantiation.Type = memoryTypeReference
+                      Signature = memoryTypeSignature
+                      FieldSignature = FieldSignature memoryTypeSignature
+                      Constructor =
+                        match impl with
+                        | MemoryImplementation.Any -> None
+                        | _ ->
+                            Some(ImportHelpers.importConstructor mdle constructorParameterTypes memoryTypeReference)
+                      ReadInt32 = readInt32Template.MakeGenericInstanceMethod memoryTypeArguments
+                      WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
+                      Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
+                      WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments }
+
+                lookup[impl] <- instantiation
+                instantiation
+
     { UnreachableExceptionConstructor =
         ImportHelpers.importConstructor
             mdle
             Seq.empty
             tyUnreachableException
       Table = tyTable1
-      Memory =
-        { Type = tyMemory
-          Signature = sigMemory
-          FieldSignature = FieldSignature sigMemory
-          Constructor =
+      Limits =
+        { LimitsClass.Type = tyLimits
+          LimitsClass.Signature = TypeDefOrRefSignature tyLimits
+          LimitsClass.Constructor =
             ImportHelpers.importConstructor
                 mdle
                 [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
-                tyMemory
-          ReadInt32 =
-            ImportHelpers.importMethod
-                mdle.DefaultImporter
-                CallingConventionAttributes.Default
-                mdle.CorLibTypeFactory.Int32
-                [| mdle.CorLibTypeFactory.UInt32; sigMemory; mdle.CorLibTypeFactory.UInt32; mdle.CorLibTypeFactory.Byte |]
-                "ReadInt32"
-                tyMemory
-          WriteInt32 =
-            ImportHelpers.importMethod
-                mdle.DefaultImporter
-                CallingConventionAttributes.Default
-                mdle.CorLibTypeFactory.Void
-                [|
-                    mdle.CorLibTypeFactory.UInt32
-                    mdle.CorLibTypeFactory.Int32
-                    sigMemory
-                    mdle.CorLibTypeFactory.UInt32
-                    mdle.CorLibTypeFactory.Byte
-                |]
-                "WriteInt32"
-                tyMemory
-          Grow =
-            ImportHelpers.importMethod
-                mdle.DefaultImporter
-                CallingConventionAttributes.Default
-                mdle.CorLibTypeFactory.Int32
-                [| mdle.CorLibTypeFactory.Int32; sigMemory |]
-                "Grow"
-                tyMemory
-          WriteArray =
-            ImportHelpers.importMethod
-                mdle.DefaultImporter
-                CallingConventionAttributes.HasThis
-                mdle.CorLibTypeFactory.Void
-                [| mdle.CorLibTypeFactory.UInt32; SzArrayTypeSignature mdle.CorLibTypeFactory.Byte |]
-                "Write"
-                tyMemory
-          }
+                tyLimits }
+      InstantiatedMemory = memoryInstanceFactory
+    //   Memory =
+    //     { Type = tyMemory
+    //       Signature = sigMemory
+    //       FieldSignature = FieldSignature sigMemory
+    //       Constructor =
+    //         ImportHelpers.importConstructor
+    //             mdle
+    //             [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
+    //             tyMemory
+    //       ReadInt32 =
+    //         ImportHelpers.importMethod
+    //             mdle.DefaultImporter
+    //             CallingConventionAttributes.Default
+    //             mdle.CorLibTypeFactory.Int32
+    //             [| mdle.CorLibTypeFactory.UInt32; sigMemory; mdle.CorLibTypeFactory.UInt32; mdle.CorLibTypeFactory.Byte |]
+    //             "ReadInt32"
+    //             tyMemory
+    //       WriteInt32 =
+    //         ImportHelpers.importMethod
+    //             mdle.DefaultImporter
+    //             CallingConventionAttributes.Default
+    //             mdle.CorLibTypeFactory.Void
+    //             [|
+    //                 mdle.CorLibTypeFactory.UInt32
+    //                 mdle.CorLibTypeFactory.Int32
+    //                 sigMemory
+    //                 mdle.CorLibTypeFactory.UInt32
+    //                 mdle.CorLibTypeFactory.Byte
+    //             |]
+    //             "WriteInt32"
+    //             tyMemory
+    //       Grow =
+    //         ImportHelpers.importMethod
+    //             mdle.DefaultImporter
+    //             CallingConventionAttributes.Default
+    //             mdle.CorLibTypeFactory.Int32
+    //             [| mdle.CorLibTypeFactory.Int32; sigMemory |]
+    //             "Grow"
+    //             tyMemory
+    //       WriteArray =
+    //         ImportHelpers.importMethod
+    //             mdle.DefaultImporter
+    //             CallingConventionAttributes.HasThis
+    //             mdle.CorLibTypeFactory.Void
+    //             [| mdle.CorLibTypeFactory.UInt32; SzArrayTypeSignature mdle.CorLibTypeFactory.Byte |]
+    //             "Write"
+    //             tyMemory
+    //       }
       InstantiatedTable = tableInstanceFactory
       InstantiatedGlobal = globalInstanceFactory
       TableHelpers =
