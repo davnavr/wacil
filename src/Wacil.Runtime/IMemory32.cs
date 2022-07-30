@@ -29,38 +29,15 @@ public interface IMemory32 : IDisposable {
     public byte this[int index] { get; set; }
 
     /// <summary>Reads a 16-bit integer at the specified <paramref name="index"/>.</summary>
-    public short ReadInt16(int index, byte alignmentPowerHint) {
-        Span<byte> buffer = stackalloc byte[2];
-        buffer[0] = this[index];
-        buffer[1] = this[index + 1];
-        return BinaryPrimitives.ReadInt16LittleEndian(buffer);
-    }
+    public short ReadInt16(int index, byte alignmentPowerHint) => MemoryHelpers.ReadInt16Slow<IMemory32>(this, index);
 
     /// <summary>Reads a 32-bit integer at the specified <paramref name="index"/>.</summary>
     /// <remarks>This provides the implementation for the <c>i32.load</c> instruction.</remarks>
-    public int ReadInt32(int index, byte alignmentPowerHint) {
-        Span<byte> buffer = stackalloc byte[4];
-        buffer[0] = this[index];
-        buffer[1] = this[index + 1];
-        buffer[2] = this[index + 2];
-        buffer[3] = this[index + 3];
-        return BinaryPrimitives.ReadInt32LittleEndian(buffer);
-    }
+    public int ReadInt32(int index, byte alignmentPowerHint) => MemoryHelpers.ReadInt32Slow<IMemory32>(this, index);
 
     /// <summary>Reads a 64-bit integer at the specified <paramref name="index"/>.</summary>
     /// <remarks>This provides the implementation for the <c>i64.load</c> instruction.</remarks>
-    public long ReadInt64(int index, byte alignmentPowerHint) {
-        Span<byte> buffer = stackalloc byte[8];
-        buffer[0] = this[index];
-        buffer[1] = this[index + 1];
-        buffer[2] = this[index + 2];
-        buffer[3] = this[index + 3];
-        buffer[4] = this[index + 4];
-        buffer[5] = this[index + 5];
-        buffer[6] = this[index + 6];
-        buffer[7] = this[index + 7];
-        return BinaryPrimitives.ReadInt64LittleEndian(buffer);
-    }
+    public long ReadInt64(int index, byte alignmentPowerHint) => MemoryHelpers.ReadInt64Slow<IMemory32>(this, index);
 
     /// <summary>
     /// Writes the specified <paramref name="bytes"/> to the this memory starting at the specified <paramref name="index"/>.
@@ -81,29 +58,17 @@ public interface IMemory32 : IDisposable {
     /// <summary>
     /// Writes a 16-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
     /// </summary>
-    public void Write(int index, byte alignmentPowerHint, short value) {
-        Span<byte> buffer = stackalloc byte[2];
-        BinaryPrimitives.WriteInt16LittleEndian(buffer, value);
-        Write(index, buffer);
-    }
+    public void Write(int index, byte alignmentPowerHint, short value) => MemoryHelpers.WriteSlow<IMemory32>(this, index, value);
 
     /// <summary>
     /// Writes a 32-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
     /// </summary>
     /// <remarks>This provides the implementation for the <c>i64.store</c> instruction.</remarks>
-    public void Write(int index, byte alignmentPowerHint, int value) {
-        Span<byte> buffer = stackalloc byte[4];
-        BinaryPrimitives.WriteInt32LittleEndian(buffer, value);
-        Write(index, buffer);
-    }
+    public void Write(int index, byte alignmentPowerHint, int value) => MemoryHelpers.WriteSlow<IMemory32>(this, index, value);
 
     /// <summary>
     /// Writes a 64-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
     /// </summary>
     /// <remarks>This provides the implementation for the <c>i64.store</c> instruction.</remarks>
-    public void Write(int index, byte alignmentPowerHint, long value) {
-        Span<byte> buffer = stackalloc byte[8];
-        BinaryPrimitives.WriteInt64LittleEndian(buffer, value);
-        Write(index, buffer);
-    }
+    public void Write(int index, byte alignmentPowerHint, long value) => MemoryHelpers.WriteSlow<IMemory32>(this, index, value);
 }
