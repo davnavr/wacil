@@ -11,7 +11,7 @@ public sealed class ArrayMemory : IMemory32 {
 
     public ArrayMemory(Limits limits) {
         Limits = limits;
-        buffer = new byte[limits.Minimum];
+        buffer = new byte[MemoryHelpers.ToByteSize(limits.Minimum)];
     }
 
     /// <inheritdoc/>
