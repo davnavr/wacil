@@ -255,6 +255,11 @@ let translateWebAssembly
                 match index with
                 | Arg i -> il.Add(CilInstruction.CreateStarg i)
                 | Loc i -> il.Add(CilInstruction.CreateStloc i)
+            | LocalTee(LocalIndex index) ->
+                il.Add(CilInstruction CilOpCodes.Dup)
+                match index with
+                | Arg i -> il.Add(CilInstruction.CreateStarg i)
+                | Loc i -> il.Add(CilInstruction.CreateStloc i)
             | GlobalGet(GlobalIndex glbl) ->
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
                 match glbl with
