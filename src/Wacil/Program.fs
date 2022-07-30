@@ -72,15 +72,13 @@ let main argv =
 
         use writer = output.OpenWrite()
 
-        Module.compileToStream
-            { TargetFramework = args.GetResult(<@ Framework @>, defaultValue = TargetFramework.Net6)
-              OutputType = OutputType.Assembly(Version(0, 0, 0, 0)) //args.GetResult(<@ Type @>, defaultValue = OutputType.Assembly)
-              OutputName = oname
-              MainClassName = oname
-              RuntimeVersion = Version(1, 0, 0, 0)
-              Namespace = "" }
-            input''
-            writer
+        let options = Options(oname)
+
+        match args.TryGetResult <@ Framework @> with
+        | Some framework -> options.TargetFramework <- framework
+        | None -> ()
+
+        Module.compileToStream options input'' writer
 
         0
     with
