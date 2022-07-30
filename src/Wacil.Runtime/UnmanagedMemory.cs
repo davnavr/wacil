@@ -56,9 +56,8 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
         return (int)oldPageCount;
     }
 
-    private void BoundsCheck(int index) {
-        uint offset = (uint)index;
-        if ((nuint)offset > (nuint)(nint)count * (nuint)MemoryHelpers.PageSize) {
+    private void BoundsCheck(nint index) {
+        if (index > count * (nint)MemoryHelpers.PageSize) {
             throw new IndexOutOfRangeException();
         }
     }
@@ -68,7 +67,7 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
         get {
             lock(locker) {
                 DisposeCheck();
-                BoundsCheck(index);
+                BoundsCheck((nint)index);
                 return *(address + index);
             }
         }
@@ -76,9 +75,35 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
         set {
             lock(locker) {
                 DisposeCheck();
-                BoundsCheck(index);
+                BoundsCheck((nint)index);
                 *(address + index) = value;
             }
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Write(int index, ReadOnlySpan<byte> bytes) {
+        if (bytes.IsEmpty) {
+            return;
+        }
+
+        lock(locker) {
+            DisposeCheck();
+            BoundsCheck((nint)index + (nint)bytes.Length - 1);
+            bytes.CopyTo(new Span<byte>(address + index, bytes.Length));
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Fill(int index, int length, byte value) {
+        if (length == 0) {
+            return;
+        }
+
+        lock(locker) {
+            DisposeCheck();
+            BoundsCheck((nint)index + (nint)length - 1);
+            new Span<byte>(address + index, length).Fill(value);
         }
     }
 

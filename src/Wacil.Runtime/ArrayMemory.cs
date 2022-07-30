@@ -36,5 +36,11 @@ public sealed class ArrayMemory : IMemory32 {
         return oldPageCount;
     }
 
+    /// <inheritdoc/>
+    public void Write(int index, ReadOnlySpan<byte> bytes) => bytes.CopyTo(new Span<byte>(buffer, index, bytes.Length));
+
+    /// <inheritdoc/>
+    public void Fill(int index, int length, byte value) => new Span<byte>(buffer, index, length).Fill(value);
+
     void IDisposable.Dispose() { }
 }

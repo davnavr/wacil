@@ -65,7 +65,7 @@ public interface IMemory32 : IDisposable {
     /// <summary>
     /// Writes the specified <paramref name="bytes"/> to the this memory starting at the specified <paramref name="index"/>.
     /// </summary>
-    public void Write(int index, Span<byte> bytes) {
+    public void Write(int index, ReadOnlySpan<byte> bytes) {
         for (int offset = 0; offset < bytes.Length; offset++) {
             this[index + offset] = bytes[offset];
         }
