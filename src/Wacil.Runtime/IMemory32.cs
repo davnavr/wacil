@@ -5,7 +5,7 @@ using System.Buffers.Binary;
 
 /// <summary>Represents a WebAssembly linear memory with 32-bit addresses.</summary>
 /// <remarks>
-/// Some read and write methods provide a <c>expectedAlignmentPower</c> argument, which implementors can use as a hint to
+/// Some read and write methods provide a <c>alignmentPowerHint</c> argument, which implementors can use as a hint to
 /// determine whether an index is considered aligned or not. If the index is not actually aligned, implementors should perform
 /// an unaligned read/write instead.
 /// </remarks>
@@ -29,7 +29,7 @@ public interface IMemory32 : IDisposable {
     public byte this[int index] { get; set; }
 
     /// <summary>Reads a 16-bit integer at the specified <paramref name="index"/>.</summary>
-    public short ReadInt16(int index, byte expectedAlignmentPower) {
+    public short ReadInt16(int index, byte alignmentPowerHint) {
         Span<byte> buffer = stackalloc byte[2];
         buffer[0] = this[index];
         buffer[1] = this[index + 1];
@@ -38,7 +38,7 @@ public interface IMemory32 : IDisposable {
 
     /// <summary>Reads a 32-bit integer at the specified <paramref name="index"/>.</summary>
     /// <remarks>This provides the implementation for the <c>i32.load</c> instruction.</remarks>
-    public int ReadInt32(int index, byte expectedAlignmentPower) {
+    public int ReadInt32(int index, byte alignmentPowerHint) {
         Span<byte> buffer = stackalloc byte[4];
         buffer[0] = this[index];
         buffer[1] = this[index + 1];
@@ -49,7 +49,7 @@ public interface IMemory32 : IDisposable {
 
     /// <summary>Reads a 64-bit integer at the specified <paramref name="index"/>.</summary>
     /// <remarks>This provides the implementation for the <c>i64.load</c> instruction.</remarks>
-    public long ReadInt64(int index, byte expectedAlignmentPower) {
+    public long ReadInt64(int index, byte alignmentPowerHint) {
         Span<byte> buffer = stackalloc byte[8];
         buffer[0] = this[index];
         buffer[1] = this[index + 1];
@@ -81,7 +81,7 @@ public interface IMemory32 : IDisposable {
     /// <summary>
     /// Writes a 16-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
     /// </summary>
-    public void Write(int index, byte byteExpectedAlignmentPower, short value) {
+    public void Write(int index, byte alignmentPowerHint, short value) {
         Span<byte> buffer = stackalloc byte[2];
         BinaryPrimitives.WriteInt16LittleEndian(buffer, value);
         Write(index, buffer);
@@ -91,7 +91,7 @@ public interface IMemory32 : IDisposable {
     /// Writes a 32-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
     /// </summary>
     /// <remarks>This provides the implementation for the <c>i64.store</c> instruction.</remarks>
-    public void Write(int index, byte byteExpectedAlignmentPower, int value) {
+    public void Write(int index, byte alignmentPowerHint, int value) {
         Span<byte> buffer = stackalloc byte[4];
         BinaryPrimitives.WriteInt32LittleEndian(buffer, value);
         Write(index, buffer);
@@ -101,7 +101,7 @@ public interface IMemory32 : IDisposable {
     /// Writes a 64-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
     /// </summary>
     /// <remarks>This provides the implementation for the <c>i64.store</c> instruction.</remarks>
-    public void Write(int index, byte byteExpectedAlignmentPower, long value) {
+    public void Write(int index, byte alignmentPowerHint, long value) {
         Span<byte> buffer = stackalloc byte[8];
         BinaryPrimitives.WriteInt64LittleEndian(buffer, value);
         Write(index, buffer);
