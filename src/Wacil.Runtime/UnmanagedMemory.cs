@@ -10,7 +10,7 @@ using System.Threading;
 /// freed.
 /// </remarks>
 public unsafe sealed class UnmanagedMemory : IMemory32 {
-    private readonly MemoryType limits;
+    private readonly Limits limits;
 
     private readonly object locker = new();
 
@@ -20,7 +20,7 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
 
     private bool disposed = false;
 
-    public UnmanagedMemory(MemoryType limits) {
+    public UnmanagedMemory(Limits limits) {
         this.limits = limits;
         count = limits.Minimum;
         address = (byte*)Marshal.AllocHGlobal(count);
@@ -30,7 +30,7 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
     public int PageCount => count;
 
     /// <inheritdoc/>
-    public MemoryType Limits => limits;
+    public Limits Limits => limits;
 
     private void DisposeCheck() {
         if (disposed) {

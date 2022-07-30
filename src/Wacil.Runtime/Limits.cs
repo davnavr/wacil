@@ -2,13 +2,14 @@ namespace Wacil.Runtime;
 
 using System;
 
-/// Represents a WebAssembly memory type, which indicates the minimum and/or maximum size of a memory in pages.
-public readonly struct MemoryType : IEquatable<MemoryType> {
+/// Represents WebAssembly limits, which indicate the minimum and/or maximum size of a memory in pages or the number of elements
+/// in a table.
+public readonly struct Limits : IEquatable<Limits> {
     private readonly int minimum;
     private readonly int maximum;
 
-    /// <summary>Constructs a new <see cref="MemoryType"/> with the specified minimum and/or maximum number of pages.</summary>
-    public MemoryType(int minimum = 0, int maximum = -1) {
+    /// <summary>Constructs a new <see cref="Limits"/> with the specified minimum and/or maximum.</summary>
+    public Limits(int minimum = 0, int maximum = -1) {
         if (minimum < 0) {
             throw new ArgumentOutOfRangeException(nameof(minimum), minimum, "minimum memory size cannot be negative");
         }
@@ -29,15 +30,15 @@ public readonly struct MemoryType : IEquatable<MemoryType> {
 
     public int Maximum => maximum;
 
-    /// Gets the maximum number of allowed pages.
+    /// Gets the maximum number of allowed memory pages or table elements.
     public int Count => maximum == -1 ? int.MaxValue : maximum - minimum;
 
     public bool Contains(int value) => value >= minimum && (maximum == -1 || value <= maximum);
 
-    public bool Equals(MemoryType other) => maximum == other.maximum && minimum == other.minimum;
+    public bool Equals(Limits other) => maximum == other.maximum && minimum == other.minimum;
 
     public override bool Equals(object? obj) {
-        if (obj is MemoryType other) {
+        if (obj is Limits other) {
             return Equals(other);
         }
 
@@ -46,7 +47,7 @@ public readonly struct MemoryType : IEquatable<MemoryType> {
     
     public override int GetHashCode() => unchecked(maximum * minimum);
 
-    public static bool operator == (MemoryType x, MemoryType y) => x.Equals(y);
+    public static bool operator == (Limits x, Limits y) => x.Equals(y);
 
-    public static bool operator != (MemoryType x, MemoryType y) => !x.Equals(y);
+    public static bool operator != (Limits x, Limits y) => !x.Equals(y);
 }

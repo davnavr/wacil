@@ -7,9 +7,9 @@ public sealed class ArrayMemory : IMemory32 {
     private byte[] buffer;
 
     /// <inheritdoc/>
-    public MemoryType Limits { get; init; }
+    public Limits Limits { get; init; }
 
-    public ArrayMemory(MemoryType limits) {
+    public ArrayMemory(Limits limits) {
         Limits = limits;
         buffer = new byte[limits.Minimum];
     }

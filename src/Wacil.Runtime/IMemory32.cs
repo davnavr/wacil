@@ -15,7 +15,7 @@ public interface IMemory32 : IDisposable {
     public int PageCount { get; }
 
     /// Gets the minimum and maximum number of pages allowed by this linear memory.
-    public MemoryType Limits { get; }
+    public Limits Limits { get; }
 
     /// <summary>Attempts to increase the number of pages in this linear memory by the specified amount.</summary>
     /// <remarks>This provides the implementation for the <c>memory.grow</c> instruction.</remarks>

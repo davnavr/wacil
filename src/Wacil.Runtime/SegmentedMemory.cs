@@ -24,9 +24,9 @@ public sealed class SegmentedMemory : IMemory32 {
     private readonly List<byte[]> pages;
 
     /// <inheritdoc/>
-    public MemoryType Limits { get; init; }
+    public Limits Limits { get; init; }
 
-    public SegmentedMemory(MemoryType limits) {
+    public SegmentedMemory(Limits limits) {
         Limits = limits;
         pages = new List<byte[]>(limits.Minimum);
 
