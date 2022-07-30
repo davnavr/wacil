@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 /// Represents a WebAssembly linear memory.
+[Obsolete]
 public sealed class Memory {
     public const int PageSize = 65536;
 
