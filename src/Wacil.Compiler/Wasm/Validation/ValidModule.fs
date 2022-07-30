@@ -254,16 +254,14 @@ module Validate =
         member _.PopValue() = 
             if controlFrameStack.IsEmpty then
                 if valueTypeStack.IsEmpty then raise(OperandStackUnderflowException())
-                let popped = valueTypeStack.Pop()
-                popped
+                valueTypeStack.Pop()
             else
                 let frame = controlFrameStack.LastRef()
                 if uint32 valueTypeStack.Length = frame.StartHeight then
                     if not frame.Unreachable then raise(OperandStackUnderflowException())
                     UnknownType
                 else
-                    let popped = valueTypeStack.Pop()
-                    popped
+                    valueTypeStack.Pop()
 
         member this.PopValue expected =
             let actual = this.PopValue()
@@ -289,10 +287,10 @@ module Validate =
 
         member this.PopControlFrame() =
             if controlFrameStack.IsEmpty then raise(ControlFrameStackUnderflowException())
-            let frame = controlFrameStack.Pop()
+            let frame = controlFrameStack.LastRef()
             this.PopManyValues frame.EndTypes |> ignore // Could avoid allocation of popped types array here
             if uint32 valueTypeStack.Length <> frame.StartHeight then raise(OperandStackUnderflowException())
-            frame
+            controlFrameStack.Pop()
 
         member _.LabelTypes frame =
             match frame.ControlFlow with
@@ -341,12 +339,7 @@ module Validate =
             maximumIntroducedBlockCount <- 0
 
             // All expressions implictly define a block
-            controlFrameStack.Add
-                { ControlFrame.ControlFlow = ControlFlow.Block
-                  StartTypes = ImmutableArray.Empty
-                  EndTypes = expression.ResultTypes
-                  StartHeight = 0u
-                  Unreachable = false }
+            this.PushControlFrame(ControlFlow.Block, ImmutableArray.Empty, expression.ResultTypes)
 
             for index = 0 to expression.Source.Length - 1 do
                 let instruction = expression.Source[index]
@@ -372,7 +365,8 @@ module Validate =
                     match frame.ControlFlow with
                     | ControlFlow.If -> this.PushControlFrame(ControlFlow.Else, frame.StartTypes, frame.EndTypes)
                     | _ -> raise(ElseInstructionMismatchException index)
-                | Format.End -> this.PushManyValues(this.PopControlFrame().EndTypes)
+                | Format.End ->
+                    this.PushManyValues(this.PopControlFrame().EndTypes)
                 | Format.Br target -> this.CheckUnconditionalBranch(this.CheckBranchTarget target)
                 | Format.BrIf target ->
                     let target' = this.CheckBranchTarget target
