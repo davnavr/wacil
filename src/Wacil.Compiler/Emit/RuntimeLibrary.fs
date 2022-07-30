@@ -245,7 +245,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 CallingConventionAttributes.Generic
                 mdle.CorLibTypeFactory.Void
                 [| helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte.MakeSzArrayType() |]
-                "Grow"
+                "Write"
                 tyMemoryHelpers
 
         writeArrayTemplate.Signature.GenericParameterCount <- 1
