@@ -352,7 +352,8 @@ let translateWebAssembly
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
                 // TODO: Figure out if an explicit Conv_I1 instruction needs to be emitted.
-                let instantiation = emitPushMemArg arg il
+                let instantiation = emitPushMemory arg.Memory il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
             | I32Store16 arg ->
                 let instantiation = emitPushMemArg arg il
