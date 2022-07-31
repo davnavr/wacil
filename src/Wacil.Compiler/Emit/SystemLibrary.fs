@@ -42,6 +42,11 @@ type RuntimeHelpersClass =
     { InitalizeArray: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
+type BitOperationsClass =
+    { LeadingZeroCountUInt32: IMethodDefOrRef
+      TrailingZeroCountUInt32: IMethodDefOrRef }
+
+[<NoComparison; NoEquality>]
 type References =
     { /// <summary>
       /// Represents a reference to the <see cref="T:System.ValueType"/> class, which serves as the base type for all value types.
@@ -58,6 +63,7 @@ type References =
       ArgumentExceptionConstructor: IMethodDefOrRef
       ArgumentNullExceptionConstructor: IMethodDefOrRef
       RuntimeHelpers: RuntimeHelpersClass
+      BitOperations: BitOperationsClass
       TargetFrameworkAttributeConstructor: ICustomAttributeType
       CompilerGeneratedAttributeConstructor: ICustomAttributeType }
 
@@ -71,6 +77,7 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
     let tyMulticastDelegate = importSystemType "MulticastDelegate"
     let tyType = importSystemType "Type"
     let tyRuntimeHelpers = importCompilerServicesType "RuntimeHelpers"
+    let tyBitOperations = importCoreType "System.Numerics" "BitOperations"
 
     let sigDelegate = TypeDefOrRefSignature tyDelegate
     let sigMethodInfo = TypeDefOrRefSignature(importCoreType "System.Reflection" "MethodInfo")
@@ -129,6 +136,17 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 "GetTypeFromHandle"
                 tyType
           }
+      BitOperations =
+        let bitCountOperation ty name =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Default
+                ty
+                [| ty |]
+                name
+                tyBitOperations
+        { LeadingZeroCountUInt32 = bitCountOperation mdle.CorLibTypeFactory.Int32 "LeadingZeroCount"
+          TrailingZeroCountUInt32 = bitCountOperation mdle.CorLibTypeFactory.Int32 "TrailingZeroCount" }
       RuntimeHelpers =
         { InitalizeArray =
             ImportHelpers.importMethod

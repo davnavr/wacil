@@ -83,6 +83,7 @@ let translateWebAssembly
     (translateFuncType: FuncType -> MethodSignature)
     (tupleTypeCache: _ -> TupleCache.Instantiation)
     (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
+    (syslib: SystemLibrary.References)
     (rtlib: RuntimeLibrary.References)
     (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
     (members: ModuleMembers)
@@ -361,6 +362,8 @@ let translateWebAssembly
             | I32LeU | I64LeU -> emitComplexComparison CilOpCodes.Ble_Un_S il
             | I32GeS | I64GeS -> emitComplexComparison CilOpCodes.Bge_S il
             | I32GeU | I64GeU -> emitComplexComparison CilOpCodes.Bge_Un_S il
+            | I32Clz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.LeadingZeroCountUInt32))
+            | I32Ctz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.TrailingZeroCountUInt32))
             | I32Add | I64Add -> il.Add(CilInstruction CilOpCodes.Add)
             | I32Sub | I64Sub -> il.Add(CilInstruction CilOpCodes.Sub)
             | I32Mul | I64Mul -> il.Add(CilInstruction CilOpCodes.Mul)

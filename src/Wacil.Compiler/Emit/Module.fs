@@ -200,6 +200,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         translateFuncType
         tupleTypeCache
         delegateTypeCache
+        syslib
         rtlib
         input
         members
