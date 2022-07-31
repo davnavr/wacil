@@ -4,7 +4,7 @@
 
 open Swensen.Unquote
 
-let instance = unreachable()
+let instance = unreachable.unreachable()
 
 test <@
     let ex =
