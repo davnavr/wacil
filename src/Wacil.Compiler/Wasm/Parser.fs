@@ -308,7 +308,7 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
         | Opcode.I64Store8 -> instructions.Add(parseMemArg reader |> I64Store8)
         | Opcode.I64Store16 -> instructions.Add(parseMemArg reader |> I64Store16)
         | Opcode.I64Store32 -> instructions.Add(parseMemArg reader |> I64Store32)
-        | Opcode.MemorySize -> instructions.Add(reader.ReadIndex() |> MemoryGrow)
+        | Opcode.MemorySize -> instructions.Add(reader.ReadIndex() |> MemorySize)
         | Opcode.MemoryGrow -> instructions.Add(reader.ReadIndex() |> MemoryGrow)
         | Opcode.I32Const -> instructions.Add(reader.ReadSignedInteger() |> Checked.int32 |> I32Const)
         | Opcode.I64Const -> instructions.Add(reader.ReadSignedInteger() |> I64Const)
