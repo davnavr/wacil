@@ -364,6 +364,7 @@ let translateWebAssembly
             | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
             | I32Shl | I64Shl -> il.Add(CilInstruction CilOpCodes.Shl)
+            | I32ShrU -> il.Add(CilInstruction CilOpCodes.Shr_Un)
             | RefNull _ -> il.Add(CilInstruction CilOpCodes.Ldnull)
             | RefFunc(FuncIdx func) ->
                 il.Add(CilInstruction CilOpCodes.Ldarg_0)
