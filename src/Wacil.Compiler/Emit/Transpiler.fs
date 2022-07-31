@@ -361,7 +361,7 @@ let translateWebAssembly
             | MemorySize memory ->
                 let instantiation = emitPushMemory memory il
                 // Memory instance is on top of the stack
-                il.Add(CilInstruction(CilOpCodes.Call, instantiation.PageCount))
+                il.Add(CilInstruction(instantiation.ThisCallOpCode, instantiation.PageCount))
             | MemoryGrow memory ->
                 // Top of the stack is the size delta
                 let instantiation = emitPushMemory memory il

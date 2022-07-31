@@ -67,6 +67,11 @@ type MemoryInstantiation =
 
     member this.UsesVirtualCalls = this.Constructor.IsNone
 
+    member this.ThisCallOpCode =
+        if this.UsesVirtualCalls
+        then AsmResolver.PE.DotNet.Cil.CilOpCodes.Callvirt
+        else AsmResolver.PE.DotNet.Cil.CilOpCodes.Call
+
 [<NoComparison; NoEquality>]
 type TableHelpersClass =
     { GetFunction: TypeSignature -> IMethodDescriptor }
