@@ -162,6 +162,7 @@ let translateWebAssembly
     for { Expression = expression; Body = cil } in inputs do
         let wasm = expression.Instructions
         let il = cil.Instructions
+        cil.InitializeLocals <- true
 
         for ty in expression.LocalTypes do
             cil.LocalVariables.Add(CilLocalVariable(translateValType ty))
