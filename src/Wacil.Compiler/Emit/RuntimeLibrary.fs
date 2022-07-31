@@ -53,6 +53,7 @@ type MemoryInstantiation =
       Signature: TypeSignature
       FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef option
+      PageCount: IMethodDefOrRef
       ReadByte: MethodSpecification
       ReadInt16: MethodSpecification
       ReadInt32: MethodSpecification
@@ -63,6 +64,8 @@ type MemoryInstantiation =
       WriteInt64: MethodSpecification
       Grow: MethodSpecification
       WriteArray: MethodSpecification }
+
+    member this.UsesVirtualCalls = this.Constructor.IsNone
 
 [<NoComparison; NoEquality>]
 type TableHelpersClass =
@@ -309,6 +312,13 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                         match impl with
                         | MemoryImplementation.Any -> None
                         | _ -> Some(ImportHelpers.importConstructor mdle constructorParameterTypes memoryTypeReference)
+                      PageCount =
+                        ImportHelpers.importPropertyAccessor
+                            mdle.DefaultImporter
+                            CallingConventionAttributes.HasThis
+                            mdle.CorLibTypeFactory.Int32
+                            "get_PageCount"
+                            memoryTypeReference
                       ReadByte = readByteTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       ReadInt16 = readInt16Template.MakeGenericInstanceMethod memoryTypeArguments
                       ReadInt32 = readInt32Template.MakeGenericInstanceMethod memoryTypeArguments

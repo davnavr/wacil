@@ -358,6 +358,10 @@ let translateWebAssembly
             | I32Store16 arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
+            | MemorySize memory ->
+                let instantiation = emitPushMemory memory il
+                // Memory instance is on top of the stack
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.PageCount))
             | MemoryGrow memory ->
                 // Top of the stack is the size delta
                 let instantiation = emitPushMemory memory il
