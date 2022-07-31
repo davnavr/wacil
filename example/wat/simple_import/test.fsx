@@ -5,7 +5,7 @@
 open Swensen.Unquote
 
 let imported (a: int64) = a // This is not factorial
-let math = simple__import.math(simple__import.math.factorial(imported))
-let instance = simple__import(math)
+let math = simple_import.math(System.Func<int64, int64>(imported))
+let instance = simple_import.simple_import(math)
 
 test <@ instance.callImportedFunction() = imported 10L @>

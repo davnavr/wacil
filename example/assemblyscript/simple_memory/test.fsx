@@ -4,7 +4,7 @@
 
 open Swensen.Unquote
 
-let instance = simple_memory()
+let instance = simple_memory.simple_memory()
 
 test <@ instance.memory <> null @>
 test <@ instance.getFunnyNumber() = 42 @>

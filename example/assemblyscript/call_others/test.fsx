@@ -4,6 +4,6 @@
 
 open Swensen.Unquote
 
-let instance = call__others()
+let instance = call_others.call_others()
 
 test <@ instance.doSomething 5 = 59 @>
