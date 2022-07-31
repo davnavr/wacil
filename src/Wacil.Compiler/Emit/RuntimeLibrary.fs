@@ -69,7 +69,9 @@ type TableHelpersClass =
 [<NoComparison; NoEquality>]
 type IntegerHelpersClass =
     { RotateLeftInt32: IMethodDefOrRef
-      RotateRightInt32: IMethodDefOrRef }
+      RotateLeftInt64: IMethodDefOrRef
+      RotateRightInt32: IMethodDefOrRef
+      RotateRightInt64: IMethodDefOrRef }
 
 /// <summary>Represents the references to the runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
@@ -345,10 +347,20 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 mdle.CorLibTypeFactory.Int32
                 [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
                 "RotateLeft"
+          RotateLeftInt64 =
+            integerOperationHelper
+                mdle.CorLibTypeFactory.Int64
+                [| mdle.CorLibTypeFactory.Int64; mdle.CorLibTypeFactory.Int64 |]
+                "RotateLeft"
           RotateRightInt32 =
             integerOperationHelper
                 mdle.CorLibTypeFactory.Int32
                 [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
+                "RotateRight"
+          RotateRightInt64 =
+            integerOperationHelper
+                mdle.CorLibTypeFactory.Int64
+                [| mdle.CorLibTypeFactory.Int64; mdle.CorLibTypeFactory.Int64 |]
                 "RotateRight" }
       TableHelpers =
         let getFunctionTypeParameter = GenericParameterSignature(GenericParameterType.Method, 0)
