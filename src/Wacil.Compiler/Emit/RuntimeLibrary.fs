@@ -65,6 +65,11 @@ type MemoryInstantiation =
 type TableHelpersClass =
     { GetFunction: TypeSignature -> IMethodDescriptor }
 
+[<NoComparison; NoEquality>]
+type IntegerHelpersClass =
+    { RotateLeftInt32: IMethodDefOrRef
+      RotateRightInt32: IMethodDefOrRef }
+
 /// <summary>Represents the references to the runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type References =
@@ -72,6 +77,7 @@ type References =
       Limits: LimitsClass
       Table: ITypeDefOrRef
       TableHelpers: TableHelpersClass
+      IntegerHelpers: IntegerHelpersClass
       /// <summary>Instantiates the <c>Wacil.Runtime.Table&lt;T&gt;</c> class for a given element type.</summary>
       InstantiatedTable: Wasm.Format.RefType -> TableInstantiation
       /// <summary>Instantiates the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
@@ -92,6 +98,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
     let specFunctionTable = tyTable1.MakeGenericInstanceType syslib.MulticastDelegate.Signature
     let tyGlobal1 = importRuntimeType "Global`1"
     let tyGlobalHelpers = importRuntimeType "GlobalHelpers"
+    let tyIntegerHelpers = importRuntimeType "IntegerHelpers"
 
     let tyLimits = importRuntimeType "Limits"
     let sigLimits = TypeDefOrRefSignature(tyLimits, isValueType = true)
@@ -311,6 +318,25 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
       InstantiatedMemory = memoryInstanceFactory
       InstantiatedTable = tableInstanceFactory
       InstantiatedGlobal = globalInstanceFactory
+      IntegerHelpers =
+        let integerOperationHelper returnType parameterTypes name  =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Default
+                returnType
+                parameterTypes
+                name
+                tyIntegerHelpers
+        { RotateLeftInt32 =
+            integerOperationHelper
+                mdle.CorLibTypeFactory.Int32
+                [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
+                "RotateLeft"
+          RotateRightInt32 =
+            integerOperationHelper
+                mdle.CorLibTypeFactory.Int32
+                [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Int32 |]
+                "RotateRight" }
       TableHelpers =
         let getFunctionTypeParameter = GenericParameterSignature(GenericParameterType.Method, 0)
         let getFunctionTemplate =

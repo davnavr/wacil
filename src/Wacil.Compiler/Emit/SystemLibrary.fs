@@ -137,14 +137,17 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 tyType
           }
       BitOperations =
-        let bitCountOperation ty name =
+        let bitOperationHelper returnType parameterTypes name =
             ImportHelpers.importMethod
                 mdle.DefaultImporter
                 CallingConventionAttributes.Default
-                ty
-                [| ty |]
+                returnType
+                parameterTypes
                 name
                 tyBitOperations
+
+        let bitCountOperation ty name = bitOperationHelper ty [| ty |] name
+
         { LeadingZeroCountUInt32 = bitCountOperation mdle.CorLibTypeFactory.Int32 "LeadingZeroCount"
           TrailingZeroCountUInt32 = bitCountOperation mdle.CorLibTypeFactory.Int32 "TrailingZeroCount" }
       RuntimeHelpers =

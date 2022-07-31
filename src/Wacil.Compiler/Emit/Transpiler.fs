@@ -362,6 +362,10 @@ let translateWebAssembly
             | I32LeU | I64LeU -> emitComplexComparison CilOpCodes.Ble_Un_S il
             | I32GeS | I64GeS -> emitComplexComparison CilOpCodes.Bge_S il
             | I32GeU | I64GeU -> emitComplexComparison CilOpCodes.Bge_Un_S il
+            | I32Rotl ->
+                // The integer to rotate is popped last
+                il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateLeftInt32))
+            | I32Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt32))
             | I32Clz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.LeadingZeroCountUInt32))
             | I32Ctz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.TrailingZeroCountUInt32))
             | I32Add | I64Add -> il.Add(CilInstruction CilOpCodes.Add)
