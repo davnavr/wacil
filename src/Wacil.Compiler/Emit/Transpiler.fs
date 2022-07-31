@@ -190,6 +190,13 @@ let translateWebAssembly
             | Nop | DataDrop _ -> il.Add(CilInstruction CilOpCodes.Nop)
             | Br target -> il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel target))
             | BrIf target -> il.Add(CilInstruction(CilOpCodes.Brtrue, branchTargetStack.GetLabel target))
+            | BrTable(targetLabels, defaultLabel) ->
+                // Integer index is on top of the stack
+                let translatedTargetLabels = ResizeArray<ICilLabel> targetLabels.Length
+                for target in targetLabels do translatedTargetLabels.Add(branchTargetStack.GetLabel target)
+                il.Add(CilInstruction(CilOpCodes.Switch, translatedTargetLabels))
+                // Branch to default label
+                il.Add(CilInstruction(CilOpCodes.Br, branchTargetStack.GetLabel defaultLabel))
             | Return -> emitFunctionReturn expression.ResultTypes il
             | Block _ -> branchTargetStack.PushBlock()
             | Loop _ ->
