@@ -403,6 +403,7 @@ let translateWebAssembly
             | I32Mul | I64Mul -> il.Add(CilInstruction CilOpCodes.Mul)
             | I32DivS | I64DivS -> il.Add(CilInstruction CilOpCodes.Div)
             | I32DivU | I64DivU -> il.Add(CilInstruction CilOpCodes.Div_Un)
+            | I32RemU -> il.Add(CilInstruction CilOpCodes.Rem_Un)
             | I32And -> il.Add(CilInstruction CilOpCodes.And)
             | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
