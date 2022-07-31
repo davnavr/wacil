@@ -54,9 +54,11 @@ type MemoryInstantiation =
       FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef option
       ReadByte: MethodSpecification
+      ReadInt16: MethodSpecification
       ReadInt32: MethodSpecification
       ReadInt64: MethodSpecification
       WriteByte: MethodSpecification
+      WriteInt16: MethodSpecification
       WriteInt32: MethodSpecification
       WriteInt64: MethodSpecification
       Grow: MethodSpecification
@@ -241,6 +243,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 [| mdle.CorLibTypeFactory.Int32; helperTypeParameter; mdle.CorLibTypeFactory.Int32; |]
                 "ReadByte"
 
+        let readInt16Template = createReadTemplate mdle.CorLibTypeFactory.Int16 "ReadInt16"
         let readInt32Template = createReadTemplate mdle.CorLibTypeFactory.Int32 "ReadInt32"
         let readInt64Template = createReadTemplate mdle.CorLibTypeFactory.Int64 "ReadInt64"
 
@@ -256,6 +259,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte; helperTypeParameter; mdle.CorLibTypeFactory.Int32 |]
                 "Write"
 
+        let writeInt16Template = createWriteTemplate mdle.CorLibTypeFactory.Int16
         let writeInt32Template = createWriteTemplate mdle.CorLibTypeFactory.Int32
         let writeInt64Template = createWriteTemplate mdle.CorLibTypeFactory.Int64
 
@@ -306,9 +310,11 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                         | MemoryImplementation.Any -> None
                         | _ -> Some(ImportHelpers.importConstructor mdle constructorParameterTypes memoryTypeReference)
                       ReadByte = readByteTemplate.MakeGenericInstanceMethod memoryTypeArguments
+                      ReadInt16 = readInt16Template.MakeGenericInstanceMethod memoryTypeArguments
                       ReadInt32 = readInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       ReadInt64 = readInt64Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteByte = writeByteTemplate.MakeGenericInstanceMethod memoryTypeArguments
+                      WriteInt16 = writeInt16Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt64 = writeInt64Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments

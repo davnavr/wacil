@@ -335,6 +335,10 @@ let translateWebAssembly
                 il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadByte))
                 il.Add(CilInstruction CilOpCodes.Conv_I4)
+            | I32Load16U arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt16))
+                il.Add(CilInstruction CilOpCodes.Conv_U4)
             | I64Load32U arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
@@ -347,9 +351,12 @@ let translateWebAssembly
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
-                // TODO: Figure out if an explicit Conv_I8 instruction needs to be emitted.
+                // TODO: Figure out if an explicit Conv_I1 instruction needs to be emitted.
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
+            | I32Store16 arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
             | MemoryGrow memory ->
                 // Top of the stack is the size delta
                 let instantiation = emitPushMemory memory il
