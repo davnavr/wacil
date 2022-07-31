@@ -58,30 +58,19 @@ public static class MemoryHelpers {
 
     public static short ReadInt16Slow<T>(T memory, int index) where T : IMemory32 {
         Span<byte> buffer = stackalloc byte[2];
-        buffer[0] = memory[index];
-        buffer[1] = memory[index + 1];
+        memory.Read(index, buffer);
         return BinaryPrimitives.ReadInt16LittleEndian(buffer);
     }
 
     public static int ReadInt32Slow<T>(T memory, int index) where T : IMemory32 {
         Span<byte> buffer = stackalloc byte[4];
-        buffer[0] = memory[index];
-        buffer[1] = memory[index + 1];
-        buffer[2] = memory[index + 2];
-        buffer[3] = memory[index + 3];
+        memory.Read(index, buffer);
         return BinaryPrimitives.ReadInt32LittleEndian(buffer);
     }
 
     public static long ReadInt64Slow<T>(T memory, int index) where T : IMemory32 {
         Span<byte> buffer = stackalloc byte[8];
-        buffer[0] = memory[index];
-        buffer[1] = memory[index + 1];
-        buffer[2] = memory[index + 2];
-        buffer[3] = memory[index + 3];
-        buffer[4] = memory[index + 4];
-        buffer[5] = memory[index + 5];
-        buffer[6] = memory[index + 6];
-        buffer[7] = memory[index + 7];
+        memory.Read(index, buffer);
         return BinaryPrimitives.ReadInt64LittleEndian(buffer);
     }
 

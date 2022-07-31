@@ -39,6 +39,12 @@ public interface IMemory32 : IDisposable {
     /// <remarks>This provides the implementation for the <c>i64.load</c> instruction.</remarks>
     public long ReadInt64(int index, byte alignmentPowerHint) => MemoryHelpers.ReadInt64Slow<IMemory32>(this, index);
 
+    public void Read(int index, Span<byte> buffer) {
+        for (int i = 0; i < buffer.Length; i++) {
+            buffer[i] = this[index + i];
+        }
+    }
+
     /// <summary>
     /// Writes the specified <paramref name="bytes"/> to the this memory starting at the specified <paramref name="index"/>.
     /// </summary>
