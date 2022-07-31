@@ -16,10 +16,12 @@ let translateModuleMemories
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
     (wasm: Wasm.Validation.ValidModule)
+    (memoryDefinitionImplementation: MemoryImplementation)
     (members: ModuleMembers)
     (moduleInstanceConstructor: CilMethodBody)
     =
     let firstDefinedIndex = wasm.Imports.Imports.Memories.Length
+    let memoryDefinitionInstantiation = rtlib.InstantiatedMemory memoryDefinitionImplementation
 
     for i in 0..wasm.Memories.Length - 1 do
         let memory = wasm.Memories[i]
@@ -28,7 +30,7 @@ let translateModuleMemories
         let field =
             DefinitionHelpers.addFieldDefinition
                 moduleClassDefinition
-                rtlib.Memory.FieldSignature
+                memoryDefinitionInstantiation.FieldSignature
                 FieldAttributes.InitOnly
                 ("__memory@" + string index)
 
@@ -36,7 +38,7 @@ let translateModuleMemories
         | true, memoryExportName ->
             DefinitionHelpers.addInstanceFieldGetter
                 moduleClassDefinition
-                rtlib.Memory.Signature
+                memoryDefinitionInstantiation.Signature
                 PropertyAttributes.None
                 (MethodAttributes.Public ||| MethodAttributes.HideBySig)
                 field
@@ -48,12 +50,17 @@ let translateModuleMemories
             | ValueSome m -> int32 m
             | ValueNone -> -1
 
-        members.Memories[index] <- MemoryMember.Defined field
+        members.Memories[index] <- MemoryMember.Defined(field, memoryDefinitionInstantiation)
 
-        // Append memory initialization code to the module constructor
-        let il = moduleInstanceConstructor.Instructions
-        il.Add(CilInstruction CilOpCodes.Ldarg_0)
-        il.Add(CilInstruction.CreateLdcI4(int32 memory.Minimum))
-        il.Add(CilInstruction.CreateLdcI4 maximum)
-        il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Memory.Constructor))
-        il.Add(CilInstruction(CilOpCodes.Stfld, field))
+        match memoryDefinitionInstantiation.Constructor with
+        | Some ctor ->
+            // Append memory initialization code to the module constructor
+            let il = moduleInstanceConstructor.Instructions
+            il.Add(CilInstruction CilOpCodes.Ldarg_0)
+            il.Add(CilInstruction.CreateLdcI4(int32 memory.Minimum))
+            il.Add(CilInstruction.CreateLdcI4 maximum)
+            il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Limits.Constructor))
+            il.Add(CilInstruction(CilOpCodes.Newobj, ctor))
+            il.Add(CilInstruction(CilOpCodes.Stfld, field))
+        | None ->
+            failwith "TODO: Prevent IMemory32 from being used for defined memories"

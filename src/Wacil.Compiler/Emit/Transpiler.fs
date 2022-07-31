@@ -112,11 +112,13 @@ let translateWebAssembly
         il.Add(CilInstruction CilOpCodes.Ldarg_0)
 
         match members.Memories[index] with
-        | MemoryMember.Defined memory ->
+        | MemoryMember.Defined(memory, instantiation) ->
             il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
-        | MemoryMember.Imported(import, memory) ->
+            instantiation
+        | MemoryMember.Imported(import, memory, instantiation) ->
             il.Add(CilInstruction(CilOpCodes.Ldfld, import))
             il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+            instantiation
 
     let emitPushTable (TableIdx index) (il: CilInstructionCollection) =
         il.Add(CilInstruction CilOpCodes.Ldarg_0)
@@ -130,9 +132,10 @@ let translateWebAssembly
             instantiation
 
     let emitPushMemArg (arg: MemArg) il =
-        emitPushMemory arg.Memory il
+        let instantiation = emitPushMemory arg.Memory il
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
         il.Add(CilInstruction.CreateLdcI4(int32 arg.Alignment.Power))
+        instantiation
 
     let emitMultiValueDeconstruct (types: ImmutableArray<ValType>) temporaryLocalCache (il: CilInstructionCollection) =
         let tupleTypeInstantiation = tupleTypeCache types
@@ -308,16 +311,20 @@ let translateWebAssembly
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.Get))
             | I32Load arg ->
                 // Top of stack is address to load, which is first parameter
-                emitPushMemArg arg il
-                il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.ReadInt32))
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
             | I32Store arg ->
                 // Stack contains the value to store on top of the address
-                emitPushMemArg arg il
-                il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.WriteInt32))
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
+            | I32Store8 arg ->
+                // TODO: Figure out if an explicit Conv_I8 instruction needs to be emitted.
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
             | MemoryGrow memory ->
                 // Top of the stack is the size delta
-                emitPushMemory memory il
-                il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.Grow))
+                let instantiation = emitPushMemory memory il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.Grow))
             | I32Const value -> il.Add(CilInstruction.CreateLdcI4 value)
             | I64Const value ->
                 if (value >>> 32) &&& 0xFFFF_FFFFL = 0L then

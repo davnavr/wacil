@@ -6,9 +6,13 @@ open Swensen.Unquote
 
 open Wacil.Runtime
 
-let instance = my__stack()
-let stack = uint32(instance._stack_push 4)
-Memory.WriteInt32(stack, 9, instance.memory, 0u, 2uy)
-Memory.WriteInt32(stack, 10, instance.memory, 4u, 2uy)
+let memory = ArrayMemory(Limits(1)) :> IMemory32
+let instance = my_stack.my_stack(my_stack.env memory)
+
+let first = instance._stack_push 4
+memory.Write(first, 2uy, 9)
+
+let second = instance._stack_push 4
+memory.Write(second, 2uy, 10)
 
 test <@ 9 + 10 = instance.addition() @>

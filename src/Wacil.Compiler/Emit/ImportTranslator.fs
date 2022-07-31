@@ -39,6 +39,7 @@ let translateModuleImports
     (moduleClassSignature: TypeSignature)
     (wasm: Wasm.Validation.ValidModule)
     (ns: string)
+    (memoryImportImplementation: MemoryImplementation)
     (members: ModuleMembers)
     =
     let constructorParameterNames = ResizeArray()
@@ -155,24 +156,25 @@ let translateModuleImports
 
             members.Tables[int32 table.Index] <- TableMember.Imported(importInstanceField, field, instantiatedTableType)
 
+        let memoryImportInstantiation = rtlib.InstantiatedMemory memoryImportImplementation
         for memory in imports.Memories do
             let name = mangleMemberName memory.Name
 
             let field =
                 DefinitionHelpers.addFieldDefinition
                     importClassDefinition
-                    rtlib.Memory.FieldSignature
+                    memoryImportInstantiation.FieldSignature
                     FieldAttributes.InitOnly
                     name
                     
-            constructorParameterTypes.Add rtlib.Memory.Signature
+            constructorParameterTypes.Add memoryImportInstantiation.Signature
             constructorParameterNames.Add name
 
             let index = importParameterIndex.Next()
             // TODO: Need to check that memory limits are correct
             importMemberInitializers.Add(CilHelpers.emitArgumentStoreWithNullCheck syslib index memory.Name field)
 
-            members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field)
+            members.Memories[int32 memory.Index] <- MemoryMember.Imported(importInstanceField, field, memoryImportInstantiation)
 
         for glbl in imports.Globals do
             let name = mangleMemberName glbl.Name

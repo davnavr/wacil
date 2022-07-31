@@ -18,8 +18,8 @@ type TableMember =
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type MemoryMember =
-    | Defined of memory: FieldDefinition
-    | Imported of import: FieldDefinition * memory: FieldDefinition
+    | Defined of memory: FieldDefinition * RuntimeLibrary.MemoryInstantiation
+    | Imported of import: FieldDefinition * memory: FieldDefinition * RuntimeLibrary.MemoryInstantiation
 
 [<RequireQualifiedAccess; NoComparison; NoEquality>]
 type GlobalMember =

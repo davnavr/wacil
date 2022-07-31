@@ -72,15 +72,19 @@ let translateDataSegments
 
             let il = moduleInstanceConstructor.Instructions
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
-            match members.Memories[int32 activeDataSegment.Memory] with
-            | MemoryMember.Defined(memory) ->
-                il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
-            | MemoryMember.Imported(import, memory) ->
-                il.Add(CilInstruction(CilOpCodes.Ldfld, import))
-                il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+
+            let instantiation =
+                match members.Memories[int32 activeDataSegment.Memory] with
+                | MemoryMember.Defined(memory, instantiation) ->
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+                    instantiation
+                | MemoryMember.Imported(import, memory, instantiation) ->
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, import))
+                    il.Add(CilInstruction(CilOpCodes.Ldfld, memory))
+                    instantiation
 
             il.Add(CilInstruction CilOpCodes.Ldarg_0)
             il.Add(CilInstruction(CilOpCodes.Call, dataOffsetFunction))
             
             CilHelpers.emitArrayFromModuleData syslib data.Bytes.Length tyByteSignature actualBytesField il
-            il.Add(CilInstruction(CilOpCodes.Call, rtlib.Memory.WriteArray))
+            il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteArray))
