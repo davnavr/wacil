@@ -325,6 +325,11 @@ let translateWebAssembly
             | I64Load arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
+            | I32Load8U arg ->
+                let instantiation = emitPushMemory arg.Memory il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadByte))
+                il.Add(CilInstruction CilOpCodes.Conv_U4)
             | I32Store arg ->
                 // Stack contains the value to store on top of the address
                 let instantiation = emitPushMemArg arg il
