@@ -54,6 +54,7 @@ type MemoryInstantiation =
       FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef option
       ReadInt32: MethodSpecification
+      WriteByte: MethodSpecification
       WriteInt32: MethodSpecification
       Grow: MethodSpecification
       WriteArray: MethodSpecification }
@@ -227,6 +228,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
             reference.Signature.GenericParameterCount <- 1
             reference
 
+        let writeByteTemplate = createWriteTemplate mdle.CorLibTypeFactory.Byte
         let writeInt32Template = createWriteTemplate mdle.CorLibTypeFactory.Int32
 
         let growHelperTemplate =
@@ -276,6 +278,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                         | MemoryImplementation.Any -> None
                         | _ -> Some(ImportHelpers.importConstructor mdle constructorParameterTypes memoryTypeReference)
                       ReadInt32 = readInt32Template.MakeGenericInstanceMethod memoryTypeArguments
+                      WriteByte = writeByteTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments }

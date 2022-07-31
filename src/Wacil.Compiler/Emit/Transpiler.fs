@@ -317,6 +317,10 @@ let translateWebAssembly
                 // Stack contains the value to store on top of the address
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
+            | I32Store8 arg ->
+                // TODO: Figure out if an explicit Conv_I8 instruction needs to be emitted.
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
             | MemoryGrow memory ->
                 // Top of the stack is the size delta
                 let instantiation = emitPushMemory memory il
