@@ -54,8 +54,10 @@ type MemoryInstantiation =
       FieldSignature: FieldSignature
       Constructor: IMethodDefOrRef option
       ReadInt32: MethodSpecification
+      ReadInt64: MethodSpecification
       WriteByte: MethodSpecification
       WriteInt32: MethodSpecification
+      WriteInt64: MethodSpecification
       Grow: MethodSpecification
       WriteArray: MethodSpecification }
 
@@ -205,16 +207,20 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
         let constructorParameterTypes = [| sigLimits :> TypeSignature |]
         let helperTypeParameter = GenericParameterSignature(GenericParameterType.Method, 0)
 
-        let readInt32Template =
-            ImportHelpers.importMethod
-                mdle.DefaultImporter
-                CallingConventionAttributes.Generic
-                mdle.CorLibTypeFactory.Int32
-                [| mdle.CorLibTypeFactory.Int32; helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte |]
-                "ReadInt32"
-                tyMemoryHelpers
+        let createReadTemplate ty name =
+            let reference =
+                ImportHelpers.importMethod
+                    mdle.DefaultImporter
+                    CallingConventionAttributes.Generic
+                    ty
+                    [| mdle.CorLibTypeFactory.Int32; helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte |]
+                    name
+                    tyMemoryHelpers
+            reference.Signature.GenericParameterCount <- 1
+            reference
 
-        readInt32Template.Signature.GenericParameterCount <- 1
+        let readInt32Template = createReadTemplate mdle.CorLibTypeFactory.Int32 "ReadInt32"
+        let readInt64Template = createReadTemplate mdle.CorLibTypeFactory.Int32 "ReadInt64"
 
         let createWriteTemplate ty =
             let reference =
@@ -230,6 +236,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
 
         let writeByteTemplate = createWriteTemplate mdle.CorLibTypeFactory.Byte
         let writeInt32Template = createWriteTemplate mdle.CorLibTypeFactory.Int32
+        let writeInt64Template = createWriteTemplate mdle.CorLibTypeFactory.Int64
 
         let growHelperTemplate =
             ImportHelpers.importMethod
@@ -278,8 +285,10 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                         | MemoryImplementation.Any -> None
                         | _ -> Some(ImportHelpers.importConstructor mdle constructorParameterTypes memoryTypeReference)
                       ReadInt32 = readInt32Template.MakeGenericInstanceMethod memoryTypeArguments
+                      ReadInt64 = readInt64Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteByte = writeByteTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
+                      WriteInt64 = writeInt64Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments }
 

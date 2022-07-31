@@ -313,10 +313,16 @@ let translateWebAssembly
                 // Top of stack is address to load, which is first parameter
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
+            | I64Load arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
             | I32Store arg ->
                 // Stack contains the value to store on top of the address
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
+            | I64Store arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
                 // TODO: Figure out if an explicit Conv_I8 instruction needs to be emitted.
                 let instantiation = emitPushMemArg arg il
