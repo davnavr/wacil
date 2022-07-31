@@ -49,6 +49,7 @@ let translateFunctionDefinitions
 
         let staticHelperMethod =
             let signature =
+                parameterTypeBuilder.Clear()
                 for ty in translatedFunctionSignature.ParameterTypes do parameterTypeBuilder.Add ty
                 parameterTypeBuilder.Add moduleClassSignature
                 MethodSignature(
