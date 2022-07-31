@@ -8,4 +8,3 @@ do
     let instance = multi_value.multi_value()
     test <@ instance.doTheThing(5) = struct(5678, 5) @>
     test <@ instance.addThreeThings() = 3 @>
-    test <@ instance.withBlockInputs(42) = 84 @>
