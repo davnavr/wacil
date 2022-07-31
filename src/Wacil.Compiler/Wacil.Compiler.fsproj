@@ -47,6 +47,8 @@
     <Compile Include="Emit\ElementSegmentMember.fs" />
     <Compile Include="Emit\Module.fsi" />
     <Compile Include="Emit\Module.fs" />
+    <Compile Include="Emit\Diagnostics.fsi" />
+    <Compile Include="Emit\Diagnostics.fs" />
   </ItemGroup>
 
 </Project>

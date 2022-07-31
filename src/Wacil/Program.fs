@@ -78,7 +78,7 @@ let main argv =
         | Some framework -> options.TargetFramework <- framework
         | None -> ()
 
-        Module.compileToStream options input'' writer
+        Diagnostics.handleInvalidCil (fun() -> Module.compileToStream options input'' writer) stderr
 
         0
     with
