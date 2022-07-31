@@ -72,7 +72,7 @@ let private emitComplexComparison comparison (il: CilInstructionCollection) =
     let endBranchLabel = CilInstructionLabel()
     il.Add(CilInstruction(comparison, trueBranchLabel))
     il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
-    il.Add(CilInstruction(CilOpCodes.Br_S, trueBranchLabel))
+    il.Add(CilInstruction(CilOpCodes.Br_S, endBranchLabel))
     trueBranchLabel.Instruction <- CilInstruction CilOpCodes.Ldc_I4_1
     endBranchLabel.Instruction <- CilInstruction CilOpCodes.Nop
     il.Add trueBranchLabel.Instruction
