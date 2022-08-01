@@ -1,0 +1,33 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <Import Project="$(MSBuildThisFileDirectory)\..\common.targets" />
+
+  <ItemGroup>
+    <Compile Include="$(MSBuildProjectDirectory)\**\*.rs" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <CrateName Condition="'$(CrateName)'==''">$(ModuleName)</CrateName>
+    <TargetTriple Condition="'$(IncludeWasi)'=='true'">wasm32-wasi</TargetTriple>
+    <TargetTriple Condition="'$(IncludeWasi)'!='true'">wasm32-unknown-unknown</TargetTriple>
+    <CargoFlags>--target $(TargetTriple) --color never</CargoFlags>
+    <_RustConfiguration Condition="'$(Configuration)'=='Release'">release</_RustConfiguration>
+    <_RustConfiguration Condition="'$(_RustConfiguration)'==''">debug</_RustConfiguration>
+    <CargoFlags Condition="'$(_RustConfiguration)'=='release'">$(CargoFlags) --release</CargoFlags>
+    <_RustModuleFile>$(MSBuildProjectDirectory)\target\$(TargetTriple)\$(_RustConfiguration)\$(CrateName).wasm</_RustModuleFile>
+  </PropertyGroup>
+
+  <Target Name="InvokeCargo" AfterTargets="Clean" Inputs="@(Compile)" Outputs="$(_RustModuleFile)">
+    <Exec
+      Command="cargo build $(CargoFlags)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      ConsoleToMsBuild="true"
+      LogStandardErrorAsError="true" />
+  </Target>
+
+  <Target Name="CoreCompile" DependsOnTargets="InvokeCargo" Inputs="$(_RustModuleFile)" Outputs="$(ModuleFile)">
+    <MakeDir Directories="$(OutDir)" />
+    <Copy SourceFiles="$(_RustModuleFile)" DestinationFiles="$(ModuleFile)" />
+  </Target>
+
+</Project>
