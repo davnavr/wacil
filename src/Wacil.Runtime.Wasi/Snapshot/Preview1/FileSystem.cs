@@ -2,6 +2,7 @@ namespace Wacil.Runtime.Wasi.Snapshot.Preview1;
 
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using Wacil.Runtime;
@@ -44,8 +45,8 @@ public sealed class FileSystem<M> where M : IMemory32 {
 
             try {
                 memory.Read(ioVectorPointer, ciovec);
-                int ioBufferPointer = BitConverter.ToInt32(ciovec.Slice(0, 4));
-                int ioBufferLength = BitConverter.ToInt32(ciovec.Slice(4, 8));
+                int ioBufferPointer = BinaryPrimitives.ReadInt32LittleEndian(ciovec.Slice(0, 4));
+                int ioBufferLength = BinaryPrimitives.ReadInt32LittleEndian(ciovec.Slice(4, 4));
                 ioVectorPointer += 8;
 
                 rented = ioBufferLength > smallByteBuffer.Length;
