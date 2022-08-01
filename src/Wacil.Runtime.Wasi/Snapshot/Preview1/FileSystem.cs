@@ -35,6 +35,7 @@ public sealed class FileSystem<M> where M : IMemory32 {
         }
 
         int bytesWrittenCount = 0;
+        Span<byte> ciovec = stackalloc byte[8];
 
         while (ioVectorCount > 0) {
             bool rented;
@@ -42,10 +43,10 @@ public sealed class FileSystem<M> where M : IMemory32 {
             Span<byte> bytes;
 
             try {
-                int ioBufferPointer = memory.ReadInt32(ioVectorPointer, 2);
-                ioVectorPointer += 4;
-                int ioBufferLength = memory.ReadInt32(ioVectorPointer, 2);
-                ioVectorPointer += 4;
+                memory.Read(ioVectorPointer, ciovec);
+                int ioBufferPointer = BitConverter.ToInt32(ciovec.Slice(0, 4));
+                int ioBufferLength = BitConverter.ToInt32(ciovec.Slice(4, 8));
+                ioVectorPointer += 8;
 
                 rented = ioBufferLength > smallByteBuffer.Length;
                 buffer = rented ? ArrayPool<byte>.Shared.Rent(ioBufferLength) : smallByteBuffer;
