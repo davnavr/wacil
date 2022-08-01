@@ -39,6 +39,9 @@ public interface IMemory32 : IDisposable {
     /// <remarks>This provides the implementation for the <c>i64.load</c> instruction.</remarks>
     public long ReadInt64(int index, byte alignmentPowerHint) => MemoryHelpers.ReadInt64Slow<IMemory32>(this, index);
 
+    /// <summary>
+    /// Copies bytes starting at the specified <paramref name="index"/> into the specified <paramref name="buffer"/>.
+    /// </summary>
     public void Read(int index, Span<byte> buffer) {
         for (int i = 0; i < buffer.Length; i++) {
             buffer[i] = this[index + i];
@@ -54,6 +57,10 @@ public interface IMemory32 : IDisposable {
         }
     }
 
+    /// <summary>
+    /// Fills a region of memory of the specified <paramref name="length"/> starting at the specified <paramref name="index"/>
+    /// with the specified <paramref name="value"/>.
+    /// </summary>
     public void Fill(int index, int length, byte value) {
         var end = index + length;
         for (int i = index; i < end; i++) {
@@ -62,18 +69,18 @@ public interface IMemory32 : IDisposable {
     }
 
     /// <summary>
-    /// Writes a 16-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
+    /// Writes a 16-bit integer at the specified <paramref name="index"/>.
     /// </summary>
     public void Write(int index, byte alignmentPowerHint, short value) => MemoryHelpers.WriteSlow<IMemory32>(this, index, value);
 
     /// <summary>
-    /// Writes a 32-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
+    /// Writes a 32-bit integer at the specified <paramref name="index"/>.
     /// </summary>
     /// <remarks>This provides the implementation for the <c>i64.store</c> instruction.</remarks>
     public void Write(int index, byte alignmentPowerHint, int value) => MemoryHelpers.WriteSlow<IMemory32>(this, index, value);
 
     /// <summary>
-    /// Writes a 64-bit integer to the specified <paramref name="memory"/> at the specified <paramref name="index"/>.
+    /// Writes a 64-bit integer at the specified <paramref name="index"/>.
     /// </summary>
     /// <remarks>This provides the implementation for the <c>i64.store</c> instruction.</remarks>
     public void Write(int index, byte alignmentPowerHint, long value) => MemoryHelpers.WriteSlow<IMemory32>(this, index, value);

@@ -36,5 +36,6 @@ public sealed class Global<T> {
         }
     }
 
+    /// <inheritdoc/>
     public override string ToString() => this.value?.ToString() ?? "null";
 }

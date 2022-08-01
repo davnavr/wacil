@@ -3,9 +3,11 @@ namespace Wacil.Runtime;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
+/// Represents a WebAssembly table.
 public sealed class Table<E> where E : class {
     private readonly List<E?> elements;
 
+    /// <summary>Initializes a new table with the specified limits.</summary>
     public Table(int minimumSize = 0, int maximumSize = -1) {
         elements = new(minimumSize);
 
@@ -14,11 +16,13 @@ public sealed class Table<E> where E : class {
         }
     }
 
+    /// Gets the number of elements in the table.
     public int Size {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => elements.Count;
     }
 
+    /// <summary>Gets or sets an element at the specified <paramref name="index"/>.</summary>
     public E? this[int index] {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => Get(index, this);
@@ -26,11 +30,13 @@ public sealed class Table<E> where E : class {
         set => Set(index, value, this);
     }
 
+    /// <summary>Gets an element at the specified <paramref name="index"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static E? Get(int index, Table<E> table) {
         return table.elements[index];
     }
 
+    /// <summary>Sets an element at the specified <paramref name="index"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Set(int index, E? item, Table<E> table) {
         table.elements[index] = item;
@@ -48,6 +54,10 @@ public sealed class Table<E> where E : class {
         }
     }
 
+    /// <summary>
+    /// Increases the number of elements in this <paramref name="table"/> by the specified amount, filling the new elements with
+    /// an <paramref name="initial"/> value.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Grow(E? initial, int delta, Table<E> table) {
         if (delta >= 0) {

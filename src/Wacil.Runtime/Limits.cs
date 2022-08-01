@@ -8,7 +8,7 @@ public readonly struct Limits : IEquatable<Limits> {
     private readonly int minimum;
     private readonly int maximum;
 
-    /// <summary>Constructs a new <see cref="Limits"/> with the specified minimum and/or maximum.</summary>
+    /// <summary>Initializes <see cref="Limits"/> with the specified minimum and/or maximum.</summary>
     public Limits(int minimum = 0, int maximum = -1) {
         if (minimum < 0) {
             throw new ArgumentOutOfRangeException(nameof(minimum), minimum, "minimum memory size cannot be negative");
@@ -26,17 +26,19 @@ public readonly struct Limits : IEquatable<Limits> {
         this.maximum = maximum;
     }
 
+    /// The minimum number of memory pages or table elements.
     public int Minimum => minimum;
 
+    /// The maximum allowed number of memory pages or table elements.
     public int Maximum => maximum;
 
-    /// Gets the maximum number of allowed memory pages or table elements.
-    public int Count => maximum == -1 ? int.MaxValue : maximum - minimum;
-
+    /// Determines whether the specified count is equal to
     public bool Contains(int value) => value >= minimum && (maximum == -1 || value <= maximum);
 
+    /// <inheritdoc/>
     public bool Equals(Limits other) => maximum == other.maximum && minimum == other.minimum;
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj) {
         if (obj is Limits other) {
             return Equals(other);
@@ -44,10 +46,13 @@ public readonly struct Limits : IEquatable<Limits> {
 
         return false;
     }
-    
+
+    /// <inheritdoc/>
     public override int GetHashCode() => unchecked(maximum * minimum);
 
+    /// <inheritdoc/>
     public static bool operator == (Limits x, Limits y) => x.Equals(y);
 
+    /// <inheritdoc/>
     public static bool operator != (Limits x, Limits y) => !x.Equals(y);
 }

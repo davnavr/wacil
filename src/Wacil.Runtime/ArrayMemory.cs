@@ -9,6 +9,7 @@ public sealed class ArrayMemory : IMemory32 {
     /// <inheritdoc/>
     public Limits Limits { get; init; }
 
+    /// <summary>Initializes a new linear memory with the specified <paramref name="limits"/>.</summary>
     public ArrayMemory(Limits limits) {
         Limits = limits;
         buffer = new byte[MemoryHelpers.ToByteSize(limits.Minimum)];
@@ -39,6 +40,7 @@ public sealed class ArrayMemory : IMemory32 {
     /// <inheritdoc/>
     public void Write(int index, ReadOnlySpan<byte> bytes) => bytes.CopyTo(new Span<byte>(buffer, index, bytes.Length));
 
+    /// <inheritdoc/>
     public void Read(int index, Span<byte> buffer) => new Span<byte>(this.buffer, index, buffer.Length).CopyTo(buffer);
 
     /// <inheritdoc/>
