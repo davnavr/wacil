@@ -42,6 +42,12 @@ public static class MemoryHelpers {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Grow<T>(int delta, T memory) where T : IMemory32 => memory.Grow(delta);
 
+    /// <summary>Provides the implementation for the <c>memory.fill</c> WebAssembly instruction.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void Fill<T>(int index, byte value, int length, T memory) where T : IMemory32 {
+        memory.Fill(index, length, value);
+    }
+
     /// Reads a byte at a specific location.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte ReadByte<T>(int index, T memory, int offset) where T : IMemory32 {

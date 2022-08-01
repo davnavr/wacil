@@ -428,6 +428,9 @@ let translateWebAssembly
                     let delegateTypeInstance = delegateTypeCache method.Signature
                     il.Add(CilInstruction(CilOpCodes.Ldftn, method))
                     il.Add(CilInstruction(CilOpCodes.Newobj, delegateTypeInstance.Constructor))
+            | MemoryFill memory ->
+                let instantiation = emitPushMemory memory il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.Fill))
             | TableInit(ElementIndex element, table) ->
                 match element with
                 | ElementSegmentMember.Passive(_, getter) ->

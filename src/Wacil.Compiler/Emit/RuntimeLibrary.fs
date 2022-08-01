@@ -63,6 +63,7 @@ type MemoryInstantiation =
       WriteInt32: MethodSpecification
       WriteInt64: MethodSpecification
       Grow: MethodSpecification
+      Fill: MethodSpecification
       WriteArray: MethodSpecification }
 
     member this.UsesVirtualCalls = this.Constructor.IsNone
@@ -272,13 +273,13 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
         let writeInt64Template = createWriteTemplate mdle.CorLibTypeFactory.Int64
 
         let growHelperTemplate =
-            ImportHelpers.importMethod
-                mdle.DefaultImporter
-                CallingConventionAttributes.Generic
-                mdle.CorLibTypeFactory.Int32
-                [| mdle.CorLibTypeFactory.Int32; helperTypeParameter |]
-                "Grow"
-                tyMemoryHelpers
+            createMemoryHelper mdle.CorLibTypeFactory.Int32 [| mdle.CorLibTypeFactory.Int32; helperTypeParameter |] "Grow"
+
+        let fillHelperTemplate =
+            createMemoryHelper
+                mdle.CorLibTypeFactory.Void
+                [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte; mdle.CorLibTypeFactory.Int32; helperTypeParameter |]
+                "Fill"
 
         growHelperTemplate.Signature.GenericParameterCount <- 1
 
@@ -333,6 +334,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                       WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt64 = writeInt64Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
+                      Fill = fillHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments }
 
                 lookup[impl] <- instantiation
