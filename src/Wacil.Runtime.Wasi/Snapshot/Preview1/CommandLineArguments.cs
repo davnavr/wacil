@@ -10,15 +10,15 @@ using Wacil.Runtime;
 /// <remarks>
 /// This class is meant to provide implementations for the <c>args_get</c> and <c>args_sizes_get</c> functions.
 /// </remarks>
-public sealed class CommandLineArguments<T> where T : IMemory32 {
-    private readonly T memory;
+public sealed class CommandLineArguments<M> where M : IMemory32 {
+    private readonly M memory;
 
     private readonly List<ImmutableArray<byte>> arguments = new();
 
     private int totalArgumentSize = 0;
 
-    /// <summary>Constructs a new instance of the <see cref="CommandLineArguments{T}"/> class.</summary>
-    public CommandLineArguments(T memory) {
+    /// <summary>Initializes an empty <see cref="CommandLineArguments{M}"/> instance.</summary>
+    public CommandLineArguments(M memory) {
         ArgumentNullException.ThrowIfNull(memory);
         this.memory = memory;
     }
@@ -51,7 +51,7 @@ public sealed class CommandLineArguments<T> where T : IMemory32 {
                 memory.Write(argumentPointerIndex, 2, argumentBufferIndex); // Write the pointer to the argument
                 memory.Write(argumentBufferIndex, arg);
                 memory[arg.Length] = 0; // Write the null terminator.
-            } catch {
+            } catch (IndexOutOfRangeException) {
                 return (int)Errno.Fault;
             }
 
@@ -68,7 +68,7 @@ public sealed class CommandLineArguments<T> where T : IMemory32 {
             memory.Write(argumentCountPointer, 2, arguments.Count);
             memory.Write(argumentSizePointer, 2, totalArgumentSize);
             return (int)Errno.Success;
-        } catch {
+        } catch (IndexOutOfRangeException) {
             return (int)Errno.Fault;
         }
     }
