@@ -46,5 +46,10 @@ public sealed class ArrayMemory : IMemory32 {
     /// <inheritdoc/>
     public void Fill(int index, int length, byte value) => new Span<byte>(buffer, index, length).Fill(value);
 
+    /// <inheritdoc/>
+    public void CopyTo<D>(int destinationIndex, int sourceIndex, int length, D destination) where D : IMemory32 {
+        destination.Write(destinationIndex, new ReadOnlySpan<byte>(buffer, sourceIndex, length));
+    }
+
     void IDisposable.Dispose() { }
 }

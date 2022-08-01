@@ -143,4 +143,21 @@ public static class MemoryHelpers {
     /// <paramref name="index"/>.
     /// </summary>
     public static void Write<T>(T memory, int index, byte[] bytes) where T : IMemory32 => memory.Write(index, bytes);
+
+    internal static void CopySlow<S, D>(int destinationIndex, int sourceIndex, int length, S source, D destination)
+        where S : IMemory32
+        where D : IMemory32
+    {
+        for (int i = 0; i < length; i++) {
+            source[sourceIndex + i] = destination[destinationIndex + i];
+        }
+    }
+
+    /// <summary>Provides the implementation for the <c>memory.copy</c> WebAssembly instruction.</summary>
+    public static void Copy<S, D>(int destinationIndex, int sourceIndex, int length, S source, D destination)
+        where S : IMemory32
+        where D : IMemory32
+    {
+        source.CopyTo<D>(destinationIndex, sourceIndex, length, destination);
+    }
 }

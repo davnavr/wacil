@@ -84,4 +84,9 @@ public interface IMemory32 : IDisposable {
     /// </summary>
     /// <remarks>This provides the implementation for the <c>i64.store</c> instruction.</remarks>
     public void Write(int index, byte alignmentPowerHint, long value) => MemoryHelpers.WriteSlow<IMemory32>(this, index, value);
+
+    /// <summary>Copies bytes from this memory to the specified <paramref name="destination"/>.</summary>
+    public void CopyTo<D>(int destinationIndex, int sourceIndex, int length, D destination) where D : IMemory32 {
+        MemoryHelpers.CopySlow<IMemory32, D>(destinationIndex, sourceIndex, length, this, destination);
+    }
 }
