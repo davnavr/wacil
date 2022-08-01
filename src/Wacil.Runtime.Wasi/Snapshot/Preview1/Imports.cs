@@ -13,4 +13,7 @@ public static class Imports {
 
     /// <summary>Provides the <c>fd_write</c> function.</summary>
     public static Func<int, int, int, int, int> FdWrite<M>(FileSystem<M> fs) where M : IMemory32 => fs.Write;
+
+    /// <summary>Provides the <c>fd_close</c> function.</summary>
+    public static Func<int, int> FdClose<M>(FileSystem<M> fs) where M : IMemory32 => fs.Close;
 }

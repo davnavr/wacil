@@ -54,14 +54,20 @@ public sealed class FileSystem<M> where M : IMemory32 {
                 bytes = new Span<byte>(buffer, 0, ioBufferLength); 
                 memory.Read(ioBufferPointer, bytes);
             } catch {
-                return(int)Errno.Fault;
+                return (int)Errno.Fault;
             }
 
             if (rented) {
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
-            descriptor.Stream.Write(bytes);
+            try {
+                descriptor.Stream.Write(bytes);
+            } catch (IOException) {
+                return (int)Errno.IO;
+            } catch (ObjectDisposedException) {
+                return (int)Errno.BadFileDescriptor;
+            }
 
             bytesWrittenCount += bytes.Length;
             ioVectorCount--;
@@ -72,6 +78,19 @@ public sealed class FileSystem<M> where M : IMemory32 {
         } catch {
             return(int)Errno.Fault;
         }
+
+        return (int)Errno.Success;
+    }
+
+    /// <summary>Closes a file descriptor.</summary>
+    /// <returns>An <see cref="Errno"/> value indicating if the file descriptor was successfully closed.</returns>
+    public int Close(int fd) {
+        FileDescriptor? descriptor;
+        if (!Descriptors.TryGetValue(fd, out descriptor)) {
+            return (int)Errno.BadFileDescriptor;
+        }
+
+        descriptor.Stream.Close(); // TODO: Return BadFileDescriptor if the stream was already closed.
 
         return (int)Errno.Success;
     }
