@@ -27,3 +27,7 @@ do
     let instance = hello_wasi.hello_wasi(hello_wasi.env(memory), wasi)
     instance._initialize()
     instance.hello()
+
+    fdout.Seek(0L, System.IO.SeekOrigin.Begin) |> ignore
+    use reader = new System.IO.StreamReader(fdout, System.Text.Encoding.ASCII)
+    System.Console.WriteLine(reader.ReadToEnd())
