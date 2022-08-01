@@ -113,6 +113,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let mainInstanceConstructor =
         ImportTranslator.translateModuleImports
             mangleMemberName
+            (CustomAttribute.markImportConstructor rtlib)
             delegateTypeCache
             translateFuncType
             syslib
