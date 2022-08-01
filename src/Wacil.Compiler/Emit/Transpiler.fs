@@ -428,6 +428,10 @@ let translateWebAssembly
                     let delegateTypeInstance = delegateTypeCache method.Signature
                     il.Add(CilInstruction(CilOpCodes.Ldftn, method))
                     il.Add(CilInstruction(CilOpCodes.Newobj, delegateTypeInstance.Constructor))
+            | MemoryCopy(destination, source) ->
+                let sourceMemoryInstantiation = emitPushMemory source il
+                let destinationMemoryInstantiation = emitPushMemory destination il
+                il.Add(CilInstruction(CilOpCodes.Call, sourceMemoryInstantiation.Copy destinationMemoryInstantiation))
             | MemoryFill memory ->
                 let instantiation = emitPushMemory memory il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.Fill))

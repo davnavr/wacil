@@ -47,7 +47,7 @@ type GlobalInstantiation =
       /// </summary>
       SetValueHelper: MethodSpecification }
 
-[<NoComparison; NoEquality>]
+[<NoComparison; ReferenceEquality>]
 type MemoryInstantiation =
     { Type: ITypeDefOrRef
       Signature: TypeSignature
@@ -64,6 +64,7 @@ type MemoryInstantiation =
       WriteInt64: MethodSpecification
       Grow: MethodSpecification
       Fill: MethodSpecification
+      Copy: MemoryInstantiation -> MethodSpecification
       WriteArray: MethodSpecification }
 
     member this.UsesVirtualCalls = this.Constructor.IsNone
@@ -281,18 +282,28 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte; mdle.CorLibTypeFactory.Int32; helperTypeParameter |]
                 "Fill"
 
-        growHelperTemplate.Signature.GenericParameterCount <- 1
-
         let writeArrayTemplate =
+            createMemoryHelper
+                mdle.CorLibTypeFactory.Void
+                [| helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte.MakeSzArrayType() |]
+                "Write"
+
+        let copyHelperTemplate =
             ImportHelpers.importMethod
                 mdle.DefaultImporter
                 CallingConventionAttributes.Generic
                 mdle.CorLibTypeFactory.Void
-                [| helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte.MakeSzArrayType() |]
-                "Write"
+                [|
+                    mdle.CorLibTypeFactory.Int32
+                    mdle.CorLibTypeFactory.Int32
+                    mdle.CorLibTypeFactory.Int32
+                    helperTypeParameter
+                    GenericParameterSignature(GenericParameterType.Method, 1)
+                |]
+                "Copy"
                 tyMemoryHelpers
 
-        writeArrayTemplate.Signature.GenericParameterCount <- 1
+        copyHelperTemplate.Signature.GenericParameterCount <- 2
 
         let lookup = Dictionary<MemoryImplementation, MemoryInstantiation>()
         fun impl ->
@@ -309,6 +320,19 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
 
                 let memoryTypeSignature = TypeDefOrRefSignature memoryTypeReference
                 let memoryTypeArguments = [| memoryTypeSignature :> TypeSignature |]
+
+                let copyHelperInstantiations = Dictionary<MemoryInstantiation, _>()
+                let copyHelperInstantiator destination =
+                    match copyHelperInstantiations.TryGetValue destination with
+                    | true, existing -> existing
+                    | false, _ ->
+                        let instantiation =
+                            copyHelperTemplate.MakeGenericInstanceMethod [|
+                                memoryTypeSignature :> TypeSignature
+                                destination.Signature
+                            |]
+                        copyHelperInstantiations[destination] <- instantiation
+                        instantiation
 
                 let instantiation =
                     { MemoryInstantiation.Type = memoryTypeReference
@@ -335,7 +359,8 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                       WriteInt64 = writeInt64Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       Fill = fillHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
-                      WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments }
+                      WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments
+                      Copy = copyHelperInstantiator }
 
                 lookup[impl] <- instantiation
                 instantiation
