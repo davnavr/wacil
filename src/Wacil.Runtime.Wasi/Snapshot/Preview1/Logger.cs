@@ -14,6 +14,11 @@ public sealed class Logger {
         this.output = output;
     }
 
+    /// <summary>
+    /// Initializes a <see cref="Logger"/> instance that writes messages to the standard output stream.
+    /// </summary>
+    public Logger() : this(System.Console.Out) { }
+
     /// <summary>Wraps an implementation of the <c>args_get</c> function.</summary>
     public Func<int, int, int> ArgsGet(Func<int, int, int> getter) => (int argv, int buffer) => {
         output.Write("args_get(argv = (byte**)0x{0:X}, argv_buf = (byte*)0x{1:X})", argv, buffer);
