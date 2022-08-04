@@ -12,6 +12,13 @@ public sealed class Stubs {
     /// <summary>Provides an implementation of the <c>args_sizes_get</c> function.</summary>
     public static Func<int, int, int> ArgsSizesGet { get; } = (int a, int b) => ERROR;
 
+    /// <summary>Provides an implementation of the <c>environ_get</c> function.</summary>
+    public static Func<int, int, int> EnvironGet { get; } = (int a, int b) => ERROR;
+
+
+    /// <summary>Provides an implementation of the <c>environ_sizes_get</c> function.</summary>
+    public static Func<int, int, int> EnvironSizesGet { get; } = (int a, int b) => ERROR;
+
     /// <summary>Provides an implementation of the <c>fd_write</c> function.</summary>
     public static Func<int, int, int, int, int> FdWrite { get; } = (int a, int b, int c, int d) => ERROR;
 

@@ -35,6 +35,22 @@ public sealed class Logger {
         return result;
     };
 
+    /// <summary>Wraps an implementation of the <c>environ_get</c> function.</summary>
+    public Func<int, int, int> EnvironGet(Func<int, int, int> getter) => (int environ, int buffer) => {
+        output.Write("environ_get(environ = (byte**)0x{0:X}), argv_buf = (byte*)0x{1:X})", environ, buffer);
+        int result = getter(environ, buffer);
+        output.WriteLine(" -> {0}", (Errno)result);
+        return result;
+    };
+
+    /// <summary>Wraps an implementation of the <c>environ_sizes_get</c> function.</summary>
+    public Func<int, int, int> EnvironSizesGet(Func<int, int, int> getter) => (int count, int size) => {
+        output.Write("environ_sizes_get(count = (byte*)0x{0:X}, size = (byte*)0x{1:X})", count, size);
+        int result = getter(count, size);
+        output.WriteLine(" -> {0}", (Errno)result);
+        return result;
+    };
+
     /// <summary>Wraps an implementation of the <c>proc_exit</c> function.</summary>
     public Action<int> ProcExit(Action<int> exiter) => (int code) => {
         output.Write("proc_exit(code = {0})", code);
