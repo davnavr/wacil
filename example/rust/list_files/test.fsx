@@ -10,11 +10,15 @@ do
     try
         let logger = Logger()
         let mutable instance: list_files.list_files = null
-        let memory = LazyMemory(lazy instance.memory)
+        let memory = new LazyMemory<_>(lazy instance.memory)
         let env = EnvironmentVariables memory
+        let file_descriptors = System.Collections.Generic.Dictionary()
+        let standard_output = new System.IO.MemoryStream()
+        file_descriptors[1] <- FileDescriptor standard_output
+        let file_system = FileSystem(memory, file_descriptors)
         instance <-
             list_files.list_files(list_files.wasi_snapshot_preview1(
-                fd_write = logger.FdWrite Stubs.FdWrite,
+                fd_write = logger.FdWrite(Imports.FdWrite file_system),
                 environ_get = logger.EnvironGet(Imports.EnvironGet env),
                 environ_sizes_get = logger.EnvironSizesGet(Imports.EnvironSizesGet env),
                 proc_exit = ProcessExit.Throw
