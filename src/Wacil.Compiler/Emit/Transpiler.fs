@@ -412,6 +412,7 @@ let translateWebAssembly
             | I32Or | I64Or -> il.Add(CilInstruction CilOpCodes.Or)
             | I32Xor | I64Xor -> il.Add(CilInstruction CilOpCodes.Xor)
             | I32Shl | I64Shl -> il.Add(CilInstruction CilOpCodes.Shl)
+            | I32ShrS | I64ShrS -> il.Add(CilInstruction CilOpCodes.Shr)
             | I32ShrU | I64ShrU -> il.Add(CilInstruction CilOpCodes.Shr_Un)
             | I64Rotl -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateLeftInt64))
             | I64Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt64))
