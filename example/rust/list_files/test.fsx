@@ -9,8 +9,10 @@ open Wacil.Runtime.Wasi.Snapshot.Preview1
 do
     try
         let logger = Logger()
-        let env = EnvironmentVariables<ArrayMemory>()
-        let instance =
+        let mutable instance: list_files.list_files = null
+        let memory = LazyMemory(lazy instance.memory)
+        let env = EnvironmentVariables memory
+        instance <-
             list_files.list_files(list_files.wasi_snapshot_preview1(
                 fd_write = logger.FdWrite Stubs.FdWrite,
                 environ_get = logger.EnvironGet(Imports.EnvironGet env),
