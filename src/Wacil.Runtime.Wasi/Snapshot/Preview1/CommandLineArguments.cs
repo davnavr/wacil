@@ -23,10 +23,13 @@ public sealed class CommandLineArguments<M> where M : IMemory32 {
         this.memory = memory;
     }
 
-    /// Adds an argument.
+    /// <summary>Adds an argument.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when the <paramref name="argument"/> contains a <c>NUL</c> byte.
+    /// </exception>
     public void Add(ImmutableArray<byte> argument) {
         if (argument.Contains(0)) {
-            throw new ArgumentException("Arguments must not contain any null bytes", nameof(argument));
+            throw new ArgumentOutOfRangeException("Arguments must not contain any null bytes", nameof(argument));
         }
 
         totalArgumentSize += argument.Length + 1;
