@@ -5,24 +5,30 @@ using System.IO;
 using System.Text;
 
 /// <summary>
-/// Provides a stream that interprets data received from WASI code as a <see cref="String"/> in a particular <see cref="Encoding"/>.
+/// Provides a stream that interprets data received from WASI code as a <see cref="String"/>, with decoding being done by a <see cref="Decoder"/>.
 /// </summary>
 public sealed class TextOutputStream : Stream {
     private readonly TextWriter output;
 
-    /// <summary>Gets the <see cref="Encoding"/> used to translate data.</summary>
-    public Encoding Encoding { get; }
+    private readonly char[] buffer = new char[64];
+
+    /// <summary>Gets the <see cref="Decoder"/> used to decode data into a <see cref="String"/>.</summary>
+    public Decoder Decoder { get; }
+
+    /// <summary>
+    /// Initializes a <see cref="TextOutputStream"/> instance with the specified <paramref name="decoder"/> and the
+    /// <see cref="TextWriter"/> to write strings to.
+    /// </summary>
+    public TextOutputStream(TextWriter output, Decoder decoder) {
+        this.output = output;
+        Decoder = decoder;
+    }
 
     /// <summary>
     /// Initializes a <see cref="TextOutputStream"/> instance with the specified <paramref name="encoding"/> and the
     /// <see cref="TextWriter"/> to write to.
     /// </summary>
-    public TextOutputStream(TextWriter output, Encoding encoding) {
-        ArgumentNullException.ThrowIfNull(output);
-        ArgumentNullException.ThrowIfNull(encoding);
-        this.output = output;
-        Encoding = encoding;
-    }
+    public TextOutputStream(TextWriter output, Encoding encoding) : this(output, encoding.GetDecoder()) { }
 
     /// <summary>
     /// Initializes a <see cref="TextOutputStream"/> with a <see cref="TextWriter"/> that decoded UTF-8 strings are written to.
@@ -34,7 +40,13 @@ public sealed class TextOutputStream : Stream {
 
     /// <inheritdoc/>
     public override void Write(ReadOnlySpan<byte> buffer) {
-        output.Write(Encoding.GetString(buffer));
+        bool _completed = false;
+        int bytesUsed, charsUsed;
+        while (!buffer.IsEmpty) {
+            Decoder.Convert(buffer, this.buffer, false, out bytesUsed, out charsUsed, out _completed);
+            output.Write(new Span<char>(this.buffer, 0, charsUsed));
+            buffer = buffer.Slice(bytesUsed);
+        }
     }
 
     /// <inheritdoc/>
