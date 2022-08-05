@@ -13,8 +13,10 @@ do
         let memory = new LazyMemory<_>(lazy instance.memory)
         let env = EnvironmentVariables memory
         let file_system = FileSystem(memory, System.Collections.Generic.Dictionary())
-        use output = new FileDescriptor(new StreamFile(new TextOutputStream(System.Console.Out)))
+        use output = FileDescriptor.FromStandardOutput()
+        use error = FileDescriptor.FromStandardError()
         file_system.Descriptors[1] <- output
+        file_system.Descriptors[2] <- error
         
         instance <-
             list_files.list_files(list_files.wasi_snapshot_preview1(

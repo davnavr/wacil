@@ -13,8 +13,7 @@ do
 
     let fdescriptors = System.Collections.Generic.Dictionary(1)
     let fs = FileSystem(memory, fdescriptors)
-    use output = new FileDescriptor(new StreamFile(new TextOutputStream(System.Console.Out)))
-    output.CanWrite <- true
+    use output = FileDescriptor.FromStandardOutput()
     fdescriptors[1] <- output
 
     let wasi =
