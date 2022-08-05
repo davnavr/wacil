@@ -17,10 +17,10 @@ do
         use error = FileDescriptor.FromStandardError()
         file_system.Descriptors[1] <- output
         file_system.Descriptors[2] <- error
-        
+
         instance <-
             list_files.list_files(list_files.wasi_snapshot_preview1(
-                fd_write = logger.FdWrite(Imports.FdWrite file_system),
+                fd_write = Imports.FdWrite file_system,
                 environ_get = logger.EnvironGet(Imports.EnvironGet env),
                 environ_sizes_get = logger.EnvironSizesGet(Imports.EnvironSizesGet env),
                 proc_exit = ProcessExit.Throw

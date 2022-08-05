@@ -13,7 +13,7 @@ public sealed class FileSystem<M> where M : IMemory32 {
 
     private readonly M memory;
 
-    /// <summary>Gets a dictionary which maps file descriptors to <see cref="Stream"/> instances.</summary>
+    /// <summary>Gets a dictionary which maps integers to file descriptors.</summary>
     public IDictionary<int, FileDescriptor> Descriptors { get; init; }
 
     /// <summary>Initializes a <see cref="FileSystem{M}"/> instance.</summary>
