@@ -13,8 +13,9 @@ do
 
     let fdescriptors = System.Collections.Generic.Dictionary(1)
     let fs = FileSystem(memory, fdescriptors)
-    let output = new TextOutputStream(System.Console.Out)
-    fdescriptors[1] <- FileDescriptor output
+    use output = new FileDescriptor(new StreamFile(new TextOutputStream(System.Console.Out)))
+    output.CanWrite <- true
+    fdescriptors[1] <- output
 
     let wasi =
         hello_wasi.wasi_snapshot_preview1(
