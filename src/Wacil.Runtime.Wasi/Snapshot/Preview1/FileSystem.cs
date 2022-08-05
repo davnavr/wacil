@@ -31,7 +31,7 @@ public sealed class FileSystem<M> where M : IMemory32 {
             return (int)Errno.BadFileDescriptor;
         }
 
-        if (!descriptor.CanWrite()) {
+        if (!descriptor.CanWrite) {
             return (int)Errno.InsufficientCapabilities;
         }
 
@@ -62,7 +62,7 @@ public sealed class FileSystem<M> where M : IMemory32 {
             }
 
             try {
-                descriptor.Stream.Write(bytes);
+                descriptor.File.Write(bytes);
             } catch (IOException) {
                 return (int)Errno.IO;
             } catch (ObjectDisposedException) {
@@ -86,11 +86,11 @@ public sealed class FileSystem<M> where M : IMemory32 {
     /// <returns>An <see cref="Errno"/> value indicating if the file descriptor was successfully closed.</returns>
     public int Close(int fd) {
         FileDescriptor? descriptor;
-        if (!Descriptors.TryGetValue(fd, out descriptor)) {
+        if (!Descriptors.TryGetValue(fd, out descriptor) || descriptor.IsClosed) {
             return (int)Errno.BadFileDescriptor;
         }
 
-        descriptor.Stream.Close(); // TODO: Return BadFileDescriptor if the stream was already closed.
+        descriptor.Close();
 
         return (int)Errno.Success;
     }
