@@ -13,8 +13,8 @@ do
 
     let fdescriptors = System.Collections.Generic.Dictionary(1)
     let fs = FileSystem(memory, fdescriptors)
-    use fdout = new System.IO.MemoryStream(64)
-    fdescriptors[1] <- FileDescriptor fdout
+    let output = new TextOutputStream(System.Console.Out)
+    fdescriptors[1] <- FileDescriptor output
 
     let wasi =
         hello_wasi.wasi_snapshot_preview1(
@@ -27,7 +27,3 @@ do
     let instance = hello_wasi.hello_wasi(hello_wasi.env(memory), wasi)
     instance._initialize()
     instance.hello()
-
-    fdout.Seek(0L, System.IO.SeekOrigin.Begin) |> ignore
-    use reader = new System.IO.StreamReader(fdout, System.Text.Encoding.ASCII)
-    System.Console.WriteLine(reader.ReadToEnd())
