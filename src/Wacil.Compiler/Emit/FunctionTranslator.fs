@@ -16,8 +16,9 @@ open AsmResolver.DotNet.Code.Cil
 let translateFunctionDefinitions
     mangleMemberName
     (markCompilerGenerated: CustomAttribute.Marker)
+    (markCustomName: string -> CustomAttribute.Marker)
     (translateFuncType: _ -> MethodSignature)
-    (rtlib: RuntimeLibrary.References)
+    (wasmCustomNames: Wasm.CustomNames.Lookup option)
     (moduleClassDefinition: TypeDefinition)
     (moduleClassSignature: TypeDefOrRefSignature)
     (wasm: Wasm.Validation.ValidModule)
@@ -26,6 +27,15 @@ let translateFunctionDefinitions
     =
     let firstDefinedIndex = wasm.Imports.Imports.Functions.Length
     let mutable parameterTypeBuilder = ArrayBuilder<TypeSignature>.Create()
+
+    let markCustomFunctionName =
+        match wasmCustomNames with
+        | Some names ->
+            fun index parent ->
+                let name = names.GetFunctionName(Wasm.Format.FuncIdx index)
+                if not(System.String.IsNullOrEmpty name) then
+                    markCustomName name parent
+        | None -> fun _ _ -> ()
 
     for i in 0..wasm.Functions.Length - 1 do
         let func = wasm.Functions[i]
@@ -47,6 +57,8 @@ let translateFunctionDefinitions
                 name
 
         Transpiler.includeMethodInput translatedInstanceMethod func.Body transpilerInputBuilder
+
+        markCustomFunctionName index translatedInstanceMethod
 
         let staticHelperMethod =
             let signature =

@@ -98,7 +98,8 @@ type References =
       /// <summary>Instantiates the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
       InstantiatedGlobal: Wasm.Format.ValType -> GlobalInstantiation
       InstantiatedMemory: MemoryImplementation -> MemoryInstantiation
-      ImportConstructorAttribute: ICustomAttributeType }
+      ImportConstructorAttribute: ICustomAttributeType
+      CustomNameAttribute: ICustomAttributeType }
 
 let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.References) (mdle: ModuleDefinition) =
     let name = "Wacil.Runtime"
@@ -428,4 +429,8 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
       ImportConstructorAttribute =
         importRuntimeType "ImportConstructorAttribute"
         |> ImportHelpers.importConstructor mdle Seq.empty
+        :?> ICustomAttributeType
+      CustomNameAttribute =
+        importRuntimeType "CustomNameAttribute"
+        |> ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String |]
         :?> ICustomAttributeType }
