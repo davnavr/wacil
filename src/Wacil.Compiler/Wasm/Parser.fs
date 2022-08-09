@@ -5,7 +5,6 @@ open System.Buffers
 open System.Buffers.Binary
 open System.Collections.Immutable
 open System.IO
-open System.Runtime.CompilerServices
 open System.Text
 
 open Wacil.Compiler.Helpers
@@ -30,6 +29,8 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
     let [<Literal>] SignMask = 0b0100_0000uy
 
     let mutable offset = 0
+
+    new (source: Stream) = Reader(source, ArrayPool.Shared)
 
     member _.Offset = offset
 
@@ -508,7 +509,7 @@ let parseFromStream (stream: Stream) =
     try
         if not stream.CanRead then invalidArg (nameof stream) "The stream must support reading"
 
-        let reader = Reader(stream, ArrayPool.Shared)
+        let reader = new Reader(stream)
         try
             let magicNumberBuffer = Span.stackalloc 4
 
