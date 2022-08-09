@@ -7,32 +7,43 @@ open Argu
 
 open Wacil.Compiler.Emit
 
+[<RequireQualifiedAccess>]
+type DefinedMemoryImplementation =
+    | Array
+    | Segmented
+
+    member this.ToImplementation() =
+        match this with
+        | Array -> MemoryImplementation.Array
+        | Segmented -> MemoryImplementation.Segmented
+
 type Options =
-    | [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
     | [<Unique; AltCommandLine("-i")>] Module of ``module.wasm``: string
     | [<Unique>] Namespace of string
     | [<Unique; AltCommandLine("-o")>] Out of file: string
     //| [<Unique>] Type of OutputType
     //| [<Unique>] Version of Version
+    | [<Unique>] Defined_Memory_Implementation of DefinedMemoryImplementation
     | [<Hidden>] Debug_Disassemble
     | [<Unique>] Diagnostic_Output_Path of file: string
+    | [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
     | Launch_Debugger
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Framework _ -> "specifies the target framework of the assembly"
             | Module _ ->
-                "the WebAssembly file to convert into a CIL file, defaults to searching for a WebAssembly file in the current \
-                working directory if omitted"
-            | Namespace _ ->
-                "the name of the namespace that will contain the class generated from the WebAssembly module"
-            | Out _ -> "the path to the generated CIL file"
-            | Debug_Disassemble -> "disassembles the input WebAssembly file into the WebAssembly Text Format"
+                "The WebAssembly file to convert into a CIL file, defaults to searching for a WebAssembly file in the current working \
+                directory if omitted"
+            | Namespace _ -> "The name of the namespace that will contain the class generated from the WebAssembly module"
+            | Out _ -> "The path to the generated CIL file"
+            //| Type _ -> "Whether the generated CIL file is an assembly or module, defaults to generating an assembly"
+            | Defined_Memory_Implementation _ -> "The runtime class to use when translating defined WebAssembly memories"
+            | Debug_Disassemble -> "Disassembles the input WebAssembly file into the WebAssembly Text Format"
             | Diagnostic_Output_Path _ ->
-                "specifies a path to a file where diagnostic information should be written to, defaults to standard error"
-            | Launch_Debugger -> "launches the debugger used to debug the compiler"
-            //| Type _ -> "whether the generated CIL file is an assembly or module, defaults to generating an assembly"
+                "Specifies a path to a file where diagnostic information should be written to, defaults to standard error"
+            | Framework _ -> "Specifies the target framework of the assembly"
+            | Launch_Debugger -> "Launches the debugger used to debug the compiler"
 
 let parser = ArgumentParser.Create<Options>(programName = "wacil")
 
@@ -79,6 +90,10 @@ let main argv =
 
         match args.TryGetResult <@ Framework @> with
         | Some framework -> options.TargetFramework <- framework
+        | None -> ()
+
+        match args.TryGetResult <@ Defined_Memory_Implementation @> with
+        | Some implementation -> options.MemoryDefinitionImplementation <- implementation.ToImplementation()
         | None -> ()
 
         let disposeDiagnosticStream, diagnosticOutputStream =
