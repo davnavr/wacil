@@ -102,7 +102,7 @@ let main argv =
             if args.Contains <@ Omit_Custom_Names @>
             then None
             else
-                match Compiler.Wasm.CustomNames.getCustomNames input''.CustomSections with
+                match Compiler.Wasm.CustomNames.getCustomNames input'' with
                 | Some(Ok names) -> Some names
                 | Some(Error e) ->
                     eprintfn "Invalid custom name section: %A" e
