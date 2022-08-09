@@ -27,6 +27,7 @@ type Options =
     | [<Hidden>] Debug_Disassemble
     | [<Unique>] Diagnostic_Output_Path of file: string
     | [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
+    | Omit_Custom_Names
     | Launch_Debugger
 
     interface IArgParserTemplate with
@@ -42,6 +43,7 @@ type Options =
             | Debug_Disassemble -> "Disassembles the input WebAssembly file into the WebAssembly Text Format"
             | Diagnostic_Output_Path _ ->
                 "Specifies a path to a file where diagnostic information should be written to, defaults to standard error"
+            | Omit_Custom_Names -> "If specified, skips parsing the custom name section of the WebAssembly module"
             | Framework _ -> "Specifies the target framework of the assembly"
             | Launch_Debugger -> "Launches the debugger used to debug the compiler"
 
@@ -95,6 +97,17 @@ let main argv =
         match args.TryGetResult <@ Defined_Memory_Implementation @> with
         | Some implementation -> options.MemoryDefinitionImplementation <- implementation.ToImplementation()
         | None -> ()
+
+        options.CustomNames <-
+            if args.Contains <@ Omit_Custom_Names @>
+            then None
+            else
+                match Compiler.Wasm.CustomNames.getCustomNames input''.CustomSections with
+                | Some(Ok names) -> Some names
+                | Some(Error e) ->
+                    eprintfn "Invalid custom name section: %A" e
+                    None
+                | None -> None
 
         let disposeDiagnosticStream, diagnosticOutputStream =
             match args.TryGetResult <@ Diagnostic_Output_Path @> with
