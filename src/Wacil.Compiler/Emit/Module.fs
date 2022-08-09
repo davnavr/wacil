@@ -155,6 +155,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     FunctionTranslator.translateFunctionDefinitions
         mangleMemberName
+        markCompilerGenerated
         translateFuncType
         rtlib
         mainClassDefinition

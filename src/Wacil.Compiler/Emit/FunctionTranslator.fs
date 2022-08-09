@@ -15,6 +15,7 @@ open AsmResolver.DotNet.Code.Cil
 
 let translateFunctionDefinitions
     mangleMemberName
+    (markCompilerGenerated: CustomAttribute.Marker)
     (translateFuncType: _ -> MethodSignature)
     (rtlib: RuntimeLibrary.References)
     (moduleClassDefinition: TypeDefinition)
@@ -65,6 +66,7 @@ let translateFunctionDefinitions
                     MethodAttributes.Static
                     ("__call_function@" + functionIndexString)
 
+            markCompilerGenerated definition
             definition.CilMethodBody <- CilMethodBody definition
             definition.ImplAttributes <- CilHelpers.methodImplAggressiveInlining
             let il = definition.CilMethodBody.Instructions
