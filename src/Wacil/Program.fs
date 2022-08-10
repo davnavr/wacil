@@ -24,6 +24,7 @@ type Options =
     //| [<Unique>] Type of OutputType
     //| [<Unique>] Version of Version
     | [<Unique>] Defined_Memory_Implementation of DefinedMemoryImplementation
+    | Release
     | [<Hidden>] Debug_Disassemble
     | [<Unique>] Diagnostic_Output_Path of file: string
     | [<Unique; AltCommandLine("-f")>] Framework of TargetFramework
@@ -40,6 +41,7 @@ type Options =
             | Out _ -> "The path to the generated CIL file"
             //| Type _ -> "Whether the generated CIL file is an assembly or module, defaults to generating an assembly"
             | Defined_Memory_Implementation _ -> "The runtime class to use when translating defined WebAssembly memories"
+            | Release -> "If specified, generates attributes to indicate that generated native code should be optimized"
             | Debug_Disassemble -> "Disassembles the input WebAssembly file into the WebAssembly Text Format"
             | Diagnostic_Output_Path _ ->
                 "Specifies a path to a file where diagnostic information should be written to, defaults to standard error"
@@ -109,6 +111,8 @@ let main argv =
                     eprintfn "Invalid custom name section: %A" e
                     None
                 | None -> None
+
+        options.IsRelease <- args.Contains <@ Release @>
 
         let disposeDiagnosticStream, diagnosticOutputStream =
             match args.TryGetResult <@ Diagnostic_Output_Path @> with

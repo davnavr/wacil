@@ -37,6 +37,8 @@ type MemoryImplementation =
 type Options (name) =
     let mutable mainClassName = null
 
+    member val IsRelease = false with get, set
+
     member val TargetFramework = TargetFramework.Net6 with get, set
 
     member val OutputType = OutputType.Assembly(System.Version(1, 0, 0, 0)) with get, set

@@ -47,6 +47,11 @@ type BitOperationsClass =
       TrailingZeroCountUInt32: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
+type DebuggableAttributeClass =
+    { Constructor: ICustomAttributeType
+      ModesEnum: TypeSignature }
+
+[<NoComparison; NoEquality>]
 type References =
     { /// <summary>
       /// Represents a reference to the <see cref="T:System.ValueType"/> class, which serves as the base type for all value types.
@@ -64,6 +69,7 @@ type References =
       ArgumentNullExceptionConstructor: IMethodDefOrRef
       RuntimeHelpers: RuntimeHelpersClass
       BitOperations: BitOperationsClass
+      DebuggableAttribute: DebuggableAttributeClass
       TargetFrameworkAttributeConstructor: ICustomAttributeType
       CompilerGeneratedAttributeConstructor: ICustomAttributeType }
 
@@ -164,6 +170,15 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 |]
                 "InitializeArray"
                 tyRuntimeHelpers }
+      DebuggableAttribute =
+        let tyDebuggableAttribute = importCoreType "System.Diagnostics" "DebuggableAttribute"
+        let sigDebuggingModes =
+            tyDebuggableAttribute.CreateTypeReference("DebuggingModes")
+            |> mdle.DefaultImporter.ImportTypeOrNull
+            |> TypeDefOrRefSignature
+
+        { Constructor = ImportHelpers.importConstructor mdle [| sigDebuggingModes |] tyDebuggableAttribute :?> ICustomAttributeType
+          ModesEnum = sigDebuggingModes }
       TargetFrameworkAttributeConstructor =
         importCoreType "System.Runtime.Versioning" "TargetFrameworkAttribute"
         |> ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String |]

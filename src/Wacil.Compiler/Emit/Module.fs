@@ -16,6 +16,8 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm.Format
 open Wacil.Compiler.Wasm.Validation
 
+type DebuggingModes = System.Diagnostics.DebuggableAttribute.DebuggingModes
+
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let mscorlib =
         match options.TargetFramework with
@@ -39,10 +41,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 CustomAttribute(
                     syslib.TargetFrameworkAttributeConstructor,
                     CustomAttributeSignature(
-                        Array.singleton(CustomAttributeArgument(
-                            mdle.CorLibTypeFactory.String,
-                            options.TargetFramework.FrameworkName
-                        )),
+                        [| CustomAttributeArgument(mdle.CorLibTypeFactory.String, options.TargetFramework.FrameworkName) |],
                         Array.singleton(CustomAttributeNamedArgument(
                             CustomAttributeArgumentMemberType.Field,
                             Utf8String "FrameworkDisplayName",
@@ -50,6 +49,18 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                             CustomAttributeArgument(mdle.CorLibTypeFactory.String, String.empty)
                         ))
                     )
+                )
+            )
+
+            let debuggingAttributeModes =
+                if options.IsRelease
+                then DebuggingModes.None
+                else DebuggingModes.Default ||| DebuggingModes.DisableOptimizations
+
+            assembly.CustomAttributes.Add(
+                CustomAttribute(
+                    syslib.DebuggableAttribute.Constructor,
+                    CustomAttributeSignature [| CustomAttributeArgument(syslib.DebuggableAttribute.ModesEnum, debuggingAttributeModes) |]
                 )
             )
 
