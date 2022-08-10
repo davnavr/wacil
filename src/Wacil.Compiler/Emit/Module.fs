@@ -93,7 +93,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         mangleMemberName options.MainClassName
         |> String.defaultValue outputModuleName
         |> DefinitionHelpers.addNormalClass syslib mdle (TypeAttributes.Sealed ||| TypeAttributes.Public) mainClassNamespace
-        
+
+    mainClassDefinition.CustomAttributes.Add(CustomAttribute(rtlib.ModuleClassAttribute, CustomAttributeSignature()))
+
     let mainClassSignature = TypeDefOrRefSignature mainClassDefinition
 
     let members =

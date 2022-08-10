@@ -98,6 +98,7 @@ type References =
       /// <summary>Instantiates the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
       InstantiatedGlobal: Wasm.Format.ValType -> GlobalInstantiation
       InstantiatedMemory: MemoryImplementation -> MemoryInstantiation
+      ModuleClassAttribute: ICustomAttributeType
       ImportConstructorAttribute: ICustomAttributeType
       CustomNameAttribute: ICustomAttributeType }
 
@@ -426,6 +427,10 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
         getFunctionTemplate.Signature.GenericParameterCount <- 1
 
         { GetFunction = fun tyDelegate -> getFunctionTemplate.MakeGenericInstanceMethod [| tyDelegate |] }
+      ModuleClassAttribute =
+        importRuntimeType "ModuleClassAttribute"
+        |> ImportHelpers.importConstructor mdle Seq.empty
+        :?> ICustomAttributeType
       ImportConstructorAttribute =
         importRuntimeType "ImportConstructorAttribute"
         |> ImportHelpers.importConstructor mdle Seq.empty
