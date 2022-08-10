@@ -20,6 +20,7 @@ type internal Reader =
     member ReadFloat64 : unit -> double
     member ReadName : unit -> Format.Name
     member Offset : int
+    member Skip : length: int -> unit
 
 [<Sealed; Class>]
 type InvalidMagicException =

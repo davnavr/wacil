@@ -47,6 +47,13 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             |> raise
         offset <- offset + read
 
+    member this.Skip(length: int) =
+        let buffer = Span.stackalloc(if length <= 1024 then length else 1024)
+        let mutable remaining = length
+        while remaining > 0 do
+            this.ReadAll buffer
+            remaining <- remaining - buffer.Length
+
     member this.ReadByte() =
         let mutable value = 0uy
         this.ReadAll(Span.ofByRef(&value))

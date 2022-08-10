@@ -91,7 +91,7 @@ let parseFromData (data: ImmutableArray<byte>) =
                         let index: Format.LocalIdx = reader.ReadIndex()
                         if not(locals.TryAdd(index, reader.ReadName())) then
                             failwithf "Local #%i in function #%i already has name" (int32 index) (int32 parent)
-            | bad -> failwithf "0x%02X is not a valid name subsection ID" bad
+            | _ -> reader.Skip size // Unknown sections are skipped
 
             let actualSubsectionSize = reader.Offset - subsectionStartOffset
             if actualSubsectionSize <> size then
