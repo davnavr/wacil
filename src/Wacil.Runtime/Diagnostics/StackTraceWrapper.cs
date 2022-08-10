@@ -18,6 +18,11 @@ public class StackTraceWrapper {
         Original = original ?? throw new ArgumentNullException(nameof(original));
     }
 
+    /// <summary>
+    /// Initializes a <see cref="StackTraceWrapper"/> wrapper from the stack trace of the specified <see cref="Exception"/>.
+    /// </summary>
+    public StackTraceWrapper(Exception source) : this(new StackTrace(source)) { }
+
     /// <summary>Writes the contents of this stack trace to a <see cref="StringBuilder"/>.</summary>
     public void ToString(StringBuilder writer) {
         ArgumentNullException.ThrowIfNull(writer);
@@ -34,7 +39,7 @@ public class StackTraceWrapper {
                     writer.EnsureCapacity(writer.Capacity + fullTypeName.Length + 1);
 
                     foreach(char c in fullTypeName) {
-                        writer.Append(c == '.' ? '+' : c);
+                        writer.Append(c == '+' ? '.' : c);
                     }
 
                     writer.Append('.');
@@ -79,10 +84,18 @@ public class StackTraceWrapper {
                         writer.Append(" in ").Append(methodFileName).Append(':').Append(frame.GetFileLineNumber()).Append(':')
                             .Append(frame.GetFileColumnNumber());
                     } else {
-                        writer.AppendFormat("at IL offset 0x{0:X4}", ilMethodOffset);
+                        writer.AppendFormat(" at IL offset 0x{0:X4}", ilMethodOffset);
                     }
                 }
             }
         }
+    }
+
+    /// <inheritdoc/>
+    public override string ToString()
+    {
+        var writer = new StringBuilder(128);
+        ToString(writer);
+        return writer.ToString();
     }
 }

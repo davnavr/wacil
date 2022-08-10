@@ -29,3 +29,7 @@ do
         instance._start()
     with
     | :? ProcessExitException as e when e.ExitCode = 0 -> ()
+    | e ->
+        eprintfn "%O" (new Diagnostics.StackTraceWrapper(e))
+        eprintfn "-- end wrapped stack trace --"
+        reraise()
