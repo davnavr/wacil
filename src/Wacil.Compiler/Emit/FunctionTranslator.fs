@@ -28,24 +28,30 @@ let translateFunctionDefinitions
     let firstDefinedIndex = wasm.Imports.Imports.Functions.Length
     let mutable parameterTypeBuilder = ArrayBuilder<TypeSignature>.Create()
 
-    let markCustomFunctionName =
+    let getCustomFunctionName =
         match wasmCustomNames with
-        | Some names ->
-            fun index parent ->
-                let name = names.GetFunctionName(Wasm.Format.FuncIdx index)
-                if not(System.String.IsNullOrEmpty name) then
-                    markCustomName name parent
-        | None -> fun _ _ -> ()
+        | Some names -> fun index -> names.GetFunctionName index
+        | None -> fun _ -> System.String.Empty
 
     for i in 0..wasm.Functions.Length - 1 do
         let func = wasm.Functions[i]
         let index = firstDefinedIndex + i
+        let index' = Wasm.Format.FuncIdx index
         let functionIndexString = string index
 
+        let customFunctionName = getCustomFunctionName index'
+
         let name, accessibility =
-            match wasm.Exports.GetFunctionName(Wasm.Format.FuncIdx index) with
+            match wasm.Exports.GetFunctionName index' with
             | true, functionExportName -> mangleMemberName functionExportName, MethodAttributes.Public
-            | false, _ -> "__function@" + functionIndexString, MethodAttributes.CompilerControlled
+            | false, _ ->
+                let mangledCustomName = mangleMemberName customFunctionName
+                let privateFunctionName =
+                    if obj.ReferenceEquals(customFunctionName, mangledCustomName)
+                    then customFunctionName
+                    else "__function@" + functionIndexString
+
+                privateFunctionName, MethodAttributes.CompilerControlled
 
         let translatedFunctionSignature = translateFuncType func.Type
 
@@ -58,7 +64,8 @@ let translateFunctionDefinitions
 
         Transpiler.includeMethodInput translatedInstanceMethod func.Body transpilerInputBuilder
 
-        markCustomFunctionName index translatedInstanceMethod
+        if not(System.String.IsNullOrEmpty customFunctionName) then
+            markCustomName customFunctionName translatedInstanceMethod
 
         let staticHelperMethod =
             let signature =
