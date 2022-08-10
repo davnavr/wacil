@@ -72,11 +72,12 @@ let main argv =
                 | Some file' -> file'
                 | None -> FileNotFoundException("No WebAssembly files were found in the current directory") |> raise
 
-        let input' =
-            use reader = input.OpenRead()
-            Compiler.Wasm.Parser.parseFromStream reader
+        let input'' =
+            let input' =
+                use reader = input.OpenRead()
+                Compiler.Wasm.Parser.parseFromStream reader
 
-        let input'' = Compiler.Wasm.Validation.Validate.fromModuleSections input'
+            Compiler.Wasm.Validation.Validate.fromModuleSections input'
         
         if args.Contains <@ Debug_Disassemble @> then
             Compiler.Wasm.Disassemble.disassembleToWriter input'' Console.Out
