@@ -41,14 +41,21 @@ let parseFromData (data: ImmutableArray<byte>) =
         let functions = Dictionary()
 
         let subsectionTagBuffer = Span.stackalloc 1
-        let highestSubsectionTag = ValueSome 0uy
+        let mutable highestSubsectionTag = ValueNone
         while reader.Read subsectionTagBuffer > 0 do
             let size = reader.ReadUnsignedInteger() |> Checked.int32
             let subsectionStartOffset = reader.Offset
 
             let id = subsectionTagBuffer[0]
-            if highestSubsectionTag.IsSome && id < highestSubsectionTag.Value then
-                failwithf "Name subsection IDs must be in descending order and may only appear once"
+
+            if highestSubsectionTag.IsSome then
+                let tag = highestSubsectionTag.Value
+                if id < tag then
+                    failwith "Name subsection IDs must be in descending order and may only appear once"
+                else if id = tag then
+                    failwithf "Name subsection 0x%02X is duplicated" id
+
+            highestSubsectionTag <- ValueSome id
 
             match id with
             | 0uy -> mdle <- reader.ReadName()
