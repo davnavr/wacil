@@ -125,6 +125,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             options.MemoryImportImplementation
             members
 
+    let markCustomName = CustomAttribute.markCustomName mdle.CorLibTypeFactory rtlib
+
     MemoryTranslator.translateModuleMemories
         mangleMemberName
         rtlib
@@ -155,8 +157,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     FunctionTranslator.translateFunctionDefinitions
         mangleMemberName
+        markCompilerGenerated
+        markCustomName
         translateFuncType
-        rtlib
+        options.CustomNames
         mainClassDefinition
         mainClassSignature
         input

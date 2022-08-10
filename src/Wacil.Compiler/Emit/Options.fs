@@ -41,10 +41,26 @@ type Options (name) =
 
     member val OutputType = OutputType.Assembly(System.Version(1, 0, 0, 0)) with get, set
 
-    member val OutputName = if System.String.IsNullOrEmpty name then "Module" else name
-
     /// <summary>Indicates the version of the <c>Wacil.Runtime</c> library being referenced.</summary>
     member val RuntimeVersion = System.Version(1, 0, 0, 0) with get, set
+
+    /// <summary>Indicates the WebAssembly custom name section to use.</summary>
+    member val CustomNames = Option<Wacil.Compiler.Wasm.CustomNames.Lookup>.None with get, set
+
+    member this.OutputName =
+        let mutable selection = name
+        let inline selectOutputName other =
+            selection <-
+                if System.String.IsNullOrEmpty name
+                then other
+                else name
+
+        match this.CustomNames with
+        | Some(names) -> selectOutputName names.ModuleName
+        | None -> ()
+
+        selectOutputName "module"
+        selection
 
     /// <summary>
     /// The name of the generated class corresponding to the WASM module. Defaults to the
