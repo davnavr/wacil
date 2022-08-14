@@ -12,6 +12,7 @@
     <Compile Include="Helpers\Unsafe.fsi" />
     <Compile Include="Helpers\Unsafe.fs" />
     <Compile Include="Helpers\Collections\ArrayBuilder.fs" />
+    <Compile Include="Helpers\IO\ReadOnlyMemoryStream.fs" />
 
     <Compile Include="Wasm\Format.fsi" />
     <Compile Include="Wasm\Format.fs" />
@@ -21,6 +22,8 @@
     <Compile Include="Wasm\Validation\Table.fs" />
     <Compile Include="Wasm\Validation\ValidModule.fsi" />
     <Compile Include="Wasm\Validation\ValidModule.fs" />
+    <Compile Include="Wasm\CustomNames.fsi" />
+    <Compile Include="Wasm\CustomNames.fs" />
     <Compile Include="Wasm\Disassemble.fsi" />
     <Compile Include="Wasm\Disassemble.fs" />
 

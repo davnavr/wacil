@@ -6,6 +6,23 @@ module Wacil.Compiler.Wasm.Parser
 open System.Collections.Immutable
 
 [<Sealed; Class>]
+type internal Reader =
+    new : source: System.IO.Stream -> Reader
+
+    member ReadByte : unit -> byte
+    member Read : buffer: System.Span<byte> -> int
+    member ReadAll : buffer: System.Span<byte> -> unit
+    member ReadUnsignedInteger : unit -> uint64
+    member inline ReadIndex : unit -> ^T when ^T : (static member From: uint64 -> 'T)
+    member ReadSignedInteger : unit -> int64
+    member ReadSignedIntegerOrNegativeZero : unit -> int64 voption
+    member ReadFloat32 : unit -> single
+    member ReadFloat64 : unit -> double
+    member ReadName : unit -> Format.Name
+    member Offset : int
+    member Skip : length: int -> unit
+
+[<Sealed; Class>]
 type InvalidMagicException =
     inherit System.Exception
 
@@ -14,6 +31,8 @@ type InvalidMagicException =
 [<Sealed; Class>]
 type ParseException =
     inherit System.Exception
+
+    new : offset: int * inner: exn -> ParseException
 
     member Offset : int
 

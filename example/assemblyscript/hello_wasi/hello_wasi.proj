@@ -1,5 +1,10 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
+  <PropertyGroup>
+    <ImportMemory>true</ImportMemory>
+    <IncludeWasi>true</IncludeWasi>
+  </PropertyGroup>
+
   <Import Project="..\assemblyscript.targets" />
 
 </Project>

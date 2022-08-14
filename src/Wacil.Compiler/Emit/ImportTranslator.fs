@@ -31,6 +31,7 @@ type private ParameterIndex =
 
 let translateModuleImports
     (mangleMemberName: string -> string)
+    (markImportConstructor: CustomAttribute.Marker)
     (delegateTypeCache: MethodSignature -> _)
     (translateFuncType: Wasm.Format.FuncType -> MethodSignature)
     (syslib: SystemLibrary.References)
@@ -219,6 +220,8 @@ let translateModuleImports
                 (constructorParameterTypes.ToArray())
                 (MethodAttributes.HideBySig ||| MethodAttributes.Public)
                 importClassDefinition
+
+        markImportConstructor importConstructorDefinition
 
         for index in 1..constructorParameterNames.Count do
             let name = constructorParameterNames[index - 1]

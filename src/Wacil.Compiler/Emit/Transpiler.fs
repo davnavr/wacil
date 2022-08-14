@@ -339,6 +339,11 @@ let translateWebAssembly
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt16))
                 il.Add(CilInstruction CilOpCodes.Conv_U4)
+            | I64Load8U arg ->
+                let instantiation = emitPushMemory arg.Memory il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadByte))
+                il.Add(CilInstruction CilOpCodes.Conv_U8)
             | I64Load32U arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
@@ -358,6 +363,12 @@ let translateWebAssembly
             | I32Store16 arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
+            | I64Store32 arg ->
+                // Note that a conversion is necessary here as other sizes (8, 16, etc.) are represented an int32, while an int64 needs to
+                // be explicitly converted
+                il.Add(CilInstruction CilOpCodes.Conv_U4) // Convert the value to store (which is currently on top of the stack)
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
             | MemorySize memory ->
                 let instantiation = emitPushMemory memory il
                 // Memory instance is on top of the stack
@@ -408,14 +419,16 @@ let translateWebAssembly
             | I32DivS | I64DivS -> il.Add(CilInstruction CilOpCodes.Div)
             | I32DivU | I64DivU -> il.Add(CilInstruction CilOpCodes.Div_Un)
             | I32RemU -> il.Add(CilInstruction CilOpCodes.Rem_Un)
-            | I32And -> il.Add(CilInstruction CilOpCodes.And)
-            | I32Or -> il.Add(CilInstruction CilOpCodes.Or)
-            | I32Xor -> il.Add(CilInstruction CilOpCodes.Xor)
+            | I32And | I64And -> il.Add(CilInstruction CilOpCodes.And)
+            | I32Or | I64Or -> il.Add(CilInstruction CilOpCodes.Or)
+            | I32Xor | I64Xor -> il.Add(CilInstruction CilOpCodes.Xor)
             | I32Shl | I64Shl -> il.Add(CilInstruction CilOpCodes.Shl)
-            | I32ShrU -> il.Add(CilInstruction CilOpCodes.Shr_Un)
+            | I32ShrS | I64ShrS -> il.Add(CilInstruction CilOpCodes.Shr)
+            | I32ShrU | I64ShrU -> il.Add(CilInstruction CilOpCodes.Shr_Un)
             | I64Rotl -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateLeftInt64))
             | I64Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt64))
             | I32WrapI64 -> il.Add(CilInstruction CilOpCodes.Conv_I4)
+            | I64ExtendI32S -> il.Add(CilInstruction CilOpCodes.Conv_I8)
             | I64ExtendI32U -> il.Add(CilInstruction CilOpCodes.Conv_U8)
             | RefNull _ -> il.Add(CilInstruction CilOpCodes.Ldnull)
             | RefFunc(FuncIdx func) ->
@@ -428,6 +441,13 @@ let translateWebAssembly
                     let delegateTypeInstance = delegateTypeCache method.Signature
                     il.Add(CilInstruction(CilOpCodes.Ldftn, method))
                     il.Add(CilInstruction(CilOpCodes.Newobj, delegateTypeInstance.Constructor))
+            | MemoryCopy(destination, source) ->
+                let sourceMemoryInstantiation = emitPushMemory source il
+                let destinationMemoryInstantiation = emitPushMemory destination il
+                il.Add(CilInstruction(CilOpCodes.Call, sourceMemoryInstantiation.Copy destinationMemoryInstantiation))
+            | MemoryFill memory ->
+                let instantiation = emitPushMemory memory il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.Fill))
             | TableInit(ElementIndex element, table) ->
                 match element with
                 | ElementSegmentMember.Passive(_, getter) ->

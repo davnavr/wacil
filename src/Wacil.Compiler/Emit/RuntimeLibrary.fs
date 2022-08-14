@@ -47,7 +47,7 @@ type GlobalInstantiation =
       /// </summary>
       SetValueHelper: MethodSpecification }
 
-[<NoComparison; NoEquality>]
+[<NoComparison; ReferenceEquality>]
 type MemoryInstantiation =
     { Type: ITypeDefOrRef
       Signature: TypeSignature
@@ -63,6 +63,8 @@ type MemoryInstantiation =
       WriteInt32: MethodSpecification
       WriteInt64: MethodSpecification
       Grow: MethodSpecification
+      Fill: MethodSpecification
+      Copy: MemoryInstantiation -> MethodSpecification
       WriteArray: MethodSpecification }
 
     member this.UsesVirtualCalls = this.Constructor.IsNone
@@ -95,7 +97,10 @@ type References =
       InstantiatedTable: Wasm.Format.RefType -> TableInstantiation
       /// <summary>Instantiates the <c>Wacil.Runtime.Global&lt;T&gt;</c> class.</summary>
       InstantiatedGlobal: Wasm.Format.ValType -> GlobalInstantiation
-      InstantiatedMemory: MemoryImplementation -> MemoryInstantiation }
+      InstantiatedMemory: MemoryImplementation -> MemoryInstantiation
+      ModuleClassAttribute: ICustomAttributeType
+      ImportConstructorAttribute: ICustomAttributeType
+      CustomNameAttribute: ICustomAttributeType }
 
 let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.References) (mdle: ModuleDefinition) =
     let name = "Wacil.Runtime"
@@ -272,26 +277,36 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
         let writeInt64Template = createWriteTemplate mdle.CorLibTypeFactory.Int64
 
         let growHelperTemplate =
-            ImportHelpers.importMethod
-                mdle.DefaultImporter
-                CallingConventionAttributes.Generic
-                mdle.CorLibTypeFactory.Int32
-                [| mdle.CorLibTypeFactory.Int32; helperTypeParameter |]
-                "Grow"
-                tyMemoryHelpers
+            createMemoryHelper mdle.CorLibTypeFactory.Int32 [| mdle.CorLibTypeFactory.Int32; helperTypeParameter |] "Grow"
 
-        growHelperTemplate.Signature.GenericParameterCount <- 1
+        let fillHelperTemplate =
+            createMemoryHelper
+                mdle.CorLibTypeFactory.Void
+                [| mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte; mdle.CorLibTypeFactory.Int32; helperTypeParameter |]
+                "Fill"
 
         let writeArrayTemplate =
+            createMemoryHelper
+                mdle.CorLibTypeFactory.Void
+                [| helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte.MakeSzArrayType() |]
+                "Write"
+
+        let copyHelperTemplate =
             ImportHelpers.importMethod
                 mdle.DefaultImporter
                 CallingConventionAttributes.Generic
                 mdle.CorLibTypeFactory.Void
-                [| helperTypeParameter; mdle.CorLibTypeFactory.Int32; mdle.CorLibTypeFactory.Byte.MakeSzArrayType() |]
-                "Write"
+                [|
+                    mdle.CorLibTypeFactory.Int32
+                    mdle.CorLibTypeFactory.Int32
+                    mdle.CorLibTypeFactory.Int32
+                    helperTypeParameter
+                    GenericParameterSignature(GenericParameterType.Method, 1)
+                |]
+                "Copy"
                 tyMemoryHelpers
 
-        writeArrayTemplate.Signature.GenericParameterCount <- 1
+        copyHelperTemplate.Signature.GenericParameterCount <- 2
 
         let lookup = Dictionary<MemoryImplementation, MemoryInstantiation>()
         fun impl ->
@@ -308,6 +323,19 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
 
                 let memoryTypeSignature = TypeDefOrRefSignature memoryTypeReference
                 let memoryTypeArguments = [| memoryTypeSignature :> TypeSignature |]
+
+                let copyHelperInstantiations = Dictionary<MemoryInstantiation, _>()
+                let copyHelperInstantiator destination =
+                    match copyHelperInstantiations.TryGetValue destination with
+                    | true, existing -> existing
+                    | false, _ ->
+                        let instantiation =
+                            copyHelperTemplate.MakeGenericInstanceMethod [|
+                                memoryTypeSignature :> TypeSignature
+                                destination.Signature
+                            |]
+                        copyHelperInstantiations[destination] <- instantiation
+                        instantiation
 
                 let instantiation =
                     { MemoryInstantiation.Type = memoryTypeReference
@@ -333,7 +361,9 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                       WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt64 = writeInt64Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
-                      WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments }
+                      Fill = fillHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
+                      WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments
+                      Copy = copyHelperInstantiator }
 
                 lookup[impl] <- instantiation
                 instantiation
@@ -396,4 +426,16 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
 
         getFunctionTemplate.Signature.GenericParameterCount <- 1
 
-        { GetFunction = fun tyDelegate -> getFunctionTemplate.MakeGenericInstanceMethod [| tyDelegate |] } }
+        { GetFunction = fun tyDelegate -> getFunctionTemplate.MakeGenericInstanceMethod [| tyDelegate |] }
+      ModuleClassAttribute =
+        importRuntimeType "ModuleClassAttribute"
+        |> ImportHelpers.importConstructor mdle Seq.empty
+        :?> ICustomAttributeType
+      ImportConstructorAttribute =
+        importRuntimeType "ImportConstructorAttribute"
+        |> ImportHelpers.importConstructor mdle Seq.empty
+        :?> ICustomAttributeType
+      CustomNameAttribute =
+        importRuntimeType "CustomNameAttribute"
+        |> ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String |]
+        :?> ICustomAttributeType }

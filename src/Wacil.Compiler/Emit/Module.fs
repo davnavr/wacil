@@ -16,6 +16,8 @@ open Wacil.Compiler.Helpers.Collections
 open Wacil.Compiler.Wasm.Format
 open Wacil.Compiler.Wasm.Validation
 
+type DebuggingModes = System.Diagnostics.DebuggableAttribute.DebuggingModes
+
 let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let mscorlib =
         match options.TargetFramework with
@@ -39,10 +41,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                 CustomAttribute(
                     syslib.TargetFrameworkAttributeConstructor,
                     CustomAttributeSignature(
-                        Array.singleton(CustomAttributeArgument(
-                            mdle.CorLibTypeFactory.String,
-                            options.TargetFramework.FrameworkName
-                        )),
+                        [| CustomAttributeArgument(mdle.CorLibTypeFactory.String, options.TargetFramework.FrameworkName) |],
                         Array.singleton(CustomAttributeNamedArgument(
                             CustomAttributeArgumentMemberType.Field,
                             Utf8String "FrameworkDisplayName",
@@ -50,6 +49,18 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
                             CustomAttributeArgument(mdle.CorLibTypeFactory.String, String.empty)
                         ))
                     )
+                )
+            )
+
+            let debuggingAttributeModes =
+                if options.IsRelease
+                then DebuggingModes.None
+                else DebuggingModes.Default ||| DebuggingModes.DisableOptimizations
+
+            assembly.CustomAttributes.Add(
+                CustomAttribute(
+                    syslib.DebuggableAttribute.Constructor,
+                    CustomAttributeSignature [| CustomAttributeArgument(syslib.DebuggableAttribute.ModesEnum, debuggingAttributeModes) |]
                 )
             )
 
@@ -82,7 +93,9 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         mangleMemberName options.MainClassName
         |> String.defaultValue outputModuleName
         |> DefinitionHelpers.addNormalClass syslib mdle (TypeAttributes.Sealed ||| TypeAttributes.Public) mainClassNamespace
-        
+
+    mainClassDefinition.CustomAttributes.Add(CustomAttribute(rtlib.ModuleClassAttribute, CustomAttributeSignature()))
+
     let mainClassSignature = TypeDefOrRefSignature mainClassDefinition
 
     let members =
@@ -113,6 +126,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
     let mainInstanceConstructor =
         ImportTranslator.translateModuleImports
             mangleMemberName
+            (CustomAttribute.markImportConstructor rtlib)
             delegateTypeCache
             translateFuncType
             syslib
@@ -123,6 +137,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             mainClassNamespace
             options.MemoryImportImplementation
             members
+
+    let markCustomName = CustomAttribute.markCustomName mdle.CorLibTypeFactory rtlib
 
     MemoryTranslator.translateModuleMemories
         mangleMemberName
@@ -154,8 +170,10 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
 
     FunctionTranslator.translateFunctionDefinitions
         mangleMemberName
+        markCompilerGenerated
+        markCustomName
         translateFuncType
-        rtlib
+        options.CustomNames
         mainClassDefinition
         mainClassSignature
         input

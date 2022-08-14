@@ -26,6 +26,7 @@ public sealed class SegmentedMemory : IMemory32 {
     /// <inheritdoc/>
     public Limits Limits { get; init; }
 
+    /// <summary>Initializes a new linear memory with the specified <paramref name="limits"/>.</summary>
     public SegmentedMemory(Limits limits) {
         Limits = limits;
         pages = new List<byte[]>(limits.Minimum);

@@ -20,6 +20,9 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
 
     private bool disposed = false;
 
+    /// <summary>
+    /// Initializes a new linear memory backed by unmanaged memory, with the specified <paramref name="limits"/>.
+    /// </summary>
     public UnmanagedMemory(Limits limits) {
         this.limits = limits;
         count = limits.Minimum;
@@ -131,5 +134,6 @@ public unsafe sealed class UnmanagedMemory : IMemory32 {
         GC.SuppressFinalize(this);
     }
 
+    /// <inheritdoc/>
     ~UnmanagedMemory() => Dispose(false);
 }

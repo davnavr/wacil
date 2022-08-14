@@ -5,7 +5,6 @@ open System.Buffers
 open System.Buffers.Binary
 open System.Collections.Immutable
 open System.IO
-open System.Runtime.CompilerServices
 open System.Text
 
 open Wacil.Compiler.Helpers
@@ -31,6 +30,8 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
 
     let mutable offset = 0
 
+    new (source: Stream) = Reader(source, ArrayPool.Shared)
+
     member _.Offset = offset
 
     member _.Read(buffer: Span<byte>) =
@@ -45,6 +46,13 @@ type Reader (source: Stream, byteArrayPool: ArrayPool<byte>) =
             |> EndOfStreamException
             |> raise
         offset <- offset + read
+
+    member this.Skip(length: int) =
+        let buffer = Span.stackalloc(if length <= 1024 then length else 1024)
+        let mutable remaining = length
+        while remaining > 0 do
+            this.ReadAll buffer
+            remaining <- remaining - buffer.Length
 
     member this.ReadByte() =
         let mutable value = 0uy
@@ -508,7 +516,7 @@ let parseFromStream (stream: Stream) =
     try
         if not stream.CanRead then invalidArg (nameof stream) "The stream must support reading"
 
-        let reader = Reader(stream, ArrayPool.Shared)
+        let reader = new Reader(stream)
         try
             let magicNumberBuffer = Span.stackalloc 4
 
@@ -538,13 +546,13 @@ let parseFromStream (stream: Stream) =
 
                 match LanguagePrimitives.EnumOfValue(sectionTagBuffer[0]) with
                 | SectionId.Custom ->
-                    { Custom.Name = reader.ReadName()
-                      Custom.Contents =
-                        let contents = Array.zeroCreate(size - (reader.Offset - sectionStartOffset))
-                        reader.ReadAll(Span(contents))
-                        Unsafe.Array.toImmutable contents }
-                    |> Section.Custom
-                    |> sections.Add
+                    let custom =
+                        { Custom.Name = reader.ReadName()
+                          Custom.Contents =
+                            let contents = Array.zeroCreate(size - (reader.Offset - sectionStartOffset))
+                            reader.ReadAll(Span(contents))
+                            Unsafe.Array.toImmutable contents }
+                    sections.Add(Section.Custom custom)
                 | SectionId.Type ->
                     let types = Array.zeroCreate(reader.ReadUnsignedInteger() |> Checked.int32)
                     for i = 0 to types.Length - 1 do types[i] <- reader.ReadFuncType()
