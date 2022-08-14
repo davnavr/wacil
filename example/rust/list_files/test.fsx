@@ -30,6 +30,7 @@ do
     with
     | :? ProcessExitException as e when e.ExitCode = 0 -> ()
     | e ->
+        eprintfn "-- begin wrapped stack trace --"
         eprintfn "%O" (new Diagnostics.StackTraceWrapper(e))
         eprintfn "-- end wrapped stack trace --"
         reraise()
