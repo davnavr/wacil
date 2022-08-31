@@ -51,6 +51,25 @@ type DebuggableAttributeClass =
     { Constructor: ICustomAttributeType
       ModesEnum: TypeSignature }
 
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type MathMethods =
+    { SingleAbs: IMethodDefOrRef
+      DoubleAbs: IMethodDefOrRef
+      SingleCeiling: IMethodDefOrRef
+      DoubleCeiling: IMethodDefOrRef
+      SingleFloor: IMethodDefOrRef
+      DoubleFloor: IMethodDefOrRef
+      SingleTruncate: IMethodDefOrRef
+      DoubleTruncate: IMethodDefOrRef
+      SingleSqrt: IMethodDefOrRef
+      DoubleSqrt: IMethodDefOrRef
+      SingleMin: IMethodDefOrRef
+      DoubleMin: IMethodDefOrRef
+      SingleMax: IMethodDefOrRef
+      DoubleMax: IMethodDefOrRef
+      SingleCopySign: IMethodDefOrRef
+      DoubleCopySign: IMethodDefOrRef }
+
 [<NoComparison; NoEquality>]
 type References =
     { /// <summary>
@@ -71,7 +90,8 @@ type References =
       BitOperations: BitOperationsClass
       DebuggableAttribute: DebuggableAttributeClass
       TargetFrameworkAttributeConstructor: ICustomAttributeType
-      CompilerGeneratedAttributeConstructor: ICustomAttributeType }
+      CompilerGeneratedAttributeConstructor: ICustomAttributeType
+      Math: MathMethods }
 
 let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
     let importCoreType = ImportHelpers.importType mdle.DefaultImporter assembly
@@ -186,4 +206,36 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
       CompilerGeneratedAttributeConstructor =
         importCompilerServicesType "CompilerGeneratedAttribute"
         |> ImportHelpers.importConstructor mdle Seq.empty
-        :?> ICustomAttributeType }
+        :?> ICustomAttributeType
+      Math =
+        let tySingle = mdle.CorLibTypeFactory.Single
+        let tySingle1 = [| tySingle |]
+        let tySingle2 = [| tySingle; tySingle |]
+
+        let tyDouble = mdle.CorLibTypeFactory.Double
+        let tyDouble1 = [| tyDouble |]
+        let tyDouble2 = [| tyDouble; tyDouble |]
+
+        let tyMath = importSystemType "Math"
+        let tyMathF = importSystemType "MathF"
+
+        let importMathFunction returnType (parameterTypes: CorLibTypeSignature[]) =
+            Seq.map (fun ty -> ty :> TypeSignature) parameterTypes
+            |> ImportHelpers.importMethod mdle.DefaultImporter CallingConventionAttributes.Default returnType
+
+        { SingleAbs = importMathFunction tySingle tySingle1 "Abs" tyMathF
+          DoubleAbs = importMathFunction tyDouble tyDouble1 "Abs" tyMath
+          SingleCeiling = importMathFunction tySingle tySingle1 "Ceiling" tyMathF
+          DoubleCeiling = importMathFunction tyDouble tyDouble1 "Ceiling" tyMath
+          SingleFloor = importMathFunction tySingle tySingle1 "Floor" tyMathF
+          DoubleFloor = importMathFunction tyDouble tyDouble1 "Floor" tyMath
+          SingleTruncate = importMathFunction tySingle tySingle1 "Truncate" tyMathF
+          DoubleTruncate = importMathFunction tyDouble tyDouble1 "Truncate" tyMath
+          SingleSqrt = importMathFunction tySingle tySingle1 "Sqrt" tyMathF
+          DoubleSqrt = importMathFunction tyDouble tyDouble1 "Sqrt" tyMath
+          SingleMin = importMathFunction tySingle tySingle2 "Min" tyMathF
+          DoubleMin = importMathFunction tyDouble tyDouble2 "Min" tyMath
+          SingleMax = importMathFunction tySingle tySingle2 "Max" tyMathF
+          DoubleMax = importMathFunction tyDouble tyDouble2 "Max" tyMath
+          SingleCopySign = importMathFunction tySingle tySingle2 "CopySign" tyMathF
+          DoubleCopySign = importMathFunction tyDouble tyDouble2 "CopySign" tyMath } }
