@@ -428,6 +428,36 @@ let translateWebAssembly
             | I32ShrU | I64ShrU -> il.Add(CilInstruction CilOpCodes.Shr_Un)
             | I64Rotl -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateLeftInt64))
             | I64Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt64))
+            | F32Abs ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleAbs))
+            | F64Abs ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleAbs))
+            | F32Ceil ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleCeiling))
+            | F64Ceil ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleCeiling))
+            | F32Floor ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleFloor))
+            | F64Floor ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleFloor))
+            | F32Trunc ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleTruncate))
+            | F64Trunc ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleTruncate))
+            | F32Sqrt ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleSqrt))
+            | F64Sqrt ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleSqrt))
             | F32Add | F64Add ->
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Add)
@@ -440,6 +470,18 @@ let translateWebAssembly
             | F32Div | F64Div ->
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Div)
+            | F32Min ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleMin))
+            | F64Min ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleMin))
+            | F32Max ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleMax))
+            | F64Max ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleMax))
             | I32WrapI64 -> il.Add(CilInstruction CilOpCodes.Conv_I4)
             | I64ExtendI32S -> il.Add(CilInstruction CilOpCodes.Conv_I8)
             | I64ExtendI32U -> il.Add(CilInstruction CilOpCodes.Conv_U8)
