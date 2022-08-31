@@ -42,13 +42,16 @@ type RuntimeHelpersClass =
     { InitalizeArray: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
-type BitOperationsClass =
-    { LeadingZeroCountUInt32: IMethodDefOrRef
-      TrailingZeroCountUInt32: IMethodDefOrRef
-      Int32BitsToSingle: IMethodDefOrRef
+type BitConverterClass =
+    { Int32BitsToSingle: IMethodDefOrRef
       SingleToInt32Bits: IMethodDefOrRef
       Int64BitsToDouble: IMethodDefOrRef
       DoubleToInt64Bits: IMethodDefOrRef }
+
+[<NoComparison; NoEquality>]
+type BitOperationsClass =
+    { LeadingZeroCountUInt32: IMethodDefOrRef
+      TrailingZeroCountUInt32: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
 type DebuggableAttributeClass =
@@ -91,6 +94,7 @@ type References =
       ArgumentExceptionConstructor: IMethodDefOrRef
       ArgumentNullExceptionConstructor: IMethodDefOrRef
       RuntimeHelpers: RuntimeHelpersClass
+      BitConverter: BitConverterClass
       BitOperations: BitOperationsClass
       DebuggableAttribute: DebuggableAttributeClass
       TargetFrameworkAttributeConstructor: ICustomAttributeType
@@ -166,6 +170,20 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 "GetTypeFromHandle"
                 tyType
           }
+      BitConverter =
+        let tyBitConverter = importSystemType "BitConverter"
+        let bitConverterHelper returnType parameterTypes name =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Default
+                returnType
+                parameterTypes
+                name
+                tyBitConverter
+        { Int32BitsToSingle = bitConverterHelper mdle.CorLibTypeFactory.Single [| mdle.CorLibTypeFactory.Int32 |] "Int32BitsToSingle"
+          SingleToInt32Bits = bitConverterHelper mdle.CorLibTypeFactory.Int32 [| mdle.CorLibTypeFactory.Single |] "SingleToInt32Bits"
+          Int64BitsToDouble = bitConverterHelper mdle.CorLibTypeFactory.Double [| mdle.CorLibTypeFactory.Int64 |] "Int64BitsToDouble"
+          DoubleToInt64Bits = bitConverterHelper mdle.CorLibTypeFactory.Int64 [| mdle.CorLibTypeFactory.Double |] "DoubleToInt64Bits" }
       BitOperations =
         let bitOperationHelper returnType parameterTypes name =
             ImportHelpers.importMethod
@@ -176,16 +194,13 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 name
                 tyBitOperations
 
-        let bitCountOperation returnType argumentType name = bitOperationHelper returnType [| argumentType |] name
+        let bitCountOperation returnType argumentType name =
+            bitOperationHelper returnType [| argumentType |] name
 
         { LeadingZeroCountUInt32 =
             bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "LeadingZeroCount"
           TrailingZeroCountUInt32 =
-            bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "TrailingZeroCount"
-          Int32BitsToSingle = bitOperationHelper mdle.CorLibTypeFactory.Single [| mdle.CorLibTypeFactory.Int32 |] "Int32BitsToSingle"
-          SingleToInt32Bits = bitOperationHelper mdle.CorLibTypeFactory.Int32 [| mdle.CorLibTypeFactory.Single |] "SingleToInt32Bits"
-          Int64BitsToDouble = bitOperationHelper mdle.CorLibTypeFactory.Double [| mdle.CorLibTypeFactory.Int64 |] "Int64BitsToDouble"
-          DoubleToInt64Bits = bitOperationHelper mdle.CorLibTypeFactory.Int64 [| mdle.CorLibTypeFactory.Double |] "DoubleToInt64Bits" }
+            bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "TrailingZeroCount" }
       RuntimeHelpers =
         { InitalizeArray =
             ImportHelpers.importMethod

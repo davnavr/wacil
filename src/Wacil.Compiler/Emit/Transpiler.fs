@@ -330,12 +330,12 @@ let translateWebAssembly
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
                 match floatingPointMode with
-                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int32BitsToSingle))
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int32BitsToSingle))
             | F64Load arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
                 match floatingPointMode with
-                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int64BitsToDouble))
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int64BitsToDouble))
             | I32Load8U arg ->
                 let instantiation = emitPushMemory arg.Memory il
                 il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
@@ -368,11 +368,11 @@ let translateWebAssembly
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | F32Store arg ->
                 let instantiation = emitPushMemArg arg il
-                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.SingleToInt32Bits))
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.SingleToInt32Bits))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
             | F64Store arg ->
                 let instantiation = emitPushMemArg arg il
-                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.DoubleToInt64Bits))
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.DoubleToInt64Bits))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
                 // TODO: Figure out if an explicit Conv_I1 instruction needs to be emitted.
@@ -515,10 +515,10 @@ let translateWebAssembly
             | F64PromoteF32 ->
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R8)
-            | I32ReinterpretF32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.SingleToInt32Bits))
-            | I64ReinterpretF64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.DoubleToInt64Bits))
-            | F32ReinterpretI32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int32BitsToSingle))
-            | F64ReinterpretI64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int64BitsToDouble))
+            | I32ReinterpretF32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.SingleToInt32Bits))
+            | I64ReinterpretF64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.DoubleToInt64Bits))
+            | F32ReinterpretI32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int32BitsToSingle))
+            | F64ReinterpretI64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int64BitsToDouble))
             | I64ExtendI32S -> il.Add(CilInstruction CilOpCodes.Conv_I8)
             | I64ExtendI32U -> il.Add(CilInstruction CilOpCodes.Conv_U8)
             | RefNull _ -> il.Add(CilInstruction CilOpCodes.Ldnull)
