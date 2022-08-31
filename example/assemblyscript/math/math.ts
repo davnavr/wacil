@@ -34,8 +34,8 @@ export function horners_method(coefficients: StaticArray<f64>, x: f64): f64 {
 
 export function quadratic(a: f64, b: f64, c: f64, x: f64): f64 {
     let coefficients = new StaticArray<f64>(3);
-    coefficients[0] = a;
+    coefficients[0] = c;
     coefficients[1] = b;
-    coefficients[2] = c;
+    coefficients[2] = a;
     return horners_method(coefficients, x);
 }
