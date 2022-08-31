@@ -326,7 +326,8 @@ let translateWebAssembly
             | I64Load arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
-            | F32Load arg ->
+            | F32Load arg -> // TODO: Check that float stores have arguments in correct order
+                // Top of stack is address to load
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
                 match floatingPointMode with
@@ -367,12 +368,12 @@ let translateWebAssembly
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | F32Store arg ->
-                let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.SingleToInt32Bits))
+                let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
             | F64Store arg ->
-                let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.DoubleToInt64Bits))
+                let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
                 // TODO: Figure out if an explicit Conv_I1 instruction needs to be emitted.
