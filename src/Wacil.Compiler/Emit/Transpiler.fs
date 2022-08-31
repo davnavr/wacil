@@ -486,6 +486,14 @@ let translateWebAssembly
             | F32DemoteF64 ->
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F64ConvertI32S | F64ConvertI64S ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R8)
+            | F64ConvertI32U | F64ConvertI64U ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Conv_R_Un)
+                    il.Add(CilInstruction CilOpCodes.Conv_R8)
             | F64PromoteF32 ->
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R8)
