@@ -326,6 +326,16 @@ let translateWebAssembly
             | I64Load arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
+            | F32Load arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int32BitsToSingle))
+            | F64Load arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int64BitsToDouble))
             | I32Load8U arg ->
                 let instantiation = emitPushMemory arg.Memory il
                 il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
