@@ -45,9 +45,13 @@ let translateFunctionDefinitions
             match wasm.Exports.GetFunctionName index' with
             | true, functionExportName -> mangleMemberName functionExportName, MethodAttributes.Public
             | false, _ ->
-                let mangledCustomName = mangleMemberName customFunctionName
+                let mangledCustomName =
+                    if System.String.IsNullOrEmpty customFunctionName
+                    then System.String.Empty
+                    else mangleMemberName customFunctionName
+
                 let privateFunctionName =
-                    if obj.ReferenceEquals(customFunctionName, mangledCustomName)
+                    if not(System.String.IsNullOrEmpty customFunctionName) && obj.ReferenceEquals(customFunctionName, mangledCustomName)
                     then customFunctionName
                     else "__function@" + functionIndexString
 
