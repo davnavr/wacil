@@ -85,6 +85,7 @@ let translateWebAssembly
     (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
     (syslib: SystemLibrary.References)
     (rtlib: RuntimeLibrary.References)
+    floatingPointMode
     (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
     (members: ModuleMembers)
     (inputs: ResizeArray<Input>)
@@ -427,6 +428,18 @@ let translateWebAssembly
             | I32ShrU | I64ShrU -> il.Add(CilInstruction CilOpCodes.Shr_Un)
             | I64Rotl -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateLeftInt64))
             | I64Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt64))
+            | F32Add | F64Add ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Add)
+            | F32Sub | F64Sub ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Sub)
+            | F32Mul | F64Mul ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Mul)
+            | F32Div | F64Div ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Div)
             | I32WrapI64 -> il.Add(CilInstruction CilOpCodes.Conv_I4)
             | I64ExtendI32S -> il.Add(CilInstruction CilOpCodes.Conv_I8)
             | I64ExtendI32U -> il.Add(CilInstruction CilOpCodes.Conv_U8)

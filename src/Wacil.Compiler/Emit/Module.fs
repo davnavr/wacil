@@ -220,6 +220,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         delegateTypeCache
         syslib
         rtlib
+        options.FloatingPointMode
         input
         members
         webAssemblyExpressions

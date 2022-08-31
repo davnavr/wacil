@@ -33,6 +33,12 @@ type MemoryImplementation =
     | Segmented
     | Unmanaged
 
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
+type FloatingPointMode =
+    /// Indicates that operations on floating-point numbers should be translated to CIL instructions or calls to the standard library.
+    /// The semantics of floating point operations may not be fully compliant with the WebAssembly standard or IEEE 754-2019.
+    | Relaxed
+
 [<Sealed>]
 type Options (name) =
     let mutable mainClassName = null
@@ -82,3 +88,5 @@ type Options (name) =
 
     /// The memory implementation to use for memory imports.
     member val MemoryImportImplementation = MemoryImplementation.Any with get, set
+
+    member val FloatingPointMode = FloatingPointMode.Relaxed with get, set
