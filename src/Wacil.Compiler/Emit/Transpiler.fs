@@ -483,6 +483,10 @@ let translateWebAssembly
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleMax))
             | I32WrapI64 -> il.Add(CilInstruction CilOpCodes.Conv_I4)
+            | I32ReinterpretF32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.SingleToInt32Bits))
+            | I64ReinterpretF64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.DoubleToInt64Bits))
+            | F32ReinterpretI32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int32BitsToSingle))
+            | F64ReinterpretI64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.Int64BitsToDouble))
             | I64ExtendI32S -> il.Add(CilInstruction CilOpCodes.Conv_I8)
             | I64ExtendI32U -> il.Add(CilInstruction CilOpCodes.Conv_U8)
             | RefNull _ -> il.Add(CilInstruction CilOpCodes.Ldnull)

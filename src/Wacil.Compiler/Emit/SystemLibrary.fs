@@ -44,7 +44,11 @@ type RuntimeHelpersClass =
 [<NoComparison; NoEquality>]
 type BitOperationsClass =
     { LeadingZeroCountUInt32: IMethodDefOrRef
-      TrailingZeroCountUInt32: IMethodDefOrRef }
+      TrailingZeroCountUInt32: IMethodDefOrRef
+      Int32BitsToSingle: IMethodDefOrRef
+      SingleToInt32Bits: IMethodDefOrRef
+      Int64BitsToDouble: IMethodDefOrRef
+      DoubleToInt64Bits: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
 type DebuggableAttributeClass =
@@ -177,7 +181,11 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
         { LeadingZeroCountUInt32 =
             bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "LeadingZeroCount"
           TrailingZeroCountUInt32 =
-            bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "TrailingZeroCount" }
+            bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "TrailingZeroCount"
+          Int32BitsToSingle = bitOperationHelper mdle.CorLibTypeFactory.Single [| mdle.CorLibTypeFactory.Int32 |] "Int32BitsToSingle"
+          SingleToInt32Bits = bitOperationHelper mdle.CorLibTypeFactory.Int32 [| mdle.CorLibTypeFactory.Single |] "SingleToInt32Bits"
+          Int64BitsToDouble = bitOperationHelper mdle.CorLibTypeFactory.Double [| mdle.CorLibTypeFactory.Int64 |] "Int64BitsToDouble"
+          DoubleToInt64Bits = bitOperationHelper mdle.CorLibTypeFactory.Int64 [| mdle.CorLibTypeFactory.Double |] "DoubleToInt64Bits" }
       RuntimeHelpers =
         { InitalizeArray =
             ImportHelpers.importMethod
