@@ -36,8 +36,9 @@ testList "math" [
         let n = int64 i
         test <@ instance.factorial n = factorial n @>
 
-    testProperty "quadratic implementation is correct" <| fun x ->
-        test <@ quadratic 2.0 3.0 4.0 x = instance.quadratic(2, 3, 4, x) @>
+    testProperty "quadratic implementation is correct" <| fun (n: int) ->
+        let x = double n
+        test <@ quadratic 4.0 3.0 2.0 x = instance.quadratic(4, 3, 2, x) @>
 ]
 |> runTestsWithCLIArgs List.empty Array.empty
 |> exit
