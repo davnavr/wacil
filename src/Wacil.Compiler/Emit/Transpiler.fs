@@ -326,15 +326,17 @@ let translateWebAssembly
             | I64Load arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
-            | F32Load arg -> // TODO: Check that float stores have arguments in correct order
+            | F32Load arg ->
                 // Top of stack is address to load
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
+                // Top of stack contains loaded integer
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int32BitsToSingle))
             | F64Load arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
+                // Top of stack contains loaded integer
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int64BitsToDouble))
             | I32Load8U arg ->
