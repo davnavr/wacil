@@ -435,6 +435,24 @@ let translateWebAssembly
             | I32Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt32))
             | I32Clz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.LeadingZeroCountUInt32))
             | I32Ctz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.TrailingZeroCountUInt32))
+            | F32Eq ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Ceq)
+            | F32Ne ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Ceq)
+                    il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                    il.Add(CilInstruction CilOpCodes.Ceq)
+            | F64Eq ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Ceq)
+            | F64Ne ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Ceq)
+                    il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                    il.Add(CilInstruction CilOpCodes.Ceq)
             | I32Add | I64Add -> il.Add(CilInstruction CilOpCodes.Add)
             | I32Sub | I64Sub -> il.Add(CilInstruction CilOpCodes.Sub)
             | I32Mul | I64Mul -> il.Add(CilInstruction CilOpCodes.Mul)
