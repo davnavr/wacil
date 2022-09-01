@@ -85,6 +85,7 @@ let translateWebAssembly
     (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
     (syslib: SystemLibrary.References)
     (rtlib: RuntimeLibrary.References)
+    floatingPointMode
     (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
     (members: ModuleMembers)
     (inputs: ResizeArray<Input>)
@@ -325,6 +326,19 @@ let translateWebAssembly
             | I64Load arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
+            | F32Load arg ->
+                // Top of stack is address to load
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt32))
+                // Top of stack contains loaded integer
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int32BitsToSingle))
+            | F64Load arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt64))
+                // Top of stack contains loaded integer
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int64BitsToDouble))
             | I32Load8U arg ->
                 let instantiation = emitPushMemory arg.Memory il
                 il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
@@ -353,6 +367,14 @@ let translateWebAssembly
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
             | I64Store arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
+            | F32Store arg ->
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.SingleToInt32Bits))
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
+            | F64Store arg ->
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.DoubleToInt64Bits))
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
@@ -413,6 +435,24 @@ let translateWebAssembly
             | I32Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt32))
             | I32Clz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.LeadingZeroCountUInt32))
             | I32Ctz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.TrailingZeroCountUInt32))
+            | F32Eq ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Ceq)
+            | F32Ne ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Ceq)
+                    il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                    il.Add(CilInstruction CilOpCodes.Ceq)
+            | F64Eq ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Ceq)
+            | F64Ne ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Ceq)
+                    il.Add(CilInstruction CilOpCodes.Ldc_I4_0)
+                    il.Add(CilInstruction CilOpCodes.Ceq)
             | I32Add | I64Add -> il.Add(CilInstruction CilOpCodes.Add)
             | I32Sub | I64Sub -> il.Add(CilInstruction CilOpCodes.Sub)
             | I32Mul | I64Mul -> il.Add(CilInstruction CilOpCodes.Mul)
@@ -427,7 +467,95 @@ let translateWebAssembly
             | I32ShrU | I64ShrU -> il.Add(CilInstruction CilOpCodes.Shr_Un)
             | I64Rotl -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateLeftInt64))
             | I64Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt64))
+            | F32Abs ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleAbs))
+            | F64Abs ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleAbs))
+            | F32Ceil ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleCeiling))
+            | F64Ceil ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleCeiling))
+            | F32Floor ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleFloor))
+            | F64Floor ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleFloor))
+            | F32Trunc ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleTruncate))
+            | F64Trunc ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleTruncate))
+            | F32Sqrt ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleSqrt))
+            | F64Sqrt ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleSqrt))
+            | F32Add | F64Add ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Add)
+            | F32Sub | F64Sub ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Sub)
+            | F32Mul | F64Mul ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Mul)
+            | F32Div | F64Div ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Div)
+            | F32Min ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleMin))
+            | F64Min ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleMin))
+            | F32Max ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.SingleMax))
+            | F64Max ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleMax))
             | I32WrapI64 -> il.Add(CilInstruction CilOpCodes.Conv_I4)
+            | F32ConvertI32S ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F32ConvertI32U ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Conv_R_Un)
+                    il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F32ConvertI64S ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F32ConvertI64U ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Conv_R_Un)
+                    il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F32DemoteF64 ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F64ConvertI32S | F64ConvertI64S ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R8)
+            | F64ConvertI32U | F64ConvertI64U ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Conv_R_Un)
+                    il.Add(CilInstruction CilOpCodes.Conv_R8)
+            | F64PromoteF32 ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R8)
+            | I32ReinterpretF32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.SingleToInt32Bits))
+            | I64ReinterpretF64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.DoubleToInt64Bits))
+            | F32ReinterpretI32 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int32BitsToSingle))
+            | F64ReinterpretI64 -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitConverter.Int64BitsToDouble))
             | I64ExtendI32S -> il.Add(CilInstruction CilOpCodes.Conv_I8)
             | I64ExtendI32U -> il.Add(CilInstruction CilOpCodes.Conv_U8)
             | RefNull _ -> il.Add(CilInstruction CilOpCodes.Ldnull)

@@ -10,6 +10,8 @@ open FsCheck
 
 open Swensen.Unquote
 
+let abort _ _ _ _ = failwith "ABORTED"
+
 let factorial n =
     let rec inner i acc =
         match i with
@@ -18,7 +20,10 @@ let factorial n =
         | _ -> inner (i - 1L) (acc * i)
     inner n 1L
 
-let instance = math.math()
+let quadratic (a: double) b c x: double =
+    (a * x * x) + (b * x) + c
+
+let instance = math.math(math.env(abort))
 
 testList "math" [
     testCase "favorite number is correct" <| fun _ ->
@@ -30,6 +35,10 @@ testList "math" [
     testProperty "factorial implementation is correct" <| fun (PositiveInt i) ->
         let n = int64 i
         test <@ instance.factorial n = factorial n @>
+
+    testProperty "quadratic implementation is correct" <| fun (n: int) ->
+        let x = double n
+        test <@ quadratic 4.0 3.0 2.0 x = instance.quadratic(4, 3, 2, x) @>
 ]
 |> runTestsWithCLIArgs List.empty Array.empty
 |> exit

@@ -42,6 +42,13 @@ type RuntimeHelpersClass =
     { InitalizeArray: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
+type BitConverterClass =
+    { Int32BitsToSingle: IMethodDefOrRef
+      SingleToInt32Bits: IMethodDefOrRef
+      Int64BitsToDouble: IMethodDefOrRef
+      DoubleToInt64Bits: IMethodDefOrRef }
+
+[<NoComparison; NoEquality>]
 type BitOperationsClass =
     { LeadingZeroCountUInt32: IMethodDefOrRef
       TrailingZeroCountUInt32: IMethodDefOrRef }
@@ -50,6 +57,25 @@ type BitOperationsClass =
 type DebuggableAttributeClass =
     { Constructor: ICustomAttributeType
       ModesEnum: TypeSignature }
+
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type MathMethods =
+    { SingleAbs: IMethodDefOrRef
+      DoubleAbs: IMethodDefOrRef
+      SingleCeiling: IMethodDefOrRef
+      DoubleCeiling: IMethodDefOrRef
+      SingleFloor: IMethodDefOrRef
+      DoubleFloor: IMethodDefOrRef
+      SingleTruncate: IMethodDefOrRef
+      DoubleTruncate: IMethodDefOrRef
+      SingleSqrt: IMethodDefOrRef
+      DoubleSqrt: IMethodDefOrRef
+      SingleMin: IMethodDefOrRef
+      DoubleMin: IMethodDefOrRef
+      SingleMax: IMethodDefOrRef
+      DoubleMax: IMethodDefOrRef
+      SingleCopySign: IMethodDefOrRef
+      DoubleCopySign: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
 type References =
@@ -68,10 +94,12 @@ type References =
       ArgumentExceptionConstructor: IMethodDefOrRef
       ArgumentNullExceptionConstructor: IMethodDefOrRef
       RuntimeHelpers: RuntimeHelpersClass
+      BitConverter: BitConverterClass
       BitOperations: BitOperationsClass
       DebuggableAttribute: DebuggableAttributeClass
       TargetFrameworkAttributeConstructor: ICustomAttributeType
-      CompilerGeneratedAttributeConstructor: ICustomAttributeType }
+      CompilerGeneratedAttributeConstructor: ICustomAttributeType
+      Math: MathMethods }
 
 let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
     let importCoreType = ImportHelpers.importType mdle.DefaultImporter assembly
@@ -142,6 +170,20 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 "GetTypeFromHandle"
                 tyType
           }
+      BitConverter =
+        let tyBitConverter = importSystemType "BitConverter"
+        let bitConverterHelper returnType parameterTypes name =
+            ImportHelpers.importMethod
+                mdle.DefaultImporter
+                CallingConventionAttributes.Default
+                returnType
+                parameterTypes
+                name
+                tyBitConverter
+        { Int32BitsToSingle = bitConverterHelper mdle.CorLibTypeFactory.Single [| mdle.CorLibTypeFactory.Int32 |] "Int32BitsToSingle"
+          SingleToInt32Bits = bitConverterHelper mdle.CorLibTypeFactory.Int32 [| mdle.CorLibTypeFactory.Single |] "SingleToInt32Bits"
+          Int64BitsToDouble = bitConverterHelper mdle.CorLibTypeFactory.Double [| mdle.CorLibTypeFactory.Int64 |] "Int64BitsToDouble"
+          DoubleToInt64Bits = bitConverterHelper mdle.CorLibTypeFactory.Int64 [| mdle.CorLibTypeFactory.Double |] "DoubleToInt64Bits" }
       BitOperations =
         let bitOperationHelper returnType parameterTypes name =
             ImportHelpers.importMethod
@@ -152,7 +194,8 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 name
                 tyBitOperations
 
-        let bitCountOperation returnType argumentType name = bitOperationHelper returnType [| argumentType |] name
+        let bitCountOperation returnType argumentType name =
+            bitOperationHelper returnType [| argumentType |] name
 
         { LeadingZeroCountUInt32 =
             bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "LeadingZeroCount"
@@ -186,4 +229,36 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
       CompilerGeneratedAttributeConstructor =
         importCompilerServicesType "CompilerGeneratedAttribute"
         |> ImportHelpers.importConstructor mdle Seq.empty
-        :?> ICustomAttributeType }
+        :?> ICustomAttributeType
+      Math =
+        let tySingle = mdle.CorLibTypeFactory.Single
+        let tySingle1 = [| tySingle |]
+        let tySingle2 = [| tySingle; tySingle |]
+
+        let tyDouble = mdle.CorLibTypeFactory.Double
+        let tyDouble1 = [| tyDouble |]
+        let tyDouble2 = [| tyDouble; tyDouble |]
+
+        let tyMath = importSystemType "Math"
+        let tyMathF = importSystemType "MathF"
+
+        let importMathFunction returnType (parameterTypes: CorLibTypeSignature[]) =
+            Seq.map (fun ty -> ty :> TypeSignature) parameterTypes
+            |> ImportHelpers.importMethod mdle.DefaultImporter CallingConventionAttributes.Default returnType
+
+        { SingleAbs = importMathFunction tySingle tySingle1 "Abs" tyMathF
+          DoubleAbs = importMathFunction tyDouble tyDouble1 "Abs" tyMath
+          SingleCeiling = importMathFunction tySingle tySingle1 "Ceiling" tyMathF
+          DoubleCeiling = importMathFunction tyDouble tyDouble1 "Ceiling" tyMath
+          SingleFloor = importMathFunction tySingle tySingle1 "Floor" tyMathF
+          DoubleFloor = importMathFunction tyDouble tyDouble1 "Floor" tyMath
+          SingleTruncate = importMathFunction tySingle tySingle1 "Truncate" tyMathF
+          DoubleTruncate = importMathFunction tyDouble tyDouble1 "Truncate" tyMath
+          SingleSqrt = importMathFunction tySingle tySingle1 "Sqrt" tyMathF
+          DoubleSqrt = importMathFunction tyDouble tyDouble1 "Sqrt" tyMath
+          SingleMin = importMathFunction tySingle tySingle2 "Min" tyMathF
+          DoubleMin = importMathFunction tyDouble tyDouble2 "Min" tyMath
+          SingleMax = importMathFunction tySingle tySingle2 "Max" tyMathF
+          DoubleMax = importMathFunction tyDouble tyDouble2 "Max" tyMath
+          SingleCopySign = importMathFunction tySingle tySingle2 "CopySign" tyMathF
+          DoubleCopySign = importMathFunction tyDouble tyDouble2 "CopySign" tyMath } }
