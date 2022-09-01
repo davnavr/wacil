@@ -522,6 +522,22 @@ let translateWebAssembly
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction(CilOpCodes.Call, syslib.Math.DoubleMax))
             | I32WrapI64 -> il.Add(CilInstruction CilOpCodes.Conv_I4)
+            | F32ConvertI32S ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F32ConvertI32U ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Conv_R_Un)
+                    il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F32ConvertI64S ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R4)
+            | F32ConvertI64U ->
+                match floatingPointMode with
+                | FloatingPointMode.Relaxed ->
+                    il.Add(CilInstruction CilOpCodes.Conv_R_Un)
+                    il.Add(CilInstruction CilOpCodes.Conv_R4)
             | F32DemoteF64 ->
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Conv_R4)
