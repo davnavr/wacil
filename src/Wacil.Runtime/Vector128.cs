@@ -1,11 +1,12 @@
 namespace Wacil.Runtime;
 
 using System;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using Intrinsics = System.Runtime.Intrinsics.Vector128;
+using X86 = System.Runtime.Intrinsics.X86;
+using Arm = System.Runtime.Intrinsics.Arm;
+using Helpers = System.Runtime.Intrinsics.Vector128;
 
 // TODO: Will endianness be an issue? (.NET rarely runs on BE machines)
 
@@ -91,19 +92,19 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     }
 
     /// <summary>Initializes a <see cref="Vector128"/> with eight <see cref="short"/> elements.</summary>
-    public Vector128(short a, short b, short c, short d, short e, short f, short g, short h) : this(Intrinsics.Create(a, b, c, d, e, f, g, h)) {}
+    public Vector128(short a, short b, short c, short d, short e, short f, short g, short h) : this(Helpers.Create(a, b, c, d, e, f, g, h)) {}
 
     /// <summary>Initializes a <see cref="Vector128"/> with four <see cref="int"/> elements.</summary>
-    public Vector128(int a, int b, int c, int d) : this(Intrinsics.Create(a, b, c, d)) {}
+    public Vector128(int a, int b, int c, int d) : this(Helpers.Create(a, b, c, d)) {}
 
     /// <summary>Initializes a <see cref="Vector128"/> with four <see cref="float"/> elements.</summary>
-    public Vector128(float a, float b, float c, float d) : this(Intrinsics.Create(a, b, c, d)) {}
+    public Vector128(float a, float b, float c, float d) : this(Helpers.Create(a, b, c, d)) {}
 
     /// <summary>Initializes a <see cref="Vector128"/> with two <see cref="long"/> elements.</summary>
-    public Vector128(long a, long b) : this(Intrinsics.Create(a, b)) {}
+    public Vector128(long a, long b) : this(Helpers.Create(a, b)) {}
 
     /// <summary>Initializes a <see cref="Vector128"/> with two <see cref="double"/> elements.</summary>
-    public Vector128(double a, double b) : this(Intrinsics.Create(a, b)) {}
+    public Vector128(double a, double b) : this(Helpers.Create(a, b)) {}
 
     /// <summary>Gets a vector with no bits set.</summary>
     public static Vector128 Zero { get; } = new(Vector128<byte>.Zero);
@@ -146,6 +147,19 @@ public readonly struct Vector128 : IEquatable<Vector128> {
 
     /// <summary>Gets the <see cref="double"/> element at the specified <paramref name="index"/>.</summary>
     public double GetDouble(int index) => doubles.GetElement(index);
+
+    /// <summary>Computes the sum of each <see cref="int"/> pair within two vectors.</summary>
+    public Vector128 AddInt32(Vector128 a, Vector128 b) {
+        if (X86.Avx2.IsSupported) {
+            return new Vector128(X86.Avx2.Add(a.integers, b.integers));
+        } else if (X86.Sse2.IsSupported) {
+            return new Vector128(X86.Sse2.Add(a.integers, b.integers));
+        } else if (Arm.AdvSimd.IsSupported) {
+            return new Vector128(Arm.AdvSimd.Add(a.integers, b.integers));
+        }
+
+        return new Vector128(a.GetInt32(0) + b.GetInt32(0), a.GetInt32(1) + b.GetInt32(1), a.GetInt32(2) + b.GetInt32(2), a.GetInt32(3) + b.GetInt32(3));
+    }
 
     /// <summary>Determines whether two vectors contain the same bits.</summary>
     public bool Equals(Vector128 other) => bytes.Equals(other.bytes);
