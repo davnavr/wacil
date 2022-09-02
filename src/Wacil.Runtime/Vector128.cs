@@ -111,23 +111,23 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     /// <summary>Gets a vector with all bits set.</summary>
     public static Vector128 AllBitsSet { get; } = new(Vector128<byte>.AllBitsSet);
 
-    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of sixteen <see cref="byte"/> elements.</summary>
-    public Vector<byte> AsByteVector() => bytes.AsVector();
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector128{T}"/> of sixteen <see cref="byte"/> elements.</summary>
+    public Vector128<byte> AsByte() => bytes;
 
-    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of eight <see cref="short"/> elements.</summary>
-    public Vector<short> AsInt16Vector() => shorts.AsVector();
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector128{T}"/> of eight <see cref="short"/> elements.</summary>
+    public Vector128<short> AsInt16() => shorts;
 
-    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of four <see cref="int"/> elements.</summary>
-    public Vector<int> AsInt32Vector() => integers.AsVector();
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector128{T}"/> of four <see cref="int"/> elements.</summary>
+    public Vector128<int> AsInt32() => integers;
 
-    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of four <see cref="float"/> elements.</summary>
-    public Vector<float> AsSingleVector() => singles.AsVector();
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector128{T}"/> of four <see cref="float"/> elements.</summary>
+    public Vector128<float> AsSingle() => singles;
 
-    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of two <see cref="long"/> elements.</summary>
-    public Vector<long> AsInt64Vector() => longs.AsVector();
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector128{T}"/> of two <see cref="long"/> elements.</summary>
+    public Vector128<long> AsInt64() => longs;
 
-    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of two <see cref="double"/> elements.</summary>
-    public Vector<double> AsDoubleVector() => doubles.AsVector();
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector128{T}"/> of two <see cref="double"/> elements.</summary>
+    public Vector128<double> AsDouble() => doubles;
 
     /// <summary>Gets the <see cref="byte"/> element at the specified <paramref name="index"/>.</summary>
     public byte GetByte(int index) => bytes.GetElement(index);
