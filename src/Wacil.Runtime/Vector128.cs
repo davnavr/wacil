@@ -114,9 +114,39 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of sixteen <see cref="byte"/> elements.</summary>
     public Vector<byte> AsByteVector() => bytes.AsVector();
 
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of eight <see cref="short"/> elements.</summary>
+    public Vector<short> AsInt16Vector() => shorts.AsVector();
+
     /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of four <see cref="int"/> elements.</summary>
-    public Vector<int> AsIntVector() => integers.AsVector();
+    public Vector<int> AsInt32Vector() => integers.AsVector();
+
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of four <see cref="float"/> elements.</summary>
+    public Vector<float> AsSingleVector() => singles.AsVector();
+
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of two <see cref="long"/> elements.</summary>
+    public Vector<long> AsInt64Vector() => longs.AsVector();
+
+    /// <summary>Interprets the elements of this vector as a <see cref="Vector{T}"/> of two <see cref="double"/> elements.</summary>
+    public Vector<double> AsDoubleVector() => doubles.AsVector();
+
+    /// <summary>Gets the <see cref="byte"/> element at the specified <paramref name="index"/>.</summary>
+    public byte GetByte(int index) => bytes.GetElement(index);
+
+    /// <summary>Gets the <see cref="short"/> element at the specified <paramref name="index"/>.</summary>
+    public short GetInt16(int index) => shorts.GetElement(index);
+
+    /// <summary>Gets the <see cref="int"/> element at the specified <paramref name="index"/>.</summary>
+    public int GetInt32(int index) => integers.GetElement(index);
+
+    /// <summary>Gets the <see cref="float"/> element at the specified <paramref name="index"/>.</summary>
+    public float GetSingle(int index) => singles.GetElement(index);
+
+    /// <summary>Gets the <see cref="long"/> element at the specified <paramref name="index"/>.</summary>
+    public float GetInt64(int index) => longs.GetElement(index);
+
+    /// <summary>Gets the <see cref="double"/> element at the specified <paramref name="index"/>.</summary>
+    public double GetDouble(int index) => doubles.GetElement(index);
 
     /// <summary>Determines whether two vectors contain the same bits.</summary>
-    public bool Equals(Vector128 other) => this.bytes.Equals(other.bytes);
+    public bool Equals(Vector128 other) => bytes.Equals(other.bytes);
 }
