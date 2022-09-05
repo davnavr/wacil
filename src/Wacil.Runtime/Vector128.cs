@@ -149,16 +149,16 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     public double GetDouble(int index) => doubles.GetElement(index);
 
     /// <summary>Computes the sum of each <see cref="int"/> pair within two vectors.</summary>
-    public Vector128 AddInt32(Vector128 a, Vector128 b) {
+    public Vector128 AddInt32(Vector128 other) {
         if (X86.Avx2.IsSupported) {
-            return new Vector128(X86.Avx2.Add(a.integers, b.integers));
+            return new Vector128(X86.Avx2.Add(integers, other.integers));
         } else if (X86.Sse2.IsSupported) {
-            return new Vector128(X86.Sse2.Add(a.integers, b.integers));
+            return new Vector128(X86.Sse2.Add(integers, other.integers));
         } else if (Arm.AdvSimd.IsSupported) {
-            return new Vector128(Arm.AdvSimd.Add(a.integers, b.integers));
+            return new Vector128(Arm.AdvSimd.Add(integers, other.integers));
         }
 
-        return new Vector128(a.GetInt32(0) + b.GetInt32(0), a.GetInt32(1) + b.GetInt32(1), a.GetInt32(2) + b.GetInt32(2), a.GetInt32(3) + b.GetInt32(3));
+        return new Vector128(GetInt32(0) + other.GetInt32(0), GetInt32(1) + other.GetInt32(1), GetInt32(2) + other.GetInt32(2), GetInt32(3) + other.GetInt32(3));
     }
 
     /// <summary>Determines whether two vectors contain the same bits.</summary>
