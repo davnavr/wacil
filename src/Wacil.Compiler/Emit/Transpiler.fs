@@ -599,8 +599,8 @@ let translateWebAssembly
                 | ElementSegmentMember.Active | ElementSegmentMember.Declarative ->
                     il.Add(CilInstruction CilOpCodes.Nop)
             | V128Const(low, high) ->
-                il.Add(CilInstruction(CilOpCodes.Ldc_I8, low))
-                il.Add(CilInstruction(CilOpCodes.Ldc_I8, high))
+                il.Add(CilInstruction(CilOpCodes.Ldc_I8, int64 low)) 
+                il.Add(CilInstruction(CilOpCodes.Ldc_I8, int64 high))
                 il.Add(CilInstruction(CilOpCodes.Newobj, vtlib.ConstructorElementsI64))
             | I32x4Add -> il.Add(CilInstruction(CilOpCodes.Call, vtlib.AddI32))
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
