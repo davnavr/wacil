@@ -10,8 +10,7 @@ open AsmResolver.DotNet.Signatures.Types
 
 [<NoComparison; NoEquality>]
 type References =
-    { Type: ITypeDefOrRef
-      Signature: TypeSignature
+    { Signature: TypeSignature
       ConstructorElementsI64: IMethodDefOrRef
       ConstructorElementsI32: IMethodDefOrRef
       ConstructorElementsI16: IMethodDefOrRef
@@ -20,7 +19,7 @@ type References =
 
 let importTypes (runtimeLibrary: RuntimeLibrary.References) (mdle: ModuleDefinition) =
     let vectorTypeReference = ImportHelpers.importType mdle.DefaultImporter runtimeLibrary.Assembly "Wacil.Runtime" "Vector128"
-    let vectorTypeSignature = TypeDefOrRefSignature vectorTypeReference
+    let vectorTypeSignature = TypeDefOrRefSignature(vectorTypeReference, isValueType = true)
     let coreLibraryTypes = mdle.CorLibTypeFactory
 
     let importConstructor parameterTypes = ImportHelpers.importConstructor mdle parameterTypes vectorTypeReference
@@ -33,8 +32,7 @@ let importTypes (runtimeLibrary: RuntimeLibrary.References) (mdle: ModuleDefinit
             name
             vectorTypeReference
 
-    { Type = vectorTypeReference
-      Signature = vectorTypeSignature
+    { Signature = vectorTypeSignature
       ConstructorElementsI64 = importConstructor (Array.create 2 coreLibraryTypes.Int64)
       ConstructorElementsI32 = importConstructor (Array.create 4 coreLibraryTypes.Int32)
       ConstructorElementsI16 = importConstructor (Array.create 8 coreLibraryTypes.Int16)
