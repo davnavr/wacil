@@ -148,7 +148,7 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     /// <summary>Gets the <see cref="double"/> element at the specified <paramref name="index"/>.</summary>
     public double GetDouble(int index) => doubles.GetElement(index);
 
-    /// <summary>Computes the sum of each <see cref="int"/> pair within two vectors.</summary>
+    /// <summary>Computes the sums for four <see cref="int"/> pairs in two vectors.</summary>
     public Vector128 AddInt32(Vector128 other) {
         if (X86.Avx2.IsSupported) {
             return new Vector128(X86.Avx2.Add(integers, other.integers));
@@ -159,6 +159,28 @@ public readonly struct Vector128 : IEquatable<Vector128> {
         }
 
         return new Vector128(GetInt32(0) + other.GetInt32(0), GetInt32(1) + other.GetInt32(1), GetInt32(2) + other.GetInt32(2), GetInt32(3) + other.GetInt32(3));
+    }
+
+    /// <summary>Computes the sums for eight <see cref="short"/> pairs in two vectors.</summary>
+    public Vector128 AddInt16(Vector128 other) {
+        if (X86.Avx2.IsSupported) {
+            return new Vector128(X86.Avx2.Add(shorts, other.shorts));
+        } else if (X86.Sse2.IsSupported) {
+            return new Vector128(X86.Sse2.Add(shorts, other.shorts));
+        } else if (Arm.AdvSimd.IsSupported) {
+            return new Vector128(Arm.AdvSimd.Add(shorts, other.shorts));
+        }
+
+        return new Vector128(
+            (short)(GetInt16(0) + other.GetInt16(0)),
+            (short)(GetInt16(1) + other.GetInt16(1)),
+            (short)(GetInt16(2) + other.GetInt16(2)),
+            (short)(GetInt16(3) + other.GetInt16(3)),
+            (short)(GetInt16(4) + other.GetInt16(4)),
+            (short)(GetInt16(5) + other.GetInt16(5)),
+            (short)(GetInt16(6) + other.GetInt16(6)),
+            (short)(GetInt16(7) + other.GetInt16(7))
+        );
     }
 
     /// <summary>Determines whether two vectors contain the same bits.</summary>
