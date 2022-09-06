@@ -327,6 +327,7 @@ type Opcode =
     | RefIsNull = 0xD1uy
     | RefFunc = 0xD2uy
     | PrefixFC = 0xFCuy
+    | PrefixFD = 0xFDuy
 
 [<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type MemArgAlign =
@@ -553,6 +554,7 @@ type Instruction =
     | TableGrow of table: TableIdx
     | TableSize of table: TableIdx
     | TableFill of table: TableIdx
+    | V128Const of low: uint64 * high: uint64
 
 type Name = string
 

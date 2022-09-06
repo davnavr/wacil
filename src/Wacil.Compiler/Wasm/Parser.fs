@@ -477,6 +477,9 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             | 16UL -> instructions.Add(reader.ReadIndex() |> TableSize)
             | 17UL -> instructions.Add(reader.ReadIndex() |> TableFill)
             | bad -> failwithf "Invalid prefixed instruction 0xFC 0x%02X" bad
+        | Opcode.PrefixFD ->
+            match reader.ReadUnsignedInteger() with
+            | bad -> failwithf "Invalid vector instruction 0xFD 0x%02X" bad
         | bad -> failwithf "0x%02X is not a valid opcode" (uint8 bad)
 
     instructions.CopyToImmutableArray()
