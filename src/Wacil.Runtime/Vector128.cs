@@ -152,50 +152,50 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     public double GetDouble(int index) => doubles.GetElement(index);
 
     /// <summary>Computes the two sums from adding the <see cref="long"/> elements of two vectors.</summary>
-    public Vector128 AddInt64(Vector128 other) {
+    public static Vector128 AddInt64(Vector128 left, Vector128 right) {
         if (X86.Avx2.IsSupported) {
-            return new Vector128(X86.Avx2.Add(longs, other.longs));
+            return new Vector128(X86.Avx2.Add(left.longs, right.longs));
         } else if (X86.Sse2.IsSupported) {
-            return new Vector128(X86.Sse2.Add(longs, other.longs));
+            return new Vector128(X86.Sse2.Add(left.longs, right.longs));
         } else if (Arm.AdvSimd.IsSupported) {
-            return new Vector128(Arm.AdvSimd.Add(longs, other.longs));
+            return new Vector128(Arm.AdvSimd.Add(left.longs, right.longs));
         }
 
-        return new Vector128(GetInt64(0) + other.GetInt64(0), GetInt64(1) + other.GetInt64(1));
+        return new Vector128(left.GetInt64(0) + right.GetInt64(0), left.GetInt64(1) + right.GetInt64(1));
     }
 
     /// <summary>Computes the sums for four <see cref="int"/> pairs in two vectors.</summary>
-    public Vector128 AddInt32(Vector128 other) {
+    public static Vector128 AddInt32(Vector128 left, Vector128 right) {
         if (X86.Avx2.IsSupported) {
-            return new Vector128(X86.Avx2.Add(integers, other.integers));
+            return new Vector128(X86.Avx2.Add(left.integers, right.integers));
         } else if (X86.Sse2.IsSupported) {
-            return new Vector128(X86.Sse2.Add(integers, other.integers));
+            return new Vector128(X86.Sse2.Add(left.integers, right.integers));
         } else if (Arm.AdvSimd.IsSupported) {
-            return new Vector128(Arm.AdvSimd.Add(integers, other.integers));
+            return new Vector128(Arm.AdvSimd.Add(left.integers, right.integers));
         }
 
-        return new Vector128(GetInt32(0) + other.GetInt32(0), GetInt32(1) + other.GetInt32(1), GetInt32(2) + other.GetInt32(2), GetInt32(3) + other.GetInt32(3));
+        return new Vector128(left.GetInt32(0) + right.GetInt32(0), left.GetInt32(1) + right.GetInt32(1), left.GetInt32(2) + right.GetInt32(2), left.GetInt32(3) + right.GetInt32(3));
     }
 
     /// <summary>Computes the sums for eight <see cref="short"/> pairs in two vectors.</summary>
-    public Vector128 AddInt16(Vector128 other) {
+    public static Vector128 AddInt16(Vector128 left, Vector128 right) {
         if (X86.Avx2.IsSupported) {
-            return new Vector128(X86.Avx2.Add(shorts, other.shorts));
+            return new Vector128(X86.Avx2.Add(left.shorts, right.shorts));
         } else if (X86.Sse2.IsSupported) {
-            return new Vector128(X86.Sse2.Add(shorts, other.shorts));
+            return new Vector128(X86.Sse2.Add(left.shorts, right.shorts));
         } else if (Arm.AdvSimd.IsSupported) {
-            return new Vector128(Arm.AdvSimd.Add(shorts, other.shorts));
+            return new Vector128(Arm.AdvSimd.Add(left.shorts, right.shorts));
         }
 
         return new Vector128(
-            (short)(GetInt16(0) + other.GetInt16(0)),
-            (short)(GetInt16(1) + other.GetInt16(1)),
-            (short)(GetInt16(2) + other.GetInt16(2)),
-            (short)(GetInt16(3) + other.GetInt16(3)),
-            (short)(GetInt16(4) + other.GetInt16(4)),
-            (short)(GetInt16(5) + other.GetInt16(5)),
-            (short)(GetInt16(6) + other.GetInt16(6)),
-            (short)(GetInt16(7) + other.GetInt16(7))
+            (short)(left.GetInt16(0) + right.GetInt16(0)),
+            (short)(left.GetInt16(1) + right.GetInt16(1)),
+            (short)(left.GetInt16(2) + right.GetInt16(2)),
+            (short)(left.GetInt16(3) + right.GetInt16(3)),
+            (short)(left.GetInt16(4) + right.GetInt16(4)),
+            (short)(left.GetInt16(5) + right.GetInt16(5)),
+            (short)(left.GetInt16(6) + right.GetInt16(6)),
+            (short)(left.GetInt16(7) + right.GetInt16(7))
         );
     }
 
