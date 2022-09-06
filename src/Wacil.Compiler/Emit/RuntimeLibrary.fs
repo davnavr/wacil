@@ -88,7 +88,8 @@ type IntegerHelpersClass =
 /// <summary>Represents the references to the runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type References =
-    { UnreachableExceptionConstructor: IMethodDefOrRef
+    { Assembly: AssemblyReference
+      UnreachableExceptionConstructor: IMethodDefOrRef
       Limits: LimitsClass
       Table: ITypeDefOrRef
       TableHelpers: TableHelpersClass
@@ -368,7 +369,8 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 lookup[impl] <- instantiation
                 instantiation
 
-    { UnreachableExceptionConstructor =
+    { Assembly = assembly
+      UnreachableExceptionConstructor =
         ImportHelpers.importConstructor
             mdle
             Seq.empty

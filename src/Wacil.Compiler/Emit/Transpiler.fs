@@ -85,6 +85,7 @@ let translateWebAssembly
     (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
     (syslib: SystemLibrary.References)
     (rtlib: RuntimeLibrary.References)
+    (vtlib: VectorLibrary.References)
     floatingPointMode
     (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
     (members: ModuleMembers)

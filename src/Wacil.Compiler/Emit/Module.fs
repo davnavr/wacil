@@ -213,6 +213,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         mainInstanceConstructor.CilMethodBody
         mainStaticInitializer.CilMethodBody
 
+    let vtlib = VectorLibrary.importTypes rtlib mdle
+
     Transpiler.translateWebAssembly
         translateValType
         translateFuncType
@@ -220,6 +222,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         delegateTypeCache
         syslib
         rtlib
+        vtlib
         options.FloatingPointMode
         input
         members
