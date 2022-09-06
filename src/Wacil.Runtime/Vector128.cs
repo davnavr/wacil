@@ -143,10 +143,23 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     public float GetSingle(int index) => singles.GetElement(index);
 
     /// <summary>Gets the <see cref="long"/> element at the specified <paramref name="index"/>.</summary>
-    public float GetInt64(int index) => longs.GetElement(index);
+    public long GetInt64(int index) => longs.GetElement(index);
 
     /// <summary>Gets the <see cref="double"/> element at the specified <paramref name="index"/>.</summary>
     public double GetDouble(int index) => doubles.GetElement(index);
+
+    /// <summary>Computes the two sums from adding the <see cref="long"/> elements of two vectors.</summary>
+    public Vector128 AddInt64(Vector128 other) {
+        if (X86.Avx2.IsSupported) {
+            return new Vector128(X86.Avx2.Add(longs, other.longs));
+        } else if (X86.Sse2.IsSupported) {
+            return new Vector128(X86.Sse2.Add(longs, other.longs));
+        } else if (Arm.AdvSimd.IsSupported) {
+            return new Vector128(Arm.AdvSimd.Add(longs, other.longs));
+        }
+
+        return new Vector128(GetInt64(0) + other.GetInt64(0), GetInt64(1) + other.GetInt64(1));
+    }
 
     /// <summary>Computes the sums for four <see cref="int"/> pairs in two vectors.</summary>
     public Vector128 AddInt32(Vector128 other) {

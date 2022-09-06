@@ -7,6 +7,14 @@ open Swensen.Unquote
 
 [<Tests>]
 let tests = testList "v128" [
+    testProperty "i64 addition is correct" <| fun (a1: int64) b1 (a2: int64) b2 ->
+        test <@
+            let x = Vector128(a1, b1)
+            let y = Vector128(a2, b2)
+            let result = x.AddInt64 y
+            a1 + a2 = result.GetInt64 0 && b1 + b2 = result.GetInt64 1
+        @>
+
     testProperty "i32 addition is correct" <| fun (a: int) b c d (e: int) f g h ->
         test <@
             let x = Vector128(a, b, c, d)
