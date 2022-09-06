@@ -13,6 +13,7 @@ type References =
     { Signature: TypeSignature
       ConstructorElementsI64: IMethodDefOrRef
       ConstructorElementsI32: IMethodDefOrRef
+      ConstructorSplatI32: IMethodDefOrRef
       ConstructorElementsI16: IMethodDefOrRef
       AddI32: IMethodDefOrRef
       AddI64: IMethodDefOrRef }
@@ -35,6 +36,7 @@ let importTypes (runtimeLibrary: RuntimeLibrary.References) (mdle: ModuleDefinit
     { Signature = vectorTypeSignature
       ConstructorElementsI64 = importConstructor (Array.create 2 coreLibraryTypes.Int64)
       ConstructorElementsI32 = importConstructor (Array.create 4 coreLibraryTypes.Int32)
+      ConstructorSplatI32 = importConstructor [| coreLibraryTypes.Int32 |]
       ConstructorElementsI16 = importConstructor (Array.create 8 coreLibraryTypes.Int16)
       AddI32 = importBinaryOperation "AddInt32"
       AddI64 = importBinaryOperation "AddInt64" }

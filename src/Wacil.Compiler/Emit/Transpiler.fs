@@ -602,5 +602,7 @@ let translateWebAssembly
                 il.Add(CilInstruction(CilOpCodes.Ldc_I8, int64 low)) 
                 il.Add(CilInstruction(CilOpCodes.Ldc_I8, int64 high))
                 il.Add(CilInstruction(CilOpCodes.Newobj, vtlib.ConstructorElementsI64))
+            | I32x4Splat ->
+                il.Add(CilInstruction(CilOpCodes.Newobj, vtlib.ConstructorSplatI32))
             | I32x4Add -> il.Add(CilInstruction(CilOpCodes.Call, vtlib.AddI32))
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))

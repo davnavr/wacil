@@ -97,6 +97,9 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     /// <summary>Initializes a <see cref="Vector128"/> with four <see cref="int"/> elements.</summary>
     public Vector128(int a, int b, int c, int d) : this(Helpers.Create(a, b, c, d)) {}
 
+    /// <summary>Initializes a <see cref="Vector128"/> with all four elements set to an <see cref="int"/> value.</summary>
+    public Vector128(int value) : this (Helpers.Create(value)) {}
+
     /// <summary>Initializes a <see cref="Vector128"/> with four <see cref="float"/> elements.</summary>
     public Vector128(float a, float b, float c, float d) : this(Helpers.Create(a, b, c, d)) {}
 

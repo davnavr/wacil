@@ -555,6 +555,7 @@ type Instruction =
     | TableSize of table: TableIdx
     | TableFill of table: TableIdx
     | V128Const of low: uint64 * high: uint64
+    | I32x4Splat
     | I32x4Add
 
 type Name = string
