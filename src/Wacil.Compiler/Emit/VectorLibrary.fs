@@ -11,6 +11,7 @@ open AsmResolver.DotNet.Signatures.Types
 [<NoComparison; NoEquality>]
 type References =
     { Type: ITypeDefOrRef
+      Signature: TypeSignature
       ConstructorElementsI64: IMethodDefOrRef
       ConstructorElementsI32: IMethodDefOrRef
       ConstructorElementsI16: IMethodDefOrRef
@@ -33,6 +34,7 @@ let importTypes (runtimeLibrary: RuntimeLibrary.References) (mdle: ModuleDefinit
             vectorTypeReference
 
     { Type = vectorTypeReference
+      Signature = vectorTypeSignature
       ConstructorElementsI64 = importConstructor (Array.create 2 coreLibraryTypes.Int64)
       ConstructorElementsI32 = importConstructor (Array.create 4 coreLibraryTypes.Int32)
       ConstructorElementsI16 = importConstructor (Array.create 8 coreLibraryTypes.Int16)

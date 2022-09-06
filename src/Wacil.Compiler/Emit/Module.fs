@@ -68,6 +68,8 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | OutputType.Module ->
             ValueNone
 
+    let mutable vectorTypeReferences: VectorLibrary.References option ref = ref None
+
     let translateValType =
         let coreLibraryTypes = mdle.CorLibTypeFactory
         function
@@ -77,9 +79,14 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         | ValType.Num F64 -> coreLibraryTypes.Double
         | ValType.Ref ExternRef -> coreLibraryTypes.Object
         | ValType.Ref FuncRef -> syslib.MulticastDelegate.Signature
-        | ValType.Vec _ -> raise(System.NotImplementedException "TODO: conversion of vectors to System.Runtime.Intrinsics.Vector128")
+        | ValType.Vec V128 ->
+            match vectorTypeReferences.Value with
+            | Some lib -> lib.Signature
+            | None -> failwith "vector helper references have not yet beein initialized"
 
     let rtlib = RuntimeLibrary.importTypes options.RuntimeVersion translateValType syslib mdle
+    let vtlib = VectorLibrary.importTypes rtlib mdle
+    vectorTypeReferences.Value <- Some vtlib
 
     let implementationDetailsClass =
         DefinitionHelpers.addNormalClass syslib mdle TypeAttributes.Sealed String.empty "<PrivateImplementationDetails>"
@@ -212,8 +219,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         webAssemblyExpressions
         mainInstanceConstructor.CilMethodBody
         mainStaticInitializer.CilMethodBody
-
-    let vtlib = VectorLibrary.importTypes rtlib mdle
 
     Transpiler.translateWebAssembly
         translateValType
