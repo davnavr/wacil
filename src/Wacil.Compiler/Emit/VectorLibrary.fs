@@ -14,6 +14,7 @@ type References =
       ConstructorI64: IMethodDefOrRef
       ConstructorI32: IMethodDefOrRef
       ConstructorI16: IMethodDefOrRef
+      AddI32: IMethodDefOrRef
       AddI64: IMethodDefOrRef }
 
 let importTypes (runtimeLibrary: RuntimeLibrary.References) (mdle: ModuleDefinition) =
@@ -35,4 +36,5 @@ let importTypes (runtimeLibrary: RuntimeLibrary.References) (mdle: ModuleDefinit
       ConstructorI64 = importConstructor (Array.create 2 coreLibraryTypes.Int64)
       ConstructorI32 = importConstructor (Array.create 4 coreLibraryTypes.Int32)
       ConstructorI16 = importConstructor (Array.create 8 coreLibraryTypes.Int16)
+      AddI32 = importBinaryOperation "AddInt32"
       AddI64 = importBinaryOperation "AddInt64" }

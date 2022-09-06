@@ -598,4 +598,5 @@ let translateWebAssembly
                     il.Add(CilInstruction(CilOpCodes.Stfld, field))
                 | ElementSegmentMember.Active | ElementSegmentMember.Declarative ->
                     il.Add(CilInstruction CilOpCodes.Nop)
+            | I32x4Add -> il.Add(CilInstruction(CilOpCodes.Call, vtlib.AddI32))
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))

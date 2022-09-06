@@ -590,6 +590,12 @@ module Validate =
                     this.PopValue OperandType.i32
                     this.PopValue(OperandType.fromRefType(this.GetTableType table))
                     this.PopValue OperandType.i32
+                | Format.V128Const _ ->
+                    this.PushValue OperandType.v128
+                | Format.I32x4Add ->
+                    this.PopValue OperandType.v128
+                    this.PopValue OperandType.v128
+                    this.PushValue OperandType.v128
 
                 validInstructonBuilder.Add
                     { ValidInstruction.Instruction = instruction
