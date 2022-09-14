@@ -31,6 +31,12 @@ public readonly struct Vector128 : IEquatable<Vector128> {
     [FieldOffset(0)]
     private readonly Vector128<double> doubles;
 
+    static Vector128() {
+        if (!BitConverter.IsLittleEndian) {
+            throw new PlatformNotSupportedException("translated WASM vector operations are currently not supported on big-endian platforms");
+        }
+    }
+
     /// <summary>Initializes a <see cref="Vector128"/> from a vector of bytes.</summary>
     public Vector128(Vector128<byte> bytes) {
         Unsafe.SkipInit(out shorts);
