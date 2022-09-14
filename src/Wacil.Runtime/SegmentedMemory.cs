@@ -3,6 +3,7 @@ namespace Wacil.Runtime;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 /// <summary>
 /// Represents a WebAssembly linear memory backed by multiple allocations corresponding to each page.
@@ -104,6 +105,16 @@ public sealed class SegmentedMemory : IMemory32 {
         }
 
         return MemoryHelpers.ReadInt64Slow<SegmentedMemory>(this, index);
+    }
+
+    /// <inheritdoc/>
+    public Vector128 ReadVector128(int index, byte alignmentPowerHint) {
+        if (MemoryHelpers.IsInt64Aligned(index, alignmentPowerHint)) {
+            var location = Location.FromIndex(index);
+            return MemoryMarshal.Read<Vector128>(new ReadOnlySpan<byte>(pages[location.Page], location.Offset, 16));
+        }
+
+        return MemoryHelpers.ReadVector128Slow<SegmentedMemory>(this, index);
     }
 
     /// <inheritdoc/>

@@ -11,8 +11,10 @@ using Helpers = System.Runtime.Intrinsics.Vector128;
 // TODO: Will endianness be an issue? (.NET rarely runs on BE machines)
 
 /// <summary>Provides an implementation for the <c>v128</c> WebAssembly type.</summary>
-[StructLayout(LayoutKind.Explicit, Size = 16, Pack = 8)]
+[StructLayout(LayoutKind.Explicit, Size = Vector128.Size, Pack = 8)]
 public readonly struct Vector128 : IEquatable<Vector128> {
+    internal const int Size = 16;
+
     [FieldOffset(0)]
     private readonly Vector128<byte> bytes;
 
@@ -33,7 +35,7 @@ public readonly struct Vector128 : IEquatable<Vector128> {
 
     static Vector128() {
         if (!BitConverter.IsLittleEndian) {
-            throw new PlatformNotSupportedException("translated WASM vector operations are currently not supported on big-endian platforms");
+            throw new PlatformNotSupportedException("WASM vector operations are currently not supported on big-endian platforms");
         }
     }
 

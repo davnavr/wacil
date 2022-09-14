@@ -3,6 +3,7 @@ namespace Wacil.Runtime;
 using System;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 /// <summary>Provides <see langword="static"/> methods for manipulating WebAssembly module memories.</summary>
 public static class MemoryHelpers {
@@ -72,6 +73,12 @@ public static class MemoryHelpers {
         return memory.ReadInt64(index + offset, alignmentPowerHint);
     }
 
+    /// Reads a 128-bit vector at a specific location.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128 ReadVector128<T>(int index, T memory, int offset, byte alignmentPowerHint) where T : IMemory32 {
+        return memory.ReadVector128(index + offset, alignmentPowerHint);
+    }
+
     /// Reads a 16-bit integer at a specific location.
     public static short ReadInt16Slow<T>(T memory, int index) where T : IMemory32 {
         Span<byte> buffer = stackalloc byte[2];
@@ -91,6 +98,13 @@ public static class MemoryHelpers {
         Span<byte> buffer = stackalloc byte[8];
         memory.Read(index, buffer);
         return BinaryPrimitives.ReadInt64LittleEndian(buffer);
+    }
+
+    /// Reads a 128-bit vector from a specific location.
+    public static Vector128 ReadVector128Slow<T>(T memory, int index) where T : IMemory32 {
+        Span<byte> buffer = stackalloc byte[Vector128.Size];
+        memory.Read(index, buffer);
+        return MemoryMarshal.Read<Vector128>(buffer);
     }
 
     /// <summary>Writes a byte <paramref name="value"/> to a specific location.</summary>

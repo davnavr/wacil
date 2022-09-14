@@ -39,6 +39,10 @@ public interface IMemory32 : IDisposable {
     /// <remarks>This provides the implementation for the <c>i64.load</c> instruction.</remarks>
     public long ReadInt64(int index, byte alignmentPowerHint) => MemoryHelpers.ReadInt64Slow<IMemory32>(this, index);
 
+    /// <summary>Reads a 128-bit vector at the specified <paramref name="index"/>.</summary>
+    /// <remarks>This provides the implementation for the <c>v128.load</c> instruction.</remarks>
+    public Vector128 ReadVector128(int index, byte alignmentPowerHint) => MemoryHelpers.ReadVector128Slow<IMemory32>(this, index);
+
     /// <summary>
     /// Copies bytes starting at the specified <paramref name="index"/> into the specified <paramref name="buffer"/>.
     /// </summary>
