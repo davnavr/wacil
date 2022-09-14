@@ -131,6 +131,12 @@ public static class MemoryHelpers {
         memory.Write(index + offset, alignmentPowerHint, value);
     }
 
+    /// <summary>Writes a 128-bit vector <paramref name="value"/> to a specific location.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void Write<T>(int index, Vector128 value, T memory, int offset, byte alignmentPowerHint) where T : IMemory32 {
+        memory.Write(index + offset, alignmentPowerHint, value);
+    }
+
     /// <summary>Writes a 16-bit integer <paramref name="value"/> to a specific location.</summary>
     public static void WriteSlow<T>(T memory, int index, short value) where T : IMemory32 {
         Span<byte> buffer = stackalloc byte[2];
@@ -149,6 +155,13 @@ public static class MemoryHelpers {
     public static void WriteSlow<T>(T memory, int index, long value) where T : IMemory32 {
         Span<byte> buffer = stackalloc byte[8];
         BinaryPrimitives.WriteInt64LittleEndian(buffer, value);
+        memory.Write(index, buffer);
+    }
+
+    /// <summary>Writes a 128-bit vector <paramref name="value"/> to a specific location.</summary>
+    public static void WriteSlow<T>(T memory, int index, Vector128 value) where T : IMemory32 {
+        Span<byte> buffer = stackalloc byte[Vector128.Size];
+        MemoryMarshal.Write<Vector128>(buffer, ref value);
         memory.Write(index, buffer);
     }
 

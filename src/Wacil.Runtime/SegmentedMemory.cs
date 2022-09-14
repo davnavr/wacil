@@ -157,11 +157,22 @@ public sealed class SegmentedMemory : IMemory32 {
             MemoryHelpers.WriteSlow<SegmentedMemory>(this, index, value);
         }
     }
+
     /// <inheritdoc/>
     public void Write(int index, byte alignmentPowerHint, long value) {
         if (MemoryHelpers.IsInt64Aligned(index, alignmentPowerHint)) {
             var location = Location.FromIndex(index);
             BinaryPrimitives.WriteInt64LittleEndian(new Span<byte>(pages[location.Page], location.Offset, 8), value);
+        } else {
+            MemoryHelpers.WriteSlow<SegmentedMemory>(this, index, value);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Write(int index, byte alignmentPowerHint, Vector128 value) {
+        if (MemoryHelpers.IsInt64Aligned(index, alignmentPowerHint)) {
+            var location = Location.FromIndex(index);
+            MemoryMarshal.Write<Vector128>(new Span<byte>(pages[location.Page], location.Offset, 16), ref value);
         } else {
             MemoryHelpers.WriteSlow<SegmentedMemory>(this, index, value);
         }
