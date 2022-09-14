@@ -31,4 +31,14 @@ let tests = testList "v128" [
             g1 + g2 = result.GetInt16 6 &&
             h1 + h2 = result.GetInt16 7
         @>
+
+    testProperty "writing to memory is correct" <| fun (a: int) b c d ->
+        use mem = new SegmentedMemory(Limits(1));
+        test <@
+            mem.Write(0, 16uy, Vector128(a, b, c, d))
+            mem.ReadInt32(0, 4uy) = a &&
+            mem.ReadInt32(4, 4uy) = b &&
+            mem.ReadInt32(8, 4uy) = c &&
+            mem.ReadInt32(12, 4uy) = d
+        @>
 ]
