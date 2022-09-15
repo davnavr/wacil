@@ -3,6 +3,7 @@ namespace Wacil.Runtime;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 /// <summary>
 /// Represents a WebAssembly linear memory backed by multiple allocations corresponding to each page.
@@ -107,6 +108,16 @@ public sealed class SegmentedMemory : IMemory32 {
     }
 
     /// <inheritdoc/>
+    public Vector128 ReadVector128(int index, byte alignmentPowerHint) {
+        if (MemoryHelpers.IsInt64Aligned(index, alignmentPowerHint)) {
+            var location = Location.FromIndex(index);
+            return MemoryMarshal.Read<Vector128>(new ReadOnlySpan<byte>(pages[location.Page], location.Offset, 16));
+        }
+
+        return MemoryHelpers.ReadVector128Slow<SegmentedMemory>(this, index);
+    }
+
+    /// <inheritdoc/>
     public void Write(int index, ReadOnlySpan<byte> bytes) {
         if (bytes.IsEmpty) {
             return;
@@ -146,11 +157,22 @@ public sealed class SegmentedMemory : IMemory32 {
             MemoryHelpers.WriteSlow<SegmentedMemory>(this, index, value);
         }
     }
+
     /// <inheritdoc/>
     public void Write(int index, byte alignmentPowerHint, long value) {
         if (MemoryHelpers.IsInt64Aligned(index, alignmentPowerHint)) {
             var location = Location.FromIndex(index);
             BinaryPrimitives.WriteInt64LittleEndian(new Span<byte>(pages[location.Page], location.Offset, 8), value);
+        } else {
+            MemoryHelpers.WriteSlow<SegmentedMemory>(this, index, value);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Write(int index, byte alignmentPowerHint, Vector128 value) {
+        if (MemoryHelpers.IsInt64Aligned(index, alignmentPowerHint)) {
+            var location = Location.FromIndex(index);
+            MemoryMarshal.Write<Vector128>(new Span<byte>(pages[location.Page], location.Offset, 16), ref value);
         } else {
             MemoryHelpers.WriteSlow<SegmentedMemory>(this, index, value);
         }

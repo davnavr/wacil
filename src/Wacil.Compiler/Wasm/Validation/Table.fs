@@ -64,6 +64,7 @@ module OperandType =
     let f64 = ValType ValType.f64
     let funcref = ValType ValType.funcref
     let externref = ValType ValType.externref
+    let v128 = ValType ValType.v128
 
     let fromRefType ty =
         match ty with

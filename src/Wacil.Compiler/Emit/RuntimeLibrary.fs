@@ -58,10 +58,12 @@ type MemoryInstantiation =
       ReadInt16: MethodSpecification
       ReadInt32: MethodSpecification
       ReadInt64: MethodSpecification
+      ReadVector128: MethodSpecification
       WriteByte: MethodSpecification
       WriteInt16: MethodSpecification
       WriteInt32: MethodSpecification
       WriteInt64: MethodSpecification
+      WriteVector128: MethodSpecification
       Grow: MethodSpecification
       Fill: MethodSpecification
       Copy: MemoryInstantiation -> MethodSpecification
@@ -88,7 +90,8 @@ type IntegerHelpersClass =
 /// <summary>Represents the references to the runtime library (<c>Wacil.Runtime.dll</c>).</summary>
 [<NoComparison; NoEquality>]
 type References =
-    { UnreachableExceptionConstructor: IMethodDefOrRef
+    { Assembly: AssemblyReference
+      UnreachableExceptionConstructor: IMethodDefOrRef
       Limits: LimitsClass
       Table: ITypeDefOrRef
       TableHelpers: TableHelpersClass
@@ -100,12 +103,15 @@ type References =
       InstantiatedMemory: MemoryImplementation -> MemoryInstantiation
       ModuleClassAttribute: ICustomAttributeType
       ImportConstructorAttribute: ICustomAttributeType
-      CustomNameAttribute: ICustomAttributeType }
+      CustomNameAttribute: ICustomAttributeType
+      Vector: VectorLibrary.References }
 
 let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.References) (mdle: ModuleDefinition) =
     let name = "Wacil.Runtime"
     let assembly = AssemblyReference(name, runtimeLibraryVersion)
     mdle.AssemblyReferences.Add assembly
+
+    let vectorLibraryReferences = VectorLibrary.importTypes assembly mdle
 
     let importRuntimeType = ImportHelpers.importType mdle.DefaultImporter assembly name
 
@@ -259,6 +265,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
         let readInt16Template = createReadTemplate mdle.CorLibTypeFactory.Int16 "ReadInt16"
         let readInt32Template = createReadTemplate mdle.CorLibTypeFactory.Int32 "ReadInt32"
         let readInt64Template = createReadTemplate mdle.CorLibTypeFactory.Int64 "ReadInt64"
+        let readVector128Template = createReadTemplate vectorLibraryReferences.Signature "ReadVector128"
 
         let createWriteTemplate ty =
             createMemoryHelper
@@ -275,6 +282,7 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
         let writeInt16Template = createWriteTemplate mdle.CorLibTypeFactory.Int16
         let writeInt32Template = createWriteTemplate mdle.CorLibTypeFactory.Int32
         let writeInt64Template = createWriteTemplate mdle.CorLibTypeFactory.Int64
+        let writeVector128Template = createWriteTemplate vectorLibraryReferences.Signature
 
         let growHelperTemplate =
             createMemoryHelper mdle.CorLibTypeFactory.Int32 [| mdle.CorLibTypeFactory.Int32; helperTypeParameter |] "Grow"
@@ -356,10 +364,12 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                       ReadInt16 = readInt16Template.MakeGenericInstanceMethod memoryTypeArguments
                       ReadInt32 = readInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       ReadInt64 = readInt64Template.MakeGenericInstanceMethod memoryTypeArguments
+                      ReadVector128 = readVector128Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteByte = writeByteTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt16 = writeInt16Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt32 = writeInt32Template.MakeGenericInstanceMethod memoryTypeArguments
                       WriteInt64 = writeInt64Template.MakeGenericInstanceMethod memoryTypeArguments
+                      WriteVector128 = writeVector128Template.MakeGenericInstanceMethod memoryTypeArguments
                       Grow = growHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       Fill = fillHelperTemplate.MakeGenericInstanceMethod memoryTypeArguments
                       WriteArray = writeArrayTemplate.MakeGenericInstanceMethod memoryTypeArguments
@@ -368,7 +378,8 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
                 lookup[impl] <- instantiation
                 instantiation
 
-    { UnreachableExceptionConstructor =
+    { Assembly = assembly
+      UnreachableExceptionConstructor =
         ImportHelpers.importConstructor
             mdle
             Seq.empty
@@ -438,4 +449,5 @@ let importTypes runtimeLibraryVersion wasmTypeTranslator (syslib: SystemLibrary.
       CustomNameAttribute =
         importRuntimeType "CustomNameAttribute"
         |> ImportHelpers.importConstructor mdle [| mdle.CorLibTypeFactory.String |]
-        :?> ICustomAttributeType }
+        :?> ICustomAttributeType
+      Vector = vectorLibraryReferences }
