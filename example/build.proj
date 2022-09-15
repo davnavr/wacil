@@ -8,4 +8,8 @@
     <MSBuild Projects="@(AssemblyScriptProjectFiles)" />
   </Target>
 
+  <Target Name="Rebuild" >
+    <MSBuild Projects="@(AssemblyScriptProjectFiles)" Targets="Rebuild" />
+  </Target>
+
 </Project>
