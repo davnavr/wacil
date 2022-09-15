@@ -85,8 +85,7 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
             | None -> failwith "vector helper references have not yet beein initialized"
 
     let rtlib = RuntimeLibrary.importTypes options.RuntimeVersion translateValType syslib mdle
-    let vtlib = VectorLibrary.importTypes rtlib mdle
-    vectorTypeReferences.Value <- Some vtlib
+    vectorTypeReferences.Value <- Some rtlib.Vector
 
     let implementationDetailsClass =
         DefinitionHelpers.addNormalClass syslib mdle TypeAttributes.Sealed String.empty "<PrivateImplementationDetails>"
@@ -227,7 +226,6 @@ let compileToModuleDefinition (options: Options) (input: ValidModule) =
         delegateTypeCache
         syslib
         rtlib
-        vtlib
         options.FloatingPointMode
         input
         members

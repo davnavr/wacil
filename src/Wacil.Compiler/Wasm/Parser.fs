@@ -479,6 +479,8 @@ let parseExpression (reader: Reader) (instructions: byref<ArrayBuilder<Instructi
             | bad -> failwithf "Invalid prefixed instruction 0xFC 0x%02X" bad
         | Opcode.PrefixFD ->
             match reader.ReadUnsignedInteger() with
+            | 0UL -> instructions.Add(parseMemArg reader |> V128Load)
+            | 11UL -> instructions.Add(parseMemArg reader |> V128Store)
             | 12UL ->
                 let bytes = Span.stackalloc 16
                 reader.ReadAll bytes

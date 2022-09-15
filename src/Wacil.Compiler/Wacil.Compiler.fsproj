@@ -30,8 +30,8 @@
     <Compile Include="Emit\Options.fs" />
     <Compile Include="Emit\ImportHelpers.fs" />
     <Compile Include="Emit\SystemLibrary.fs" />
-    <Compile Include="Emit\RuntimeLibrary.fs" />
     <Compile Include="Emit\VectorLibrary.fs" />
+    <Compile Include="Emit\RuntimeLibrary.fs" />
     <Compile Include="Emit\DefinitionHelpers.fs" />
     <Compile Include="Emit\ConstantBytes.fs" />
     <Compile Include="Emit\CustomAttribute.fs" />

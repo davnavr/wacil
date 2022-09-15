@@ -18,8 +18,8 @@ type References =
       AddI32: IMethodDefOrRef
       AddI64: IMethodDefOrRef }
 
-let importTypes (runtimeLibrary: RuntimeLibrary.References) (mdle: ModuleDefinition) =
-    let vectorTypeReference = ImportHelpers.importType mdle.DefaultImporter runtimeLibrary.Assembly "Wacil.Runtime" "Vector128"
+let importTypes (runtimeLibraryAssembly: AssemblyReference) (mdle: ModuleDefinition) =
+    let vectorTypeReference = ImportHelpers.importType mdle.DefaultImporter runtimeLibraryAssembly "Wacil.Runtime" "Vector128"
     let vectorTypeSignature = TypeDefOrRefSignature(vectorTypeReference, isValueType = true)
     let coreLibraryTypes = mdle.CorLibTypeFactory
     let twoVectorTypes = [| vectorTypeSignature :> TypeSignature; vectorTypeSignature |]

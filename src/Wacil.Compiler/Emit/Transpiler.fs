@@ -85,7 +85,6 @@ let translateWebAssembly
     (delegateTypeCache: MethodSignature -> DelegateCache.Instantiation)
     (syslib: SystemLibrary.References)
     (rtlib: RuntimeLibrary.References)
-    (vtlib: VectorLibrary.References)
     floatingPointMode
     (wasm: Wacil.Compiler.Wasm.Validation.ValidModule)
     (members: ModuleMembers)
@@ -598,11 +597,19 @@ let translateWebAssembly
                     il.Add(CilInstruction(CilOpCodes.Stfld, field))
                 | ElementSegmentMember.Active | ElementSegmentMember.Declarative ->
                     il.Add(CilInstruction CilOpCodes.Nop)
+            | V128Load arg ->
+                // Top of stack is address to load, which is first parameter
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadVector128))
+            | V128Store arg ->
+                // Stack contains the value to store on top of the address
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteVector128))
             | V128Const(low, high) ->
                 il.Add(CilInstruction(CilOpCodes.Ldc_I8, int64 low)) 
                 il.Add(CilInstruction(CilOpCodes.Ldc_I8, int64 high))
-                il.Add(CilInstruction(CilOpCodes.Newobj, vtlib.ConstructorElementsI64))
+                il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Vector.ConstructorElementsI64))
             | I32x4Splat ->
-                il.Add(CilInstruction(CilOpCodes.Newobj, vtlib.ConstructorSplatI32))
-            | I32x4Add -> il.Add(CilInstruction(CilOpCodes.Call, vtlib.AddI32))
+                il.Add(CilInstruction(CilOpCodes.Newobj, rtlib.Vector.ConstructorSplatI32))
+            | I32x4Add -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.Vector.AddI32))
             | bad -> raise(System.NotImplementedException(sprintf "Add translation implementation for %A" bad))
