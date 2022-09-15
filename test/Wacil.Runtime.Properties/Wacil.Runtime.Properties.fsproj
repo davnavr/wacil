@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(RootDirectory)\src\Wacil.Runtime\Wacil.Runtime.csproj" />
+    <PackageReference Include="Unquote" Version="6.1.0" />
+    <PackageReference Include="Expecto" Version="9.0.4" />
+    <PackageReference Include="Expecto.FsCheck" Version="9.0.4" />
+    <Compile Include="Vector128.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+</Project>
