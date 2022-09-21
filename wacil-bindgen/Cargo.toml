@@ -3,5 +3,18 @@ name = "wacil-bindgen"
 version = "0.1.0"
 license = "Apache-2.0"
 edition = "2021"
+readme = "README.md"
+repository = "https://github.com/davnavr/wacil/"
 
 [dependencies]
+wacil-macro = { path = "wacil-macro" }
+
+[features]
+default = [ "std" ]
+std = []
+
+[workspace]
+members = [
+    "wacil-backend",
+    "wacil-macro"
+]
