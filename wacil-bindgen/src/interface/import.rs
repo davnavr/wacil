@@ -2,21 +2,26 @@ use crate::interface::{FfiMethod, TypeName};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
-pub struct MethodImport<'a>(&'a FfiMethod<'a>);
+pub struct MethodImport(&'static FfiMethod);
 
 /// Describes that a CLR class is used in Rust code.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
-pub struct ClassImport<'a> {
-    pub name: TypeName<'a>,
-    pub methods: &'a [MethodImport<'a>],
+pub struct ClassImport {
+    pub name: TypeName,
+    pub methods: &'static [MethodImport],
 }
 
-impl<'a> ClassImport<'a> {
-    pub fn new(name: TypeName<'a>) -> Self {
-        Self {
-            name,
-            methods: Default::default(),
-        }
+impl ClassImport {
+    pub const fn new(name: TypeName) -> Self {
+        Self { name, methods: &[] }
     }
+
+    pub const fn with_methods(self, methods: &'static [MethodImport]) -> Self {
+        Self { methods, ..self }
+    }
+}
+
+pub trait ClassImportDescriptor {
+    const DESCRIPTOR: &'static ClassImport;
 }

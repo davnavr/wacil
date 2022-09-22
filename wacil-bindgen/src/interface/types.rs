@@ -1,8 +1,8 @@
 //! Describes the CLR type system.
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Type<'a> {
-    Named(crate::interface::TypeName<'a>),
+pub enum Type {
+    Named(crate::interface::TypeName),
     Byte,
     SByte,
     Int16,
@@ -15,7 +15,7 @@ pub enum Type<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum ReturnType<'a> {
-    Type(Type<'a>),
+pub enum ReturnType {
+    Type(Type),
     Void,
 }

@@ -3,15 +3,15 @@ use crate::interface::Name;
 
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
-pub struct Parameter<'a> {
+pub struct Parameter {
     pub name: Name,
-    pub parameters: &'a [Type<'a>],
+    pub parameters: &'static [Type],
 }
 
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
-pub struct FfiMethod<'a> {
+pub struct FfiMethod {
     pub name: Name,
-    pub return_type: ReturnType<'a>,
-    pub parameters: &'a [Parameter<'a>],
+    pub return_type: ReturnType,
+    pub parameters: &'static [Parameter],
 }

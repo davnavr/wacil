@@ -7,21 +7,22 @@ mod import;
 mod name;
 
 pub use ffi::FfiMethod;
-pub use import::ClassImport;
+pub use import::{ClassImport, ClassImportDescriptor};
 pub use name::{Name, Namespace, TypeName};
 
 #[derive(Clone, Debug)]
-pub struct Interface<'a> {
-    pub imported_classes: &'a [ClassImport<'a>],
+#[non_exhaustive]
+pub struct Interface {
+    pub imported_classes: &'static [ClassImport],
 }
 
-impl<'a> Interface<'a> {
+impl Interface {
     pub const fn new() -> Self {
         Self { imported_classes: &[] }
     }
 }
 
-impl Default for Interface<'_> {
+impl Default for Interface {
     fn default() -> Self {
         Self::new()
     }

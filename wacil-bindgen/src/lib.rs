@@ -7,20 +7,20 @@ pub mod interface;
 mod object;
 mod runtime;
 
-pub use object::{ClrObject, ClrClass};
+pub use object::{ClrClass, ClrObject};
 
 /// Describes a CLR class used in Rust code.
 ///
 /// # Examples
 ///
 /// ```no_run
-/// wacil_bindgen::class_import! {
+/// wacil_bindgen::wacil_import! {
 ///     pub class MyClassName {
 ///     }
 /// }
 /// ```
 #[macro_export]
-macro_rules! class_import {
+macro_rules! wacil_import {
     {
         $(#[$class_meta:meta])*
         $access:vis class $class_name:ident {
@@ -47,19 +47,17 @@ macro_rules! class_import {
             }
         }
 
-        impl ::core::std::ops::Deref for $class_name {
+        impl ::core::ops::Deref for $class_name {
             type Target = $crate::ClrObject;
 
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
+
+        impl $crate::interface::ClassImportDescriptor for $class_name {
+            const DESCRIPTOR: &'static $crate::interface::ClassImport =
+                &$crate::interface::ClassImport::new($crate::interface::TypeName::new($crate::interface::Namespace::GLOBAL, stringify!($class_name)));
+        }
     }
 }
-
-/*
-// TODO: Any calls to runtime functions need to look like this:
-extern "C" {
-    fn __wacil_bg_my_name(a: Argument) -> ReturnValue;
-}
-*/
