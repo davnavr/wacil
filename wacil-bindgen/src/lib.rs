@@ -7,7 +7,7 @@ pub mod interface;
 mod object;
 mod runtime;
 
-pub use object::ClrObject;
+pub use object::{ClrObject, ClrClass};
 
 /// Describes a CLR class used in Rust code.
 ///
@@ -34,6 +34,24 @@ macro_rules! class_import {
         impl $class_name {
             pub unsafe fn from_object_unchecked(o: $crate::ClrObject) -> Self {
                 Self(o)
+            }
+        }
+
+        impl $crate::ClrClass for $class_name {
+            fn into_object(self) -> $crate::ClrObject {
+                self.0
+            }
+
+            fn as_object(&self) -> &$crate::ClrObject {
+                &self.0
+            }
+        }
+
+        impl ::core::std::ops::Deref for $class_name {
+            type Target = $crate::ClrObject;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
             }
         }
     }
