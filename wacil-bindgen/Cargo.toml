@@ -7,7 +7,7 @@ readme = "README.md"
 repository = "https://github.com/davnavr/wacil/"
 
 [dependencies]
-wacil-macro = { path = "wacil-macro" }
+wacil-macros = { path = "wacil-macros" }
 
 [features]
 default = [ "std" ]
@@ -16,5 +16,5 @@ std = []
 [workspace]
 members = [
     "wacil-backend",
-    "wacil-macro"
+    "wacil-macros"
 ]
