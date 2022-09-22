@@ -1,4 +1,4 @@
-//! Describes the .NET type system.
+//! Describes the CLR type system.
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Type<'a> {

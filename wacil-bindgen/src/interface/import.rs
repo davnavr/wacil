@@ -4,7 +4,7 @@ use crate::interface::{FfiMethod, TypeName};
 #[repr(transparent)]
 pub struct MethodImport<'a>(&'a FfiMethod<'a>);
 
-/// Describes that a .NET class is used in Rust code.
+/// Describes that a CLR class is used in Rust code.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub struct ClassImport<'a> {

@@ -9,10 +9,3 @@ version = "0.1.0"
 [[package]]
 name = "wacil-bindgen"
 version = "0.1.0"
-dependencies = [
- "wacil-macros",
-]
-
-[[package]]
-name = "wacil-macros"
-version = "0.1.0"
