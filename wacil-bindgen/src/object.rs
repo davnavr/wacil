@@ -37,6 +37,20 @@ impl ClrObject {
     pub fn raw_index(&self) -> isize {
         self.index
     }
+
+    /// Calls the object's [`GetHashCode()`] method.
+    ///
+    /// # Safety
+    ///
+    /// Any .NET class can override the [`GetHashCode()`] to contain arbitrary code, so this function is unsafe.
+    ///
+    /// [`GetHashCode()`]: https://learn.microsoft.com/en-us/dotnet/api/system.object.gethashcode
+    pub unsafe fn get_hash_code(&self) -> i32 {
+        unsafe {
+            // Safety: The GetHashCode implementation is responsible for ensuring safety.
+            runtime::wacil_rt_object_get_hash_code(self.index)
+        }
+    }
 }
 
 impl core::fmt::Debug for ClrObject {

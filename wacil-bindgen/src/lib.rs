@@ -26,7 +26,7 @@ macro_rules! wacil_import {
     {
         $(#[$class_meta:meta])*
         $access:vis class $class_name:ident {
-
+            
         }
     } => {
         $(#[$class_meta])*
