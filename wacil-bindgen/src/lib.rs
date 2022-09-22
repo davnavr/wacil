@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod interface;
+pub mod result;
 
 mod object;
 mod runtime;
