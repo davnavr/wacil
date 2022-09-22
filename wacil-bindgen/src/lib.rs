@@ -2,6 +2,7 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod abi;
 pub mod interface;
 pub mod result;
 
@@ -45,6 +46,14 @@ macro_rules! wacil_import {
 
             fn as_object(&self) -> &$crate::ClrObject {
                 &self.0
+            }
+        }
+
+        impl<'a> $crate::abi::IntoWasmValue for &'a $class_name {
+            type Value = <&'a $crate::ClrObject as $crate::abi::IntoWasmValue>::Value;
+
+            fn into_value(self) -> Self::Value {
+                $crate::abi::IntoWasmValue::into_value(&self.0)
             }
         }
 
