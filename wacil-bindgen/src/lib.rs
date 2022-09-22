@@ -5,6 +5,7 @@
 pub mod interface;
 
 mod object;
+mod runtime;
 
 pub use object::ClrObject;
 
@@ -12,7 +13,7 @@ pub use object::ClrObject;
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// wacil_bindgen::class_import! {
 ///     pub class MyClassName {
 ///     }
