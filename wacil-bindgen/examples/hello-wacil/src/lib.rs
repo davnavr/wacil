@@ -1,9 +1,9 @@
-use wacil_bindgen::interface;
 
 pub extern "C" fn example_function() {}
 
 #[test]
 fn generate() {
+    use wacil_bindgen::interface;
     //let interface =
 
     let module = wacil_backend::Module {
