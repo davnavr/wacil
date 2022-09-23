@@ -16,10 +16,6 @@ impl ClassImport {
     pub const fn new(name: TypeName) -> Self {
         Self { name, methods: &[] }
     }
-
-    pub const fn with_methods(self, methods: &'static [MethodImport]) -> Self {
-        Self { methods, ..self }
-    }
 }
 
 pub trait ClassImportDescriptor {

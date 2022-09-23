@@ -66,8 +66,9 @@ macro_rules! wacil_import {
         }
 
         impl $crate::interface::ClassImportDescriptor for $class_name {
-            const DESCRIPTOR: &'static $crate::interface::ClassImport =
-                &$crate::interface::ClassImport::new($crate::interface::TypeName::new($crate::interface::Namespace::GLOBAL, stringify!($class_name)));
+            const DESCRIPTOR: &'static $crate::interface::ClassImport = &$crate::interface::ClassImport {
+                ..$crate::interface::ClassImport::new($crate::interface::TypeName::new($crate::interface::Namespace::GLOBAL, stringify!($class_name))),
+            };
         }
     }
 }
