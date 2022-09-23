@@ -10,8 +10,9 @@ pub struct Parameter {
 
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
-pub struct FfiMethod {
+pub struct Method {
     pub name: Name,
+    pub is_static: bool,
     pub return_type: ReturnType,
     pub parameters: &'static [Parameter],
 }

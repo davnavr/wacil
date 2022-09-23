@@ -6,7 +6,7 @@ mod ffi;
 mod import;
 mod name;
 
-pub use ffi::FfiMethod;
+pub use ffi::{Method, Parameter};
 pub use import::{ClassImport, ClassImportDescriptor};
 pub use name::{Name, Namespace, TypeName};
 

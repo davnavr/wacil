@@ -1,15 +1,11 @@
-use crate::interface::{FfiMethod, TypeName};
+use crate::interface::{Method, TypeName};
 
-#[derive(Clone, Copy, Debug)]
-#[repr(transparent)]
-pub struct MethodImport(&'static FfiMethod);
-
-/// Describes that a CLR class is used in Rust code.
+/// Describes a CLR class that is used in Rust code.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub struct ClassImport {
     pub name: TypeName,
-    pub methods: &'static [MethodImport],
+    pub methods: &'static [Method],
 }
 
 impl ClassImport {
