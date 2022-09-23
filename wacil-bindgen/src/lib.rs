@@ -11,24 +11,10 @@ mod runtime;
 
 pub use object::{ClrClass, ClrObject};
 
-/// Describes a CLR class used in Rust code.
-///
-/// # Examples
-///
-/// ```no_run
-/// wacil_bindgen::wacil_import! {
-///     pub class MyClassName {
-///     }
-/// }
-/// ```
+/// Wraps an instance of a CLR class.
 #[macro_export]
-macro_rules! wacil_import {
-    {
-        $(#[$class_meta:meta])*
-        $access:vis class $class_name:ident {
-            
-        }
-    } => {
+macro_rules! wacil_object_wrapper {
+    ($(#[$class_meta:meta])* $access:vis $class_name:ident;) => {
         $(#[$class_meta])*
         #[repr(transparent)]
         $access struct $class_name($crate::ClrObject);
@@ -64,11 +50,5 @@ macro_rules! wacil_import {
                 &self.0
             }
         }
-
-        impl $crate::interface::ClassImportDescriptor for $class_name {
-            const DESCRIPTOR: &'static $crate::interface::ClassImport = &$crate::interface::ClassImport {
-                ..$crate::interface::ClassImport::new($crate::interface::TypeName::new($crate::interface::Namespace::GLOBAL, stringify!($class_name))),
-            };
-        }
-    }
+    };
 }

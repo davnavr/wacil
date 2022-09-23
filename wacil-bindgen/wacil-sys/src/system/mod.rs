@@ -4,8 +4,5 @@ pub use wacil_bindgen::ClrObject as Object;
 
 pub use wacil_bindgen::result::Exception;
 
-wacil_bindgen::wacil_import! {
-    pub class Console {
-        
-    }
-}
+pub mod console;
+pub mod string;

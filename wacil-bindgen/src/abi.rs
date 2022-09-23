@@ -1,6 +1,5 @@
-
 /// Marker trait for WebAssembly types.
-pub unsafe trait WasmValue { }
+pub unsafe trait WasmValue {}
 
 unsafe impl WasmValue for i32 {}
 unsafe impl WasmValue for u32 {}
