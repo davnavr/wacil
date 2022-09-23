@@ -5,7 +5,17 @@ version = 3
 [[package]]
 name = "wacil-backend"
 version = "0.1.0"
+dependencies = [
+ "wacil-bindgen",
+]
 
 [[package]]
 name = "wacil-bindgen"
 version = "0.1.0"
+
+[[package]]
+name = "wacil-sys"
+version = "0.1.0"
+dependencies = [
+ "wacil-bindgen",
+]

@@ -13,4 +13,5 @@ std = []
 [workspace]
 members = [
     "wacil-backend",
+    "wacil-sys"
 ]
