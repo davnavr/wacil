@@ -1,0 +1,9 @@
+[package]
+name = "hello-wacil"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wacil-bindgen = { path = "../../" }
+wacil-backend = { path = "../../wacil-backend" }
+wacil-sys = { path = "../../wacil-sys" }

@@ -45,6 +45,7 @@ impl ClrObject {
     /// Any .NET class can override the [`GetHashCode()`] to contain arbitrary code, so this function is unsafe.
     ///
     /// [`GetHashCode()`]: https://learn.microsoft.com/en-us/dotnet/api/system.object.gethashcode
+    #[cfg(target_arch = "wasm32")]
     pub unsafe fn get_hash_code(&self) -> i32 {
         unsafe {
             // Safety: The GetHashCode implementation is responsible for ensuring safety.
@@ -59,6 +60,7 @@ impl core::fmt::Debug for ClrObject {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 impl Drop for ClrObject {
     fn drop(&mut self) {
         if self.index != NULL_INDEX {

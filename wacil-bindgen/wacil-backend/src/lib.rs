@@ -14,7 +14,7 @@ impl<W: Write> Destination<W> {
     fn new(destination: W) -> Self {
         Self {
             out: destination,
-            is_new_line: false,
+            is_new_line: true,
         }
     }
 
@@ -69,9 +69,10 @@ impl<W: Write> Destination<W> {
             self.require_new_line()?;
             contents(self)?;
             self.require_new_line()?;
-            self.write("}")?;
+            self.write("}")
+        } else {
+            contents(self)
         }
-        Ok(())
     }
 
     fn write_class<F: FnOnce(&mut Self) -> Result>(&mut self, name: interface::Name, modifiers: &[&'static str], contents: F) -> Result {
@@ -86,7 +87,7 @@ impl<W: Write> Destination<W> {
 }
 
 pub struct Module {
-    pub interface: &'static interface::Interface,
+    pub interfaces: &'static [&'static interface::Interface],
     pub module_name: interface::TypeName,
     pub wrapper_name: interface::TypeName,
 }
@@ -98,16 +99,6 @@ pub fn generate<W: Write>(module: &Module, destination: W) -> Result {
         out.write_class(module.wrapper_name.name, &["public", "sealed"], |out| {
             Ok(())
         })
-    })
-    // out.write_region("Imports", |out| {
-    //     interface
-    //         .imported_classes
-    //         .iter()
-    //         .try_for_each(|class| out.write_namespace(class.name.namespace, |out| {
-    //             out.write_class(class.name.name, |out| {
-                    
-    //                 Ok(())
-    //             })
-    //     }))
-    // })
+    })?;
+    out.require_new_line()
 }
