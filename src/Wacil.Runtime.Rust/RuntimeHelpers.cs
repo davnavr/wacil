@@ -21,6 +21,7 @@ public sealed class RuntimeHelpers {
 
         public object? Resolve(string name) {
             // Runtime functions, keep in sync with wacil-bindgen/src/runtime.rs
+            // TODO: Replace wrappers to System.Object methods with auto-generated ones
             return name switch {
                 "wacil_rt_object_table_drop" => rtObjectTableDrop,
                 "wacil_rt_object_get_hash_code" => rtObjectGetHashCode,

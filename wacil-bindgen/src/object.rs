@@ -1,5 +1,6 @@
 //! Contains the [`ClrObject`] struct.
 
+#[cfg(target_arch = "wasm32")]
 use crate::runtime;
 
 const NULL_INDEX: isize = -1;
@@ -37,7 +38,12 @@ impl ClrObject {
     pub fn raw_index(&self) -> isize {
         self.index
     }
+}
 
+// TODO: Replace wrappers to System.Object methods with auto-generated ones
+/// Wrappers for [`Object`](https://learn.microsoft.com/en-us/dotnet/api/system.object) methods.
+#[cfg(target_arch = "wasm32")]
+impl ClrObject {
     /// Calls the object's [`GetHashCode()`] method.
     ///
     /// # Safety
@@ -45,8 +51,8 @@ impl ClrObject {
     /// Any .NET class can override the [`GetHashCode()`] to contain arbitrary code, so this function is unsafe.
     ///
     /// [`GetHashCode()`]: https://learn.microsoft.com/en-us/dotnet/api/system.object.gethashcode
-    #[cfg(target_arch = "wasm32")]
     pub unsafe fn get_hash_code(&self) -> i32 {
+        // TODO: wacil-backend should generate get_hash_code implementation
         unsafe {
             // Safety: The GetHashCode implementation is responsible for ensuring safety.
             runtime::wacil_rt_object_get_hash_code(self.index)
