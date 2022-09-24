@@ -3,10 +3,10 @@
 use core::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Type {
+pub enum Type<'a> {
     Named {
         name: crate::interface::TypeName,
-        arguments: &'static [Type],
+        arguments: &'a [Type<'a>],
     },
     Byte,
     SByte,
@@ -21,7 +21,7 @@ pub enum Type {
     Object,
 }
 
-impl Display for Type {
+impl Display for Type<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         use core::fmt::Write;
         match self {
@@ -55,12 +55,12 @@ impl Display for Type {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum ReturnType {
-    Type(Type),
+pub enum ReturnType<'a> {
+    Type(Type<'a>),
     Void,
 }
 
-impl Display for ReturnType {
+impl Display for ReturnType<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Type(ty) => Display::fmt(ty, f),

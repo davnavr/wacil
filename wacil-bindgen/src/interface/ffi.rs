@@ -5,7 +5,7 @@ use crate::interface::Name;
 #[non_exhaustive]
 pub struct Parameter {
     pub name: Name,
-    pub parameters: &'static [Type],
+    pub parameters: &'static [Type<'static>],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -13,6 +13,6 @@ pub struct Parameter {
 pub struct Method {
     pub name: Name,
     pub is_static: bool,
-    pub return_type: ReturnType,
+    pub return_type: ReturnType<'static>,
     pub parameters: &'static [Parameter],
 }

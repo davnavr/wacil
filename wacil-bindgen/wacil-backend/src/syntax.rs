@@ -3,7 +3,7 @@
 use std::fmt::{Display, Formatter, Result, Write};
 
 pub use wacil_bindgen::interface::types::{ReturnType, Type};
-pub use wacil_bindgen::interface::{Name, Namespace};
+pub use wacil_bindgen::interface::{Name, Namespace, TypeName};
 
 #[repr(transparent)]
 struct CommaSeparated<'a, T>(&'a [T]);
@@ -23,7 +23,7 @@ where
 }
 
 pub enum Expression<'a> {
-    NewInstance(&'a Type, &'a [Expression<'a>]),
+    NewInstance(&'a Type<'a>, &'a [Expression<'a>]),
     This,
     Identifier(Name),
     MemberAccess(&'a Expression<'a>, Name),
@@ -90,12 +90,12 @@ pub struct Field<'a> {
     pub access: AccessModifier,
     pub modifiers: &'a [FieldModifier],
     pub name: Name,
-    pub value_type: &'a Type,
+    pub value_type: &'a Type<'a>,
     pub value: Option<&'a Expression<'a>>,
 }
 
 pub struct Parameter<'a> {
-    pub argument_type: &'a Type,
+    pub argument_type: &'a Type<'a>,
     pub name: Name,
 }
 
@@ -105,9 +105,26 @@ impl Display for Parameter<'_> {
     }
 }
 
+pub enum ConstructorBaseCall<'a> {
+    None,
+    Base(&'a [Expression<'a>]),
+    This(&'a [Expression<'a>]),
+}
+
+impl Display for ConstructorBaseCall<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Self::None => Ok(()),
+            Self::Base(arguments) => write!(f, "base({})", CommaSeparated(arguments)),
+            Self::This(arguments) => write!(f, "this({})", CommaSeparated(arguments)),
+        }
+    }
+}
+
 pub struct Constructor<'a> {
     pub access: AccessModifier,
     pub parameters: &'a [Parameter<'a>],
+    pub base_call: ConstructorBaseCall<'a>,
     pub body: &'a [Statement<'a>],
 }
 
@@ -124,7 +141,7 @@ pub struct TypeDefinition<'a> {
     pub access: AccessModifier,
     pub kind: TypeDefinitionKind,
     pub name: Name,
-    pub sub_types: &'a [&'a Type],
+    pub sub_types: &'a [&'a Type<'a>],
     pub members: &'a [Member<'a>],
 }
 
@@ -153,6 +170,9 @@ impl Display for TypeDefinition<'_> {
                 }
                 Member::Constructor(ctor) => {
                     write!(f, "{} {}({})", ctor.access, self.name, CommaSeparated(ctor.parameters))?;
+                    if !matches!(ctor.base_call, ConstructorBaseCall::None) {
+                        write!(f, ":{}", ctor.base_call)?;
+                    }
                     f.write_char('{')?;
                     ctor.body.iter().try_for_each(|s| s.fmt(f))?;
                     f.write_char('}')?;

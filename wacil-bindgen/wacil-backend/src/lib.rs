@@ -19,35 +19,24 @@ pub fn generate<W: Write>(module: &Module, mut destination: W) -> std::io::Resul
         arguments: &[],
     };
 
+    let runtime_namespace = Namespace::new(&["Wacil", "Runtime"]);
+
+    let module_wrapper = Type::Named {
+        name: TypeName::new(runtime_namespace, "ModuleWrapper"),
+        arguments: &[module_type],
+    };
+
     let constructor_parameters = [Parameter {
         name: "module",
         argument_type: &module_type,
     }];
 
-    let members = vec![
-        Member::Field(Field {
-            access: AccessModifier::Private,
-            modifiers: &[],
-            name: "locker",
-            value_type: &Type::Object,
-            value: Some(&Expression::NewInstance(&Type::Object, &[])),
-        }),
-        Member::Field(Field {
-            access: AccessModifier::Private,
-            modifiers: &[FieldModifier::Readonly],
-            name: "module",
-            value_type: &module_type,
-            value: None,
-        }),
-        Member::Constructor(Constructor {
-            access: AccessModifier::Private,
-            parameters: &constructor_parameters,
-            body: &[Statement::Assignment {
-                destination: Expression::MemberAccess(&Expression::This, "module"),
-                value: Expression::Identifier("module"),
-            }],
-        }),
-    ];
+    let members = vec![Member::Constructor(Constructor {
+        access: AccessModifier::Private,
+        parameters: &constructor_parameters,
+        base_call: ConstructorBaseCall::Base(&[Expression::Identifier("module")]),
+        body: &[],
+    })];
 
     let tree = SourceCode {
         namespace: module.wrapper_name.namespace,
@@ -55,7 +44,7 @@ pub fn generate<W: Write>(module: &Module, mut destination: W) -> std::io::Resul
             access: AccessModifier::Public,
             kind: TypeDefinitionKind::Class,
             name: module.wrapper_name.name,
-            sub_types: &[],
+            sub_types: &[&module_wrapper],
             members: &members,
         }],
     };
