@@ -4,7 +4,10 @@ use core::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
-    Named { name: crate::interface::TypeName, arguments: &'static [Type] },
+    Named {
+        name: crate::interface::TypeName,
+        arguments: &'static [Type],
+    },
     Byte,
     SByte,
     Int16,
@@ -23,7 +26,7 @@ impl Display for Type {
         use core::fmt::Write;
         match self {
             Self::Named { name, arguments } => {
-                write!(f, "global::{}.{}", name.namespace, name.name)?;
+                Display::fmt(name, f)?;
                 if !arguments.is_empty() {
                     f.write_char('<')?;
                     arguments.iter().enumerate().try_for_each(|(index, ty)| {
@@ -35,7 +38,7 @@ impl Display for Type {
                     f.write_char('>')?;
                 }
                 Ok(())
-            },
+            }
             Self::Byte => f.write_str("byte"),
             Self::SByte => f.write_str("sbyte"),
             Self::Int16 => f.write_str("short"),

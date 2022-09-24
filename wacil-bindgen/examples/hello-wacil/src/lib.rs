@@ -1,4 +1,3 @@
-
 pub extern "C" fn example_function() {}
 
 #[test]
@@ -12,12 +11,8 @@ fn generate() {
         wrapper_name: interface::TypeName::new(Default::default(), "HelloWacilWrapper"),
     };
 
-    let do_it = || -> std::io::Result<()> {
-        wacil_backend::generate(
-            &module,
-            std::fs::File::create(std::path::Path::new("./HelloWacil.cs"))?,
-        )
-    };
+    let do_it =
+        || -> std::io::Result<()> { wacil_backend::generate(&module, std::fs::File::create(std::path::Path::new("./HelloWacil.cs"))?) };
 
     do_it().unwrap();
 }

@@ -55,3 +55,14 @@ impl TypeName {
         Self { namespace, name }
     }
 }
+
+impl Display for TypeName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_str("global::")?;
+        Display::fmt(&self.namespace, f)?;
+        if !self.namespace.names().is_empty() {
+            f.write_char('.')?;
+        }
+        Display::fmt(&self.name, f)
+    }
+}
