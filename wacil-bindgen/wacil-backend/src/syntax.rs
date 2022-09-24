@@ -24,6 +24,9 @@ where
 
 pub enum Expression<'a> {
     NewInstance(&'a Type, &'a [Expression<'a>]),
+    This,
+    Identifier(Name),
+    MemberAccess(&'a Expression<'a>, Name),
 }
 
 impl Display for Expression<'_> {
@@ -32,6 +35,26 @@ impl Display for Expression<'_> {
             Self::NewInstance(ty, args) => {
                 write!(f, "new {ty}({})", &CommaSeparated(args))
             }
+            Self::This => f.write_str("this"),
+            Self::Identifier(name) => f.write_str(name),
+            Self::MemberAccess(e, name) => write!(f, "{e}.{name}"),
+        }
+    }
+}
+
+pub enum Statement<'a> {
+    Expression(Expression<'a>),
+    Assignment {
+        destination: Expression<'a>,
+        value: Expression<'a>,
+    },
+}
+
+impl Display for Statement<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Self::Expression(expr) => write!(f, "{expr};"),
+            Self::Assignment { destination, value } => write!(f, "{destination} = {value};"),
         }
     }
 }
@@ -71,28 +94,26 @@ pub struct Field<'a> {
     pub value: Option<&'a Expression<'a>>,
 }
 
-impl Display for Field<'_> {
+pub struct Parameter<'a> {
+    pub argument_type: &'a Type,
+    pub name: Name,
+}
+
+impl Display for Parameter<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{} ", self.access)?;
-        self.modifiers.iter().try_for_each(|m| write!(f, "{m} "))?;
-        write!(f, "{} {}", self.value_type, self.name)?;
-        if let Some(expression) = self.value {
-            write!(f, " = {expression}")?;
-        }
-        f.write_char(';')
+        write!(f, "{} {}", self.argument_type, self.name)
     }
+}
+
+pub struct Constructor<'a> {
+    pub access: AccessModifier,
+    pub parameters: &'a [Parameter<'a>],
+    pub body: &'a [Statement<'a>],
 }
 
 pub enum Member<'a> {
     Field(Field<'a>),
-}
-
-impl Display for Member<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        match self {
-            Self::Field(field) => field.fmt(f),
-        }
-    }
+    Constructor(Constructor<'a>),
 }
 
 pub enum TypeDefinitionKind {
@@ -103,7 +124,7 @@ pub struct TypeDefinition<'a> {
     pub access: AccessModifier,
     pub kind: TypeDefinitionKind,
     pub name: Name,
-    pub sub_types: &'a [Type],
+    pub sub_types: &'a [&'a Type],
     pub members: &'a [Member<'a>],
 }
 
@@ -119,7 +140,25 @@ impl Display for TypeDefinition<'_> {
             CommaSeparated(&self.sub_types).fmt(f)?;
         }
         f.write_char('{')?;
-        self.members.iter().try_for_each(|m| write!(f, "{m}"))?;
+        for member in self.members.iter() {
+            match member {
+                Member::Field(field) => {
+                    write!(f, "{} ", field.access)?;
+                    field.modifiers.iter().try_for_each(|m| write!(f, "{m} "))?;
+                    write!(f, "{} {}", field.value_type, field.name)?;
+                    if let Some(expression) = field.value {
+                        write!(f, " = {expression}")?;
+                    }
+                    f.write_char(';')?;
+                }
+                Member::Constructor(ctor) => {
+                    write!(f, "{} {}({})", ctor.access, self.name, CommaSeparated(ctor.parameters))?;
+                    f.write_char('{')?;
+                    ctor.body.iter().try_for_each(|s| s.fmt(f))?;
+                    f.write_char('}')?;
+                }
+            }
+        }
         f.write_char('}')
     }
 }

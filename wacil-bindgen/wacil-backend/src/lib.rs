@@ -19,6 +19,11 @@ pub fn generate<W: Write>(module: &Module, mut destination: W) -> std::io::Resul
         arguments: &[],
     };
 
+    let constructor_parameters = [Parameter {
+        name: "module",
+        argument_type: &module_type,
+    }];
+
     let members = vec![
         Member::Field(Field {
             access: AccessModifier::Private,
@@ -33,6 +38,14 @@ pub fn generate<W: Write>(module: &Module, mut destination: W) -> std::io::Resul
             name: "module",
             value_type: &module_type,
             value: None,
+        }),
+        Member::Constructor(Constructor {
+            access: AccessModifier::Private,
+            parameters: &constructor_parameters,
+            body: &[Statement::Assignment {
+                destination: Expression::MemberAccess(&Expression::This, "module"),
+                value: Expression::Identifier("module"),
+            }],
         }),
     ];
 
