@@ -1,7 +1,6 @@
 namespace Wacil.Runtime;
 
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 
 /// Constructs WASM module imports dynamically.
@@ -23,7 +22,7 @@ public static class DynamicImport {
     /// Thrown if the <typeparamref name="T"/> class does not contain a <see langword="public"/> constructor annotated with
     /// the <see cref="ImportConstructorAttribute"/> attribute.
     /// </exception>
-    public static T Create<T>(IReadOnlyDictionary<string, object> imports) where T : class {
+    public static T Create<T>(IDynamicImportResolver imports) where T : class {
         ConstructorInfo? constructor = GetImportConstructor<T>();
 
         if (constructor == null) {
@@ -31,10 +30,10 @@ public static class DynamicImport {
         }
 
         ParameterInfo[] parameters = constructor.GetParameters();
-        var arguments = new object[parameters.Length];
+        var arguments = new object?[parameters.Length];
 
         for (int i = 0; i < arguments.Length; i++) {
-            arguments[i] = imports[parameters[i].Name ?? String.Empty];
+            arguments[i] = imports.Resolve(parameters[i].Name ?? String.Empty);
         }
 
         return (T)constructor.Invoke(arguments);
