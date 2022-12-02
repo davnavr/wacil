@@ -348,7 +348,9 @@ let translateWebAssembly
                 let instantiation = emitPushMemory arg.Memory il
                 il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadByte))
-                il.Add(CilInstruction CilOpCodes.Conv_I4)
+            | I32Load16S arg ->
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt16))
             | I32Load16U arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt16))
