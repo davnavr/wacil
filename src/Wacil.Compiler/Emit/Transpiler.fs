@@ -385,30 +385,29 @@ let translateWebAssembly
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
-                // TODO: Figure out if an explicit Conv_I1 instruction needs to be emitted.
+                il.Add(CilInstruction CilOpCodes.Conv_I1)
                 let instantiation = emitPushMemory arg.Memory il
                 il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
             | I32Store16 arg ->
+                il.Add(CilInstruction CilOpCodes.Conv_I2)
                 let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
             | I64Store8 arg ->
-                // Note that a conversion is necessary here as other sizes (8, 16, etc.) are represented an int32, while an int64 needs to
-                // be explicitly converted
                 il.Add(CilInstruction CilOpCodes.Conv_I1)
                 let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
             | I64Store16 arg ->
-                // Note that a conversion is necessary here as other sizes (8, 16, etc.) are represented an int32, while an int64 needs to
-                // be explicitly converted
-                il.Add(CilInstruction CilOpCodes.Conv_I4)
+                il.Add(CilInstruction CilOpCodes.Conv_I2)
                 let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
             | I64Store32 arg ->
-                // Note that a conversion is necessary here as other sizes (8, 16, etc.) are represented an int32, while an int64 needs to
-                // be explicitly converted
-                il.Add(CilInstruction CilOpCodes.Conv_I4) // Convert the value to store (which is currently on top of the stack)
+                il.Add(CilInstruction CilOpCodes.Conv_I4)
                 let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
             | MemorySize memory ->
                 let instantiation = emitPushMemory memory il
