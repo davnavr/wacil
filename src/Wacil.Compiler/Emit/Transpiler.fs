@@ -392,10 +392,16 @@ let translateWebAssembly
             | I32Store16 arg ->
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
+            | I64Store16 arg ->
+                // Note that a conversion is necessary here as other sizes (8, 16, etc.) are represented an int32, while an int64 needs to
+                // be explicitly converted
+                il.Add(CilInstruction CilOpCodes.Conv_I4)
+                let instantiation = emitPushMemArg arg il
+                il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
             | I64Store32 arg ->
                 // Note that a conversion is necessary here as other sizes (8, 16, etc.) are represented an int32, while an int64 needs to
                 // be explicitly converted
-                il.Add(CilInstruction CilOpCodes.Conv_U4) // Convert the value to store (which is currently on top of the stack)
+                il.Add(CilInstruction CilOpCodes.Conv_I4) // Convert the value to store (which is currently on top of the stack)
                 let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt32))
             | MemorySize memory ->
