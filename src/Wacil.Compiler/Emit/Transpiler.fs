@@ -363,8 +363,7 @@ let translateWebAssembly
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadByte))
                 il.Add(CilInstruction CilOpCodes.Conv_U8)
             | I64Load16U arg ->
-                let instantiation = emitPushMemory arg.Memory il
-                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
+                let instantiation = emitPushMemArg arg il
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.ReadInt16))
                 il.Add(CilInstruction CilOpCodes.Conv_U8)
             | I64Load32U arg ->
@@ -388,7 +387,8 @@ let translateWebAssembly
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt64))
             | I32Store8 arg ->
                 il.Add(CilInstruction CilOpCodes.Conv_I1)
-                let instantiation = emitPushMemArg arg il
+                let instantiation = emitPushMemory arg.Memory il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
             | I32Store16 arg ->
                 il.Add(CilInstruction CilOpCodes.Conv_I2)
@@ -396,7 +396,8 @@ let translateWebAssembly
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteInt16))
             | I64Store8 arg ->
                 il.Add(CilInstruction CilOpCodes.Conv_I1)
-                let instantiation = emitPushMemArg arg il
+                let instantiation = emitPushMemory arg.Memory il
+                il.Add(CilInstruction.CreateLdcI4(int32 arg.Offset))
                 il.Add(CilInstruction(CilOpCodes.Call, instantiation.WriteByte))
             | I64Store16 arg ->
                 il.Add(CilInstruction CilOpCodes.Conv_I2)
