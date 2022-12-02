@@ -450,6 +450,12 @@ let translateWebAssembly
             | I32Rotr -> il.Add(CilInstruction(CilOpCodes.Call, rtlib.IntegerHelpers.RotateRightInt32))
             | I32Clz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.LeadingZeroCountUInt32))
             | I32Ctz -> il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.TrailingZeroCountUInt32))
+            | I64Clz ->
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.LeadingZeroCountUInt64))
+                il.Add(CilInstruction CilOpCodes.Conv_I8)
+            | I64Ctz ->
+                il.Add(CilInstruction(CilOpCodes.Call, syslib.BitOperations.TrailingZeroCountUInt64))
+                il.Add(CilInstruction CilOpCodes.Conv_I8)
             | F32Eq ->
                 match floatingPointMode with
                 | FloatingPointMode.Relaxed -> il.Add(CilInstruction CilOpCodes.Ceq)

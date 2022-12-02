@@ -51,7 +51,9 @@ type BitConverterClass =
 [<NoComparison; NoEquality>]
 type BitOperationsClass =
     { LeadingZeroCountUInt32: IMethodDefOrRef
-      TrailingZeroCountUInt32: IMethodDefOrRef }
+      LeadingZeroCountUInt64: IMethodDefOrRef
+      TrailingZeroCountUInt32: IMethodDefOrRef
+      TrailingZeroCountUInt64: IMethodDefOrRef }
 
 [<NoComparison; NoEquality>]
 type DebuggableAttributeClass =
@@ -194,13 +196,17 @@ let importTypes (assembly: AssemblyReference) (mdle: ModuleDefinition) =
                 name
                 tyBitOperations
 
-        let bitCountOperation returnType argumentType name =
-            bitOperationHelper returnType [| argumentType |] name
+        let bitCountOperation argumentType name =
+            bitOperationHelper mdle.CorLibTypeFactory.Int32 [| argumentType |] name
 
         { LeadingZeroCountUInt32 =
-            bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "LeadingZeroCount"
+            bitCountOperation mdle.CorLibTypeFactory.UInt32 "LeadingZeroCount"
+          LeadingZeroCountUInt64 =
+            bitCountOperation mdle.CorLibTypeFactory.UInt64 "LeadingZeroCount"
           TrailingZeroCountUInt32 =
-            bitCountOperation mdle.CorLibTypeFactory.Int32 mdle.CorLibTypeFactory.UInt32 "TrailingZeroCount" }
+            bitCountOperation mdle.CorLibTypeFactory.UInt32 "TrailingZeroCount"
+          TrailingZeroCountUInt64 =
+            bitCountOperation mdle.CorLibTypeFactory.UInt64 "TrailingZeroCount" }
       RuntimeHelpers =
         { InitalizeArray =
             ImportHelpers.importMethod
