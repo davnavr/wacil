@@ -26,6 +26,9 @@
     <Compile Include="Wasm\CustomNames.fs" />
     <Compile Include="Wasm\Disassemble.fsi" />
     <Compile Include="Wasm\Disassemble.fs" />
+  
+    <Compile Include="Dwarf\Parser.fsi" />
+    <Compile Include="Dwarf\Parser.fs" />
 
     <Compile Include="Emit\Options.fs" />
     <Compile Include="Emit\ImportHelpers.fs" />
