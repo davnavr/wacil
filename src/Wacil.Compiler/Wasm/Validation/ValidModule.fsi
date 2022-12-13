@@ -22,6 +22,8 @@ type ValidModule =
     member GetTable: index: Format.TableIdx -> Table.AnyTable
     member GetMemory: index: Format.MemIdx -> Table.AnyMemory
     member GetGlobal: index: Format.GlobalIdx -> Table.AnyGlobal
+    /// Gets the data of the first custom section with the given name.
+    member GetFirstCustomSection: name: Format.Name -> ImmutableArray<byte>
 
 /// Base class used for all errors that occur during module validation.
 [<Class>]

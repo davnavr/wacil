@@ -74,6 +74,16 @@ type ValidModule
     member _.GetTable(index: Format.TableIdx) = anyTableLookup index
     member _.GetMemory(index: Format.MemIdx) = anyMemoryLookup index
     member _.GetGlobal(index: Format.GlobalIdx) = anyGlobalLookup index
+    member _.GetFirstCustomSection(name: Format.Name) =
+        let mutable data = ImmutableArray<byte>.Empty
+        let mutable found = false
+        let mutable enumerator = custom.GetEnumerator()
+        while not found && enumerator.MoveNext() do
+            let current = enumerator.Current
+            if current.Name.Equals(name) then
+                found <- true
+                data <- current.Contents
+        data
 
 type ValidationException =
     inherit System.Exception
