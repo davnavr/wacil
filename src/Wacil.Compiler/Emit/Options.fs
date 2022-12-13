@@ -84,7 +84,7 @@ type Options (name) =
     member val Namespace = System.String.Empty with get, set
 
     /// The memory implementation to use for memory definitions.
-    member val MemoryDefinitionImplementation = MemoryImplementation.Array with get, set
+    member val MemoryDefinitionImplementation = MemoryImplementation.Segmented with get, set
 
     /// The memory implementation to use for memory imports.
     member val MemoryImportImplementation = MemoryImplementation.Any with get, set
